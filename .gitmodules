@@ -1,0 +1,3 @@
+[submodule "datasets_knowledge_embedding"]
+	path = datasets_knowledge_embedding
+	url = https://github.com/villmow/datasets_knowledge_embedding
