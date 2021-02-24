@@ -1,0 +1,14 @@
+logs/
+*__pycache__*
+data/
+*.sh
+.DS_Store
+
+*.svg
+*.pdf
+*.eps
+submission/
+
+.vscode
+.idea
+# TODO

@@ -1,0 +1,8 @@
+☐ To discuss in the meeting 2020.02.10
+    ✔ all previous update and *why* @done(21-02-10 10:07)
+    ✔ sub-modulize @done(21-02-10 10:16)
+        ☐ dataset sub-sampler and indexing
+        ✔ logging and storage interface @done(21-02-10 10:16)
+        ✔ model seperation, our model and baselines @done(21-02-10 10:16)
+        ✔ cmd interface and config @done(21-02-10 10:16)
+        ✔ try to parallize the task @done(21-02-10 10:16)
