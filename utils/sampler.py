@@ -61,10 +61,12 @@ def produce_single_query(incoming_edges, projection, reverse_projection, nentity
         e4 = random.randint(0, nentity)
         while len(incoming_edges[e4]) == 0:
             e4 = random.randint(0, nentity)
-        r1, r2, r3 = random.sample(incoming_edges[e4], 1)[0], random.sample(incoming_edges[e4], 1)[0], random.sample(incoming_edges[e4], 1)[0]
-        e1, e2, e3 = random.sample(reverse_projection[(e4, r1)], 1)[0], random.sample(reverse_projection[(e4, r2)], 1)[0], random.sample(reverse_projection[(e4, r3)], 1)[0]
+        r1, r2, r3 = random.sample(incoming_edges[e4], 1)[0], random.sample(incoming_edges[e4], 1)[0], \
+                     random.sample(incoming_edges[e4], 1)[0]
+        e1, e2, e3 = random.sample(reverse_projection[(e4, r1)], 1)[0], random.sample(reverse_projection[(e4, r2)], 1)[
+            0], random.sample(reverse_projection[(e4, r3)], 1)[0]
         query = ((e1, (-r1,)), (e2, (-r2,)), (e3, (-r3,)))
-        ans = projection[(e1,r1)].intersection(projection[(e2, r2)]).intersection(projection[(e3, r3)])
+        ans = projection[(e1, r1)].intersection(projection[(e2, r2)]).intersection(projection[(e3, r3)])
     elif query_structure == '2in':
         e3 = random.randint(0, nentity)
         while len(incoming_edges[e3]) == 0:
@@ -77,10 +79,12 @@ def produce_single_query(incoming_edges, projection, reverse_projection, nentity
         e4 = random.randint(0, nentity)
         while len(incoming_edges[e4]) == 0:
             e4 = random.randint(0, nentity)
-        r1, r2, r3 = random.sample(incoming_edges[e4], 1)[0], random.sample(incoming_edges[e4], 1)[0], random.sample(incoming_edges[e4], 1)[0]
-        e1, e2, e3 = random.sample(reverse_projection[(e4, r1)], 1)[0], random.sample(reverse_projection[(e4, r2)], 1)[0], random.sample(reverse_projection[(e4, r3)], 1)[0]
+        r1, r2, r3 = random.sample(incoming_edges[e4], 1)[0], random.sample(incoming_edges[e4], 1)[0], \
+                     random.sample(incoming_edges[e4], 1)[0]
+        e1, e2, e3 = random.sample(reverse_projection[(e4, r1)], 1)[0], random.sample(reverse_projection[(e4, r2)], 1)[
+            0], random.sample(reverse_projection[(e4, r3)], 1)[0]
         query = ((e1, (-r1,)), (e2, (-r2,)), (e3, (-r3, -2)))
-        ans = projection[(e1,  r1)].intersection(projection[(e2, r2)]) - projection[(e3, r3)]
+        ans = projection[(e1, r1)].intersection(projection[(e2, r2)]) - projection[(e3, r3)]
     elif query_structure == 'inp':
         e4 = random.randint(0, nentity)
         while len(incoming_edges[e4]) == 0:
@@ -104,7 +108,8 @@ def produce_single_query(incoming_edges, projection, reverse_projection, nentity
         query = ((e1, (-r1, -r2)), (e3, (-r3, -2)))
         ans = set()
         for e_2 in projection[(e1, r1)]:
-            ans.update(projection[(e_2, r2)] - projection[(e3, r3)])
+            ans.update(projection[(e_2, r2)])
+        ans = ans - projection[(e3, r3)]
     elif query_structure == 'pni':
         e4 = random.randint(0, nentity)
         while len(incoming_edges[e4]) == 0:
@@ -114,9 +119,9 @@ def produce_single_query(incoming_edges, projection, reverse_projection, nentity
         r1 = random.sample(incoming_edges[e2], 1)[0]
         e1 = random.sample(reverse_projection[(e2, r1)], 1)[0]
         query = ((e1, (-r1, -r2, -2)), (e3, (-r3,)))
-        ans = set()
+        ans = projection[(e3, r3)]
         for e_2 in projection[(e1, r1)]:
-            ans.update(projection[(e3, r3)] - projection[(e_2, r2)])
+            ans = ans - projection[(e_2, r2)]
 
     return query, ans
 
@@ -133,13 +138,14 @@ def produce_query(incoming_edges, projection, reverse_projection, nentity, query
     return all_queries, all_answers
 
 
-def produce_single_test_query(incoming_edges,  projection, reverse_projection, projection_origin,  nentity, query_structure):
+def produce_single_test_query(incoming_edges, projection, reverse_projection, incoming_edges_origin,
+                              projection_origin, nentity, query_structure):
     if query_structure == '1p':
         e2 = random.randint(0, nentity)
         while len(incoming_edges[e2]) == 0:
             e2 = random.randint(0, nentity)
         r = random.sample(incoming_edges[e2], 1)[0]
-        e1 = random.sample(reverse_projection[(e2,r)], 1)[0]
+        e1 = random.sample(reverse_projection[(e2, r)], 1)[0]
         query = (e1, (-r,))
         ans = projection[(e1, r)]
         easy_ans = projection_origin[(e1, r)]
@@ -153,8 +159,8 @@ def produce_single_test_query(incoming_edges,  projection, reverse_projection, p
         e1 = random.sample(reverse_projection[(e2, r1)], 1)[0]
         query = (e1, (-r1, -r2))
         ans = set()
-        for e_2 in projection[(e1,r1)]:
-            ans.update(projection[(e_2,r2)])
+        for e_2 in projection[(e1, r1)]:
+            ans.update(projection[(e_2, r2)])
         easy_ans = set()
         for e_2 in projection_origin[(e1, r1)]:
             easy_ans.update(projection_origin[(e_2, r2)])
@@ -171,11 +177,14 @@ def produce_single_test_query(incoming_edges,  projection, reverse_projection, p
         e4 = random.randint(0, nentity)
         while len(incoming_edges[e4]) == 0:
             e4 = random.randint(0, nentity)
-        r1, r2, r3 = random.sample(incoming_edges[e4], 1)[0], random.sample(incoming_edges[e4], 1)[0], random.sample(incoming_edges[e4], 1)[0]
-        e1, e2, e3 = random.sample(reverse_projection[(e4, r1)], 1)[0], random.sample(reverse_projection[(e4, r2)], 1)[0], random.sample(reverse_projection[(e4, r3)], 1)[0]
+        r1, r2, r3 = random.sample(incoming_edges[e4], 1)[0], random.sample(incoming_edges[e4], 1)[0], \
+                     random.sample(incoming_edges[e4], 1)[0]
+        e1, e2, e3 = random.sample(reverse_projection[(e4, r1)], 1)[0], random.sample(reverse_projection[(e4, r2)], 1)[
+            0], random.sample(reverse_projection[(e4, r3)], 1)[0]
         query = ((e1, (-r1,)), (e2, (-r2,)), (e3, (-r3,)))
         ans = projection[(e1, r1)].intersection(projection[(e2, r2)]).intersection(projection[(e3, r3)])
-        easy_ans = projection_origin[(e1, r1)].intersection((projection_origin[(e2, r2)])).intersection((projection_origin[(e3, r3)]))
+        easy_ans = projection_origin[(e1, r1)].intersection((projection_origin[(e2, r2)])).intersection(
+            (projection_origin[(e3, r3)]))
     elif query_structure == '2in':
         e3 = random.randint(0, nentity)
         while len(incoming_edges[e3]) == 0:
@@ -189,8 +198,10 @@ def produce_single_test_query(incoming_edges,  projection, reverse_projection, p
         e4 = random.randint(0, nentity)
         while len(incoming_edges[e4]) == 0:
             e4 = random.randint(0, nentity)
-        r1, r2, r3 = random.sample(incoming_edges[e4], 1)[0], random.sample(incoming_edges[e4], 1)[0], random.sample(incoming_edges[e4], 1)[0]
-        e1, e2, e3 = random.sample(reverse_projection[(e4, r1)], 1)[0], random.sample(reverse_projection[(e4, r2)], 1)[0], random.sample(reverse_projection[(e4, r3)], 1)[0]
+        r1, r2, r3 = random.sample(incoming_edges[e4], 1)[0], random.sample(incoming_edges[e4], 1)[0], \
+                     random.sample(incoming_edges[e4], 1)[0]
+        e1, e2, e3 = random.sample(reverse_projection[(e4, r1)], 1)[0], random.sample(reverse_projection[(e4, r2)], 1)[
+            0], random.sample(reverse_projection[(e4, r3)], 1)[0]
         query = ((e1, (-r1,)), (e2, (-r2,)), (e3, (-r3, -2)))
         ans = projection[(e1, r1)].intersection(projection[(e2, r2)]) - projection[(e3, r3)]
         easy_ans = projection_origin[(e1, r1)].intersection(projection_origin[(e2, r2)]) - projection_origin[(e3, r3)]
@@ -221,38 +232,43 @@ def produce_single_test_query(incoming_edges,  projection, reverse_projection, p
         ans = set()
         easy_ans = set()
         for e_2 in projection[(e1, r1)]:
-            ans.update(projection[(e_2, r2)] - projection[(e3, r3)])
+            ans.update(projection[(e_2, r2)])
+        ans = ans - projection[(e3, r3)]
         for e_2 in projection_origin[(e1, r1)]:
-            easy_ans.update((projection_origin[(e_2, r2)]) - projection_origin[(e3, r3)])
-    elif query_structure == 'pni':
+            easy_ans.update((projection_origin[(e_2, r2)]))
+        easy_ans = easy_ans - projection_origin[(e3, r3)]
+    elif query_structure == 'pni':  # 自己强行分类讨论了
         e4 = random.randint(0, nentity)
         while len(incoming_edges[e4]) == 0:
             e4 = random.randint(0, nentity)
-        r3, r2 = random.sample(incoming_edges[e4], 1)[0], random.sample(incoming_edges[e4], 1)[0]
+        new_edges = incoming_edges[e4] # - incoming_edges_origin[e4]
+        r3, r2 = random.sample(new_edges, 1)[0], random.sample(incoming_edges[e4], 1)[0]
         e3, e2 = random.sample(reverse_projection[(e4, r3)], 1)[0], random.sample(reverse_projection[(e4, r2)], 1)[0]
         r1 = random.sample(incoming_edges[e2], 1)[0]
         e1 = random.sample(reverse_projection[(e2, r1)], 1)[0]
         query = ((e1, (-r1, -r2, -2)), (e3, (-r3,)))
-        ans = set()
-        easy_ans = set()
+        ans = projection[(e3, r3)]
+        easy_ans = projection_origin[(e3, r3)]
         for e_2 in projection[(e1, r1)]:
-            ans.update(projection[(e3, r3)] - projection[(e_2, r2)])
+            ans = ans - projection[(e_2, r2)]
         for e_2 in projection_origin[(e1, r1)]:
-            easy_ans.update(projection_origin[(e3, r3)] - projection_origin[(e_2, r2)])
+            easy_ans = easy_ans - projection_origin[(e_2, r2)]
     hard_ans = ans - easy_ans
     return query, easy_ans, hard_ans
 
 
-def produce_test_query(incoming_edges, projection, reverse_projection, projection_origin, nentity, query_num, query_structures, max_ans):
+def produce_test_query(incoming_edges, projection, reverse_projection, incoming_edges_origin, projection_origin, nentity, query_num,
+                       query_structures, max_ans):
     easy_queries = collections.defaultdict(set)
     hard_queries = collections.defaultdict(set)
     all_easy_answers = collections.defaultdict(set)
     all_hard_answers = collections.defaultdict(set)
-    all_num = 0
     maximum = 10 * query_num
     for query_structure in query_structures:
+        all_num = 0
         while len(hard_queries[query_structure]) < query_num and all_num < maximum:
-            query, easy_ans, hard_ans = produce_single_test_query(incoming_edges, projection, reverse_projection, projection_origin, nentity, query_structure)
+            query, easy_ans, hard_ans = produce_single_test_query(incoming_edges, projection, reverse_projection, incoming_edges_origin,
+                                                                  projection_origin, nentity, query_structure)
             if len(easy_ans) + len(hard_ans) < max_ans:
                 if len(hard_ans) == 0:
                     easy_queries[query_structure].add(query)
@@ -298,15 +314,16 @@ def count_answer_num(queries, easy_ans, hard_ans):
             hard_ans_average[q_r] /= len(queries[q_r])
     return easy_ans_average, hard_ans_average
 
+
 stanford_data_path = '../data/FB15k-237-betae'  # + 原来的， - 反向的
 data_path = '../datasets_knowledge_embedding/FB15k-237'
 new_data_path = '../my_data/FB15k-237'
 train_query_num, valid_query_num = 10000, 5000
 max_ans = 100
 all_entity_dict, all_relation_dict, id2ent, id2rel = read_indexing(stanford_data_path)
-a, b, c, d= (id2ent[3986], id2ent[7154], id2rel[132], id2rel[336])
+a, b, c, d = (id2ent[3986], id2ent[7154], id2rel[132], id2rel[336])
 e = id2ent[0]
-numentity, numrelation = int(0), int(0)  # 14505, 237
+numentity, numrelation = len(all_entity_dict), len(all_relation_dict)  # 14505, 237
 incoming_edges = collections.defaultdict(set)
 outcoming_edges = collections.defaultdict(set)
 projection = collections.defaultdict(set)
@@ -331,7 +348,7 @@ with open('../datasets_knowledge_embedding/FB15k-237/train.txt', 'r', errors='ig
         if r_reverse not in all_relation_dict:
             all_relation_dict[r_reverse] = numrelation
             numrelation -= 1
-        e1, r_projection, r_reverse, e2 = all_entity_dict[e1], -all_relation_dict[r_projection],\
+        e1, r_projection, r_reverse, e2 = all_entity_dict[e1], -all_relation_dict[r_projection], \
                                           -all_relation_dict[r_reverse], all_entity_dict[e2]
         incoming_edges[e2].add(r_projection)
         outcoming_edges[e2].add(r_reverse)
@@ -342,7 +359,6 @@ with open('../datasets_knowledge_embedding/FB15k-237/train.txt', 'r', errors='ig
         reverse_projection[(e1, r_reverse)].add(e2)
         reverse_projection[(e2, r_projection)].add(e1)
 
-print('numentity, numrelation', numentity, numrelation)
 my_tasks = ['1p', '2i', '2in', '3in', 'inp', 'pni', 'pin']
 train_queries, train_answers = produce_query(incoming_edges, projection, reverse_projection, numentity,
                                              query_num=train_query_num, query_structures=my_tasks, max_answer=max_ans)
@@ -363,7 +379,7 @@ with open('../datasets_knowledge_embedding/FB15k-237/valid.txt', 'r', errors='ig
         if e1 not in all_entity_dict or e2 not in all_entity_dict or r_projection not in all_relation_dict:
             pass
         else:
-            e1, r_projection, r_reverse, e2 = all_entity_dict[e1], -all_relation_dict[r_projection],\
+            e1, r_projection, r_reverse, e2 = all_entity_dict[e1], -all_relation_dict[r_projection], \
                                               -all_relation_dict[r_reverse], all_entity_dict[e2]
             incoming_edges_valid[e2].add(r_projection)
             outcoming_edges_valid[e2].add(r_reverse)
@@ -375,7 +391,7 @@ with open('../datasets_knowledge_embedding/FB15k-237/valid.txt', 'r', errors='ig
             reverse_projection_valid[(e2, r_projection)].add(e1)
 
 valid_easy_query, valid_hard_query, valid_easy_ans, valid_hard_ans = produce_test_query(
-    incoming_edges_valid, projection_valid, reverse_projection_valid, projection, numentity,
+    incoming_edges_valid, projection_valid, reverse_projection_valid, incoming_edges, projection, numentity,
     query_num=valid_query_num, query_structures=my_tasks, max_ans=max_ans)
 pickle.dump(valid_hard_query, open(os.path.join(
     new_data_path, "valid-queries.pkl"), "wb"))
@@ -407,25 +423,24 @@ with open('../datasets_knowledge_embedding/FB15k-237/test.txt', 'r', errors='ign
             reverse_projection_test[(e1, r_reverse)].add(e2)
             reverse_projection_test[(e2, r_projection)].add(e1)
 
-
 test_easy_query, test_hard_query, test_easy_ans, test_hard_ans = produce_test_query(
-    incoming_edges_test, projection_test, reverse_projection_test,
+    incoming_edges_test, projection_test, reverse_projection_test, incoming_edges_valid,
     projection_valid, numentity, query_num=valid_query_num, query_structures=my_tasks, max_ans=max_ans)
 
 stanford_train_ans = pickle.load(
-        open(os.path.join(stanford_data_path, "train-answers.pkl"), 'rb'))
+    open(os.path.join(stanford_data_path, "train-answers.pkl"), 'rb'))
 stanford_valid_easy_ans = pickle.load(
-        open(os.path.join(stanford_data_path, "valid-easy-answers.pkl"), 'rb'))
+    open(os.path.join(stanford_data_path, "valid-easy-answers.pkl"), 'rb'))
 stanford_valid_hard_ans = pickle.load(
-        open(os.path.join(stanford_data_path, "valid-hard-answers.pkl"), 'rb'))
+    open(os.path.join(stanford_data_path, "valid-hard-answers.pkl"), 'rb'))
 stanford_test_easy_ans = pickle.load(
-        open(os.path.join(stanford_data_path, "test-easy-answers.pkl"), 'rb'))
+    open(os.path.join(stanford_data_path, "test-easy-answers.pkl"), 'rb'))
 stanford_test_hard_ans = pickle.load(
-        open(os.path.join(stanford_data_path, "test-hard-answers.pkl"), 'rb'))
+    open(os.path.join(stanford_data_path, "test-hard-answers.pkl"), 'rb'))
 check_ans = check_query(train_queries, train_answers, stanford_train_ans)
-check_valid_ans = check_query(valid_hard_query, valid_easy_ans, stanford_valid_easy_ans)\
+check_valid_ans = check_query(valid_hard_query, valid_easy_ans, stanford_valid_easy_ans) \
                   + check_query(valid_hard_query, valid_hard_ans, stanford_valid_hard_ans)
-check_test_ans = check_query(test_hard_query, test_easy_ans, stanford_test_easy_ans)\
+check_test_ans = check_query(test_hard_query, test_easy_ans, stanford_test_easy_ans) \
                  + check_query(test_hard_query, test_hard_ans, stanford_test_hard_ans)
 print("check ans here", check_ans, check_valid_ans, check_test_ans)
 easy_train_average, _ = count_answer_num(train_queries, train_answers, collections.defaultdict(set))
@@ -438,4 +453,3 @@ pickle.dump(test_easy_ans, open(os.path.join(
     new_data_path, "test-easy-answers.pkl"), "wb"))
 pickle.dump(test_hard_ans, open(os.path.join(
     new_data_path, "test-hard-answers.pkl"), "wb"))
-
