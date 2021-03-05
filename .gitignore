@@ -1,6 +1,7 @@
 logs/
 *__pycache__*
 data/
+*.zip
 *.sh
 .DS_Store
 

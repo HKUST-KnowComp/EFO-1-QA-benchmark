@@ -326,6 +326,7 @@ def load_data(args, train_tasks, test_tasks, number_of_queries, number_of_entiti
 
 
 def main(args):
+    # from now on the args is a dict
     set_global_seed(args.seed)
     train_tasks = args.train_tasks.split('.')
     test_tasks = args.test_tasks.split('.')
