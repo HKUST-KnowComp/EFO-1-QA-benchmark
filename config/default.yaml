@@ -1,0 +1,37 @@
+data:
+  path: data/FB15k-237-betae
+  cpu: 10
+train:
+  negative_sample_size: 128
+  batch_size: 512
+  test_batch_size: 1
+  learning_rate: 0.0001
+  steps: 100000
+  warm_up_steps: None
+  tasks: 1p.2p.3p.1i.2i
+evaluate:
+  valid_steps: 30000
+  log_steps: 100
+  test_valid_log_steps: 1000
+  print: true
+  tasks: 1p.2p.3p.1i.2i
+result:
+  checkpoint_steps: 50000
+  case_path: default
+embedding:
+  geometry: beta # one of [vec, box, beta, dm]
+  beta:
+    entity_dim: 400
+    relation_dim: 400
+    hidden_dim: 1600
+    num_layers: 2
+  box:
+    entity_dim: 400
+    relation_dim: 400
+    offset_activation: None
+    center_reg: 0.02
+  dm:
+    entity_dim: 2
+    relation_dim: 2
+    hidden_dim: 1600
+    num_layers: 2
