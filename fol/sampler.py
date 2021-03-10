@@ -17,6 +17,9 @@ class Sampler(ABC):
         """A method for dump the contained information into the string
         """
         return ""
+
+    def clear(self):
+        self.objects = set()
     
 
 class VariableSampler(Variable, Sampler):
@@ -110,13 +113,20 @@ class ProjectionSampler(Projection, Sampler):
         self.projections = projections # this is abstracted from knowledge graphs
         # a possible data structure of projections:
         # projections[head_entity][relation] = tail_entities
+        self.rel = ""  #TODO to fill, the relation you select
 
     def sample(self):
-        pass
+        # TODO
+        return self.objects
 
     def dumps(self):
-        relation_str = "?" #TODO: you make it
-        return f"[{relation_str}]({self.f.dumps()})"
+        r_str = "?" #TODO: you make it from self.rel
+        return f"[{r_str}]({self.f.dumps()})"
+    
+    def clear(self):
+        self.objects = set()
+        self.rel = set()
+
 
 # This section is important, since it determines the class you use.
 grammar_class = {
