@@ -18,6 +18,7 @@ class Sampler(ABC):
         """
         return ""
 
+    @abstractmethod
     def clear(self):
         self.objects = set()
     
@@ -41,6 +42,8 @@ class VariableSampler(Variable, Sampler):
         obj_cat_str = ', '.join([obj for obj in list(self.objects)])
         return f'{obj_cat_str}'
 
+    def clear(self):
+        self.objects = set()
 
 class ConjunctionSampler(Conjunction, Sampler):
     def __init__(self, lf: Sampler, rf: Sampler):
@@ -58,6 +61,11 @@ class ConjunctionSampler(Conjunction, Sampler):
     def dumps(self):
         return f'({self.lf.dumps()})&({self.rf.dumps()})'
 
+    def clear(self):
+        self.objects = set()
+        self.lf.clear()
+        self.rf.clear()
+
 class DisjunctionSampler(Disjunction, Sampler):
     def __init__(self, lf: Sampler, rf: Sampler):
         super().__init__(lf, rf)
@@ -73,6 +81,12 @@ class DisjunctionSampler(Disjunction, Sampler):
 
     def dumps(self):
         return f'({self.lf.dumps()})|({self.rf.dumps()})'
+
+    def clear(self):
+        self.objects = set()
+        self.lf.clear()
+        self.rf.clear()
+
 
 class NegationSamplerProto(Negation, Sampler):
     def __init__(self, f: Sampler):
@@ -90,6 +104,10 @@ class NegationSamplerProto(Negation, Sampler):
 
     def dumps(self):
         return f"!({self.f.dumps()})"
+
+    def clear(self):
+        self.objects = set()
+        self.f.clear()
 
 class NegationSamplerV1(NegationSamplerProto, Sampler):
     def __init__(self, f):
@@ -126,6 +144,7 @@ class ProjectionSampler(Projection, Sampler):
     def clear(self):
         self.objects = set()
         self.rel = set()
+        self.f.clear()
 
 
 # This section is important, since it determines the class you use.
