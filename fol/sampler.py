@@ -8,7 +8,15 @@ class Sampler(ABC):
         
     @abstractmethod
     def sample(self):
-        return self.objects
+        """A method for sampling data and handling the set operation
+        """
+        return self.objects, None
+
+    @abstractmethod
+    def dumps(self):
+        """A method for dump the contained information into the string
+        """
+        return ""
     
 
 class VariableSampler(Variable, Sampler):
@@ -25,6 +33,10 @@ class VariableSampler(Variable, Sampler):
         """
         self.objects.add(1)
         return self.objects
+    
+    def dumps(self):
+        obj_cat_str = ', '.join([obj for obj in list(self.objects)])
+        return f'{obj_cat_str}'
 
 
 class ConjunctionSampler(Conjunction, Sampler):
@@ -40,6 +52,8 @@ class ConjunctionSampler(Conjunction, Sampler):
         self.objects = lobjs.intersection(robjs)
         return self.objects
     
+    def dumps(self):
+        return f'({self.lf.dumps()})&({self.rf.dumps()})'
 
 class DisjunctionSampler(Disjunction, Sampler):
     def __init__(self, lf: Sampler, rf: Sampler):
@@ -54,8 +68,11 @@ class DisjunctionSampler(Disjunction, Sampler):
         self.objects = lobjs.union(robjs)
         return self.objects
 
-class NegationSampler_Proto(Negation, Sampler):
-    def __init__(self, f):
+    def dumps(self):
+        return f'({self.lf.dumps()})|({self.rf.dumps()})'
+
+class NegationSamplerProto(Negation, Sampler):
+    def __init__(self, f: Sampler):
         super().__init__(f)
     
     def sample(self):
@@ -68,7 +85,10 @@ class NegationSampler_Proto(Negation, Sampler):
         """
         pass
 
-class NegationSamplerV1(Negation, Sampler):
+    def dumps(self):
+        return f"!({self.f.dumps()})"
+
+class NegationSamplerV1(NegationSamplerProto, Sampler):
     def __init__(self, f):
         super().__init__(f)
     
@@ -83,7 +103,7 @@ class NegationSamplerV2(Negation, Sampler):
         pass
 
 class ProjectionSampler(Projection, Sampler):
-    def __init__(self, f, projections):
+    def __init__(self, f: Sampler, projections):
         def __init__(self, f):
             super().__init__(f)
         
@@ -94,6 +114,9 @@ class ProjectionSampler(Projection, Sampler):
     def sample(self):
         pass
 
+    def dumps(self):
+        relation_str = "?" #TODO: you make it
+        return f"[{relation_str}]({self.f.dumps()})"
 
 # This section is important, since it determines the class you use.
 grammar_class = {
