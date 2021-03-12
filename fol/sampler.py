@@ -43,12 +43,11 @@ class VariableSampler(Variable, Sampler):
         - Return the sampled results
         """
         new_variable = random.sample(self.candidate_entities, 1)[0]
-        print(new_variable)
         self.objects.add(new_variable)
         return self.objects
 
     def dumps(self):
-        obj_cat_str = ', '.join([obj for obj in list(self.objects)])
+        obj_cat_str = ', '.join([str(obj) for obj in list(self.objects)])
         return f'{obj_cat_str}'
 
     def clear(self):
@@ -154,7 +153,6 @@ class ProjectionSampler(Projection, Sampler):
         if len(variable) != 0:
             chosen_variable = random.sample(variable, 1)[0]
             self.rel = random.sample(projection[chosen_variable].keys(), 1)[0]
-            print('rel', self.rel)
             self.objects = projection[chosen_variable][self.rel]
             for e in variable:
                 self.objects.update(projection[e][self.rel])
@@ -162,9 +160,8 @@ class ProjectionSampler(Projection, Sampler):
         else:
             return set()
 
-
     def dumps(self):
-        r_str = "?"  # TODO: you make it from self.rel
+        r_str = str(self.rel)  # Notice: sample first
         return f"[{r_str}]({self.f.dumps()})"
 
     def clear(self):
@@ -295,5 +292,6 @@ if __name__ == "__main__":
         print(f'parsing the query {name}: `{case}`')
         f = sample_beta_like(case, grammar_class, projection)
         a = f.sample()
-        print(a)
+        b = f.dumps()
+        print(a, b)
         print()
