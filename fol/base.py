@@ -9,44 +9,44 @@ class Formula(ABC):
 class Variable(Formula):
     def __init__(self):
         super().__init__()
-        print("claim a variable")
         pass
 
 
 class Conjunction(Formula):
     def __init__(self, lf, rf):
         super().__init__()
-        print("claim a conjunction")
         self.lf, self.rf = lf, rf
 
 
 class Disjunction(Formula):
     def __init__(self, lf, rf):
         super().__init__()
-        print("claim a disjunction")
         self.lf, self.rf = lf, rf
 
 
 class Negation(Formula):
     def __init__(self, f):
         super().__init__()
-        print("claim a negation")
         self.f = f
 
 
 class Projection(Formula):
     def __init__(self, f):
         super().__init__()
-        print("claim a projection")
         self.f = f
 
+class Difference(Formula):
+    def __init__(self, lf, rf):
+        super().__init__()
+        self.lf = lf
+        self.rf = rf
 
 # This dictionary is important, since it determines the class you use.
 grammar_class = {
     'delim': '()',
     'zop': Variable,
     'uop': {'~': Negation, 'p': Projection},
-    'biop': {'&': Conjunction, '|': Disjunction}
+    'biop': {'&': Conjunction, '|': Disjunction, '-': Difference}
 }
 
 
@@ -78,7 +78,7 @@ def generate_meta_query(d=0, max_depth=5):
     if d > max_depth:
         return "e"
 
-    t = random.randint(0, 3)
+    t = random.randint(0, 4)
     if t == 0:
         return f"p({generate_meta_query(d+1, max_depth)})"
     if t == 1:
@@ -87,8 +87,8 @@ def generate_meta_query(d=0, max_depth=5):
         return f"({generate_meta_query(d+1, max_depth)})&({generate_meta_query(d+1, max_depth)})"
     if t == 3:
         return f"({generate_meta_query(d+1, max_depth)})|({generate_meta_query(d+1, max_depth)})"
-    # if t == 4:
-    #     return "e"
+    if t == 4:
+        return f"({generate_meta_query(d+1, max_depth)})-({generate_meta_query(d+1, max_depth)})"
 
 
 def parse_meta_query(query, gc):
@@ -98,12 +98,10 @@ def parse_meta_query(query, gc):
         return zop()
 
     pstack = []
-    print()
     uop_triggers = []
     biop_triggers = []
 
     for i, c in enumerate(query):
-        print(c, end='-')
         if c in delim:  # if there is any composition
             if c == '(':
                 pstack.append(i)
