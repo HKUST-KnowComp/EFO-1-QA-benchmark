@@ -60,11 +60,13 @@ class VariableSampler(Variable, Sampler):
         return self.objects, self.easy_objects
 
     def reverse_sample(self, need_to_contain: bool = None, essential_point=None):
-        if not need_to_contain:
-            essential_point = random.sample(self.candidate_entities - set(essential_point), 1)[0]
-        if essential_point is None:
+        if need_to_contain is False:
+            essential_point = random.sample(self.candidate_entities - {essential_point}, 1)[0]
+        if need_to_contain is None and essential_point is None:
             essential_point = random.sample(self.candidate_entities, 1)[0]
-        return essential_point
+        self.objects = {essential_point}
+        self.easy_objects = {essential_point}
+        return self.objects, self.easy_objects
 
     def dumps(self):
         obj_cat_str = ', '.join([str(obj) for obj in list(self.objects)])
@@ -93,15 +95,17 @@ class ConjunctionSampler(Conjunction, Sampler):
         if need_to_contain is False:
             choose_formula = random.randint(0, 1)
             if choose_formula == 0:
-                lq = self.lf.reverse_sample(need_to_contain=False, essential_point=essential_point)
-                rq = self.rf.reverse_sample()
+                lobjs, lobjs_easy = self.lf.reverse_sample(need_to_contain=False, essential_point=essential_point)
+                robjs, robjs_easy = self.rf.reverse_sample()
             else:
-                lq = self.lf.reverse_sample()
-                rq = self.rf.reverse_sample(need_to_contain=False, essential_point=essential_point)
+                lobjs, lobjs_easy = self.lf.reverse_sample()
+                robjs, robjs_easy = self.rf.reverse_sample(need_to_contain=False, essential_point=essential_point)
         else:  # By default, choose a common start point.
-            lq = self.lf.reverse_sample(need_to_contain=True, essential_point=essential_point)
-            rq = self.rf.reverse_sample(need_to_contain=True, essential_point=essential_point)
-        return f'({lq})&({rq})'
+            lobjs, lobjs_easy = self.lf.reverse_sample(need_to_contain=True, essential_point=essential_point)
+            robjs, robjs_easy = self.rf.reverse_sample(need_to_contain=True, essential_point=essential_point)
+        self.objects = lobjs.intersection(robjs)
+        self.easy_objects = lobjs_easy.intersection(robjs_easy)
+        return self.objects, self.easy_objects
 
     def dumps(self):
         return f'({self.lf.dumps()})&({self.rf.dumps()})'
@@ -128,14 +132,20 @@ class DisjunctionSampler(Disjunction, Sampler):
     def reverse_sample(self, need_to_contain: bool = None, essential_point=None):
         if essential_point is None:
             essential_point = random.sample(self.candidate_entites, 1)[0]
-        choose_formula = random.randint(0, 1)
-        if choose_formula == 0:
-            lq = self.lf.reverse_sample(need_to_contain=True, essential_point=essential_point)
-            rq = self.rf.reverse_sample()
+        if need_to_contain is False:
+            lobjs, lobjs_easy = self.lf.reverse_sample(need_to_contain=False, essential_point=essential_point)
+            robjs, robjs_easy = self.rf.reverse_sample(need_to_contain=False, essential_point=essential_point)
         else:
-            lq = self.lf.reverse_sample()
-            rq = self.rf.reverse_sample(need_to_contain=True, essential_point=essential_point)
-        return f'({lq})|({rq})'
+            choose_formula = random.randint(0, 1)
+            if choose_formula == 0:
+                lobjs, lobjs_easy = self.lf.reverse_sample(need_to_contain=True, essential_point=essential_point)
+                robjs, robjs_easy = self.rf.reverse_sample()
+            else:
+                lobjs, lobjs_easy = self.lf.reverse_sample()
+                robjs, robjs_easy = self.rf.reverse_sample(need_to_contain=True, essential_point=essential_point)
+        self.objects = lobjs.union(robjs)
+        self.easy_objects = lobjs_easy.union(robjs_easy)
+        return self.objects, self.easy_objects
 
     def dumps(self):
         return f'({self.lf.dumps()})|({self.rf.dumps()})'
@@ -186,9 +196,11 @@ class NegationSamplerV1(NegationSamplerProto, Sampler):
 
     def reverse_sample(self, need_to_contain: bool = None, essential_point: int = None):
         if need_to_contain is not None:
-            need_to_contain = 1 - need_to_contain
-        query = self.f.reverse_sample(need_to_contain=need_to_contain, essential_point=essential_point)
-        return f"!({query})"
+            need_to_contain = bool(1 - need_to_contain)
+        fobjs, fobjs_easy = self.f.reverse_sample(need_to_contain=need_to_contain, essential_point=essential_point)
+        self.objects = self.bounds - fobjs
+        self.easy_objects = self.bounds - fobjs_easy
+        return self.objects, self.easy_objects
 
 
 class NegationSamplerV2(Negation, Sampler):
@@ -243,11 +255,17 @@ class ProjectionSampler(Projection, Sampler):
             self.rel = random.sample(self.reverse_projection[now_point].keys(), 1)[0]
             next_points = self.reverse_projection[now_point][self.rel]
             next_point = random.sample(next_points, 1)[0]
-            query = self.f.reverse_sample(need_to_contain=True, essential_point=next_point)
             meeting_requirement = True
-            if need_to_contain is False and now_point in self.projections[next_point][self.rel]:
+            if need_to_contain is False and essential_point in self.projections[next_point][self.rel]:
                 meeting_requirement = False
-        return f"[{str(self.rel)}]({query})"
+        qobjs, qobjs_easy = self.f.reverse_sample(need_to_contain=True, essential_point=next_point)
+        self.objects = self.projections[next_point][self.rel]
+        self.easy_objects = self.projection_origin[next_point][self.rel]
+        for entity in qobjs:
+            self.objects.update(self.projections[entity][self.rel])
+        for entity in qobjs_easy:
+            self.easy_objects.update(self.projection_origin[entity][self.rel])
+        return self.objects, self.easy_objects
 
     def dumps(self):
         r_str = str(self.rel)  # Notice: sample first
@@ -404,5 +422,6 @@ if __name__ == "__main__":
                                    reverse_projection_valid, reverse_projection_train)
         a = f_valid.sample()
         b = f_valid.dumps()
-        d = f_valid.reverse_sample()  # possible '([30](5689))&(([30](5689))&([322](434)))'
-        print(d)
+        d_ans, d_easy_ans = f_valid.reverse_sample(essential_point=2)
+        e = f_valid.dumps()
+        print(e)
