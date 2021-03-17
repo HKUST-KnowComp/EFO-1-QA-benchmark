@@ -78,17 +78,17 @@ def generate_meta_query(d=0, max_depth=5):
     if d > max_depth:
         return "e"
 
-    t = random.randint(0, 4)
+    t = random.randint(0, 3)
     if t == 0:
         return f"p({generate_meta_query(d+1, max_depth)})"
     if t == 1:
-        return f"~({generate_meta_query(d+1, max_depth)})"
-    if t == 2:
         return f"({generate_meta_query(d+1, max_depth)})&({generate_meta_query(d+1, max_depth)})"
-    if t == 3:
+    if t == 2:
         return f"({generate_meta_query(d+1, max_depth)})|({generate_meta_query(d+1, max_depth)})"
-    if t == 4:
+    if t == 3:
         return f"({generate_meta_query(d+1, max_depth)})-({generate_meta_query(d+1, max_depth)})"
+    # if t == 4:
+        # return f"~({generate_meta_query(d+1, max_depth)})"
 
 
 def parse_meta_query(query, gc):
@@ -148,7 +148,7 @@ if __name__ == '__main__':
     data = defaultdict(list)
     for i in range(100):
         for j in range(10):
-            meta_q = generate_meta_query()
+            meta_q = generate_meta_query(max_depth=j)
             parse_meta_query(meta_q, grammar_class)
             data['id'].append(i)
             data['depth'].append(j)
