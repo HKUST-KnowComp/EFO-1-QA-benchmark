@@ -282,7 +282,7 @@ class ProjectionSampler(Projection, Sampler):
 grammar_class = {
     'delim': '()',
     'zop': VariableSampler,
-    'uop': {'!': NegationSamplerV1, 'p': ProjectionSampler},
+    'uop': {'~': NegationSamplerV1, 'p': ProjectionSampler},
     'biop': {'&': ConjunctionSampler, '|': DisjunctionSampler}
 }
 
