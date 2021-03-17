@@ -45,7 +45,7 @@ class Projection(Formula):
 grammar_class = {
     'delim': '()',
     'zop': Variable,
-    'uop': {'!': Negation, 'p': Projection},
+    'uop': {'~': Negation, 'p': Projection},
     'biop': {'&': Conjunction, '|': Disjunction}
 }
 
