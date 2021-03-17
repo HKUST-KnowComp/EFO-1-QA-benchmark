@@ -4,6 +4,7 @@ data/
 *.sh
 .DS_Store
 
+*.csv
 *.svg
 *.pdf
 *.eps

@@ -1,6 +1,6 @@
 from abc import ABC
-
-
+import random
+from collections import defaultdict
 class Formula(ABC):
     def __init__(self):
         pass
@@ -74,8 +74,24 @@ beta_query = {
     'up': 'p(p(e)|p(e))'
 }
 
+def generate_meta_query(d=0, max_depth=5):
+    if d > max_depth:
+        return "e"
 
-def parse_beta_like(query, gc):
+    t = random.randint(0, 3)
+    if t == 0:
+        return f"p({generate_meta_query(d+1, max_depth)})"
+    if t == 1:
+        return f"~({generate_meta_query(d+1, max_depth)})"
+    if t == 2:
+        return f"({generate_meta_query(d+1, max_depth)})&({generate_meta_query(d+1, max_depth)})"
+    if t == 3:
+        return f"({generate_meta_query(d+1, max_depth)})|({generate_meta_query(d+1, max_depth)})"
+    # if t == 4:
+    #     return "e"
+
+
+def parse_meta_query(query, gc):
     delim, zop, uop, biop = get_grammar_class(gc)
 
     if query == 'e':
@@ -102,7 +118,7 @@ def parse_beta_like(query, gc):
                     raise SyntaxError(f"Query {query} is Iiligal")
                 # address the only bracket case
                 if begin == 0 and i == len(query) - 1:
-                    return parse_beta_like(last_dilim_query, grammar_class)
+                    return parse_meta_query(last_dilim_query, grammar_class)
 
         elif c in biop:  # handle the conjunction and disjunction
             if len(pstack) == 0:  # only when at the top of the syntax tree
@@ -113,18 +129,33 @@ def parse_beta_like(query, gc):
                 uop_triggers.append([i, c])
 
     for i, c in biop_triggers:
-        lf, rf = parse_beta_like(query[:i], grammar_class), parse_beta_like(query[i + 1:], grammar_class)
+        lf, rf = parse_meta_query(query[:i], grammar_class), parse_meta_query(query[i + 1:], grammar_class)
         return biop[c](lf, rf)
     for i, c in uop_triggers:
-        f = parse_beta_like(query[i + 1:], grammar_class)
+        f = parse_meta_query(query[i + 1:], grammar_class)
         return uop[c](f)
 
     raise SyntaxError(f"Query {query} fall out of branches")
 
 
 if __name__ == '__main__':
+    # test beta type query
     for name in beta_query:
         case = beta_query[name]
         print(f'parsing the query {name}: `{case}`')
-        f = parse_beta_like(case, grammar_class)
+        f = parse_meta_query(case, grammar_class)
         print()
+
+    # test random generate query
+    data = defaultdict(list)
+    for i in range(100):
+        for j in range(10):
+            meta_q = generate_meta_query()
+            parse_meta_query(meta_q, grammar_class)
+            data['id'].append(i)
+            data['depth'].append(j)
+            data['meta_query'].append(meta_q)
+    import pandas as pd
+    df = pd.DataFrame(data=data)
+    df.to_csv('fol/random_meta_query.csv', index=False)
+
