@@ -6,7 +6,6 @@ import random
 from abc import ABC, abstractmethod
 
 from fol.base import Variable, Conjunction, Disjunction, Negation, Projection
-from fol.base import parse_beta_like
 
 
 class Sampler(ABC):
@@ -70,7 +69,7 @@ class VariableSampler(Variable, Sampler):
 
     def dumps(self):
         obj_cat_str = ', '.join([str(obj) for obj in list(self.objects)])
-        return f'{obj_cat_str}'
+        return f'{{{obj_cat_str}}}'
 
     def clear(self):
         self.objects = set()
@@ -298,9 +297,15 @@ def get_grammar_class(gc):
 def sample_beta_like(query, gc, projection, projection_origin, reverse_projection, reverse_projection_origin):
     delim, zop, uop, biop = get_grammar_class(gc)
 
-    if query == 'e':
-        return zop(set(range(len(projection))))
-
+    if query == 'e' or query[0] == '{':
+        if query == 'e':
+            return zop(set(range(len(projection))))
+        else:
+            i = 1
+            while query[i] != '}':
+                i += 1
+            entity = int(query[1:i])
+            return zop({entity})
     pstack = []
     print()
     uop_triggers = []
@@ -399,6 +404,22 @@ beta_query = {
     '2u': 'p(e)|p(e)',
     'up': 'p(p(e)|p(e))'
 }
+
+partial_beta_query = {
+    '1p': 'p({3})',
+    '2p': 'p(p({4}))',
+    '3p': 'p(p(p({7})))',
+    '2i': 'p(e)&p({1003})',
+    '3i': 'p(e)&p({5133})&p(e)',
+    '2in': 'p(e)&!p({876})',
+    '3in': 'p({971})&p(e)&!p(e)',
+    'inp': 'p(p(e)&!p({765}))',
+    'pni': 'p(p({10074}))&!p(e)',
+    'ip': 'p(p(e)&p(e))',
+    'pi': 'p(e)&p(p({1087}))',
+    '2u': 'p(e)|p({7087})',
+    'up': 'p(p(e)|p({21}))'
+}
 '''
 
 '''
@@ -413,6 +434,7 @@ if __name__ == "__main__":
     projection_valid, reverse_projection_valid = load_data('../datasets_knowledge_embedding/FB15k-237/valid.txt',
                                                            all_entity_dict, all_relation_dict, projection_train,
                                                            reverse_projection_train)
+    '''                                                   
     for name in beta_query:
         case = beta_query[name]
         print(f'parsing the query {name}: `{case}`')
@@ -425,3 +447,16 @@ if __name__ == "__main__":
         d_ans, d_easy_ans = f_valid.reverse_sample(essential_point=2)
         e = f_valid.dumps()
         print(e)
+    '''
+    for name in partial_beta_query:
+        case = partial_beta_query[name]
+        print(f'parsing the query {name}: `{case}`')
+        f_valid = sample_beta_like(case, grammar_class, projection_valid, projection_train,
+                                   reverse_projection_valid, reverse_projection_train)
+        e, e_easy = f_valid.sample()
+        g = f_valid.dumps()
+        h, h_easy = f_valid.reverse_sample()
+        i = f_valid.dumps()
+        print(g, e, e_easy)
+        print(i, h, h_easy)
+
