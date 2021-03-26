@@ -3,9 +3,12 @@ import copy
 import os
 import pickle
 import random
+import json
+import numpy as np
+import matplotlib.pyplot as plt
 from abc import ABC, abstractmethod
 
-from fol.base import Variable, Conjunction, Disjunction, Negation, Projection
+from fol.base import Variable, Conjunction, Disjunction, Negation, Projection, Difference
 
 
 class Sampler(ABC):
@@ -202,16 +205,39 @@ class NegationSamplerV1(NegationSamplerProto, Sampler):
         return self.objects, self.easy_objects
 
 
-class NegationSamplerV2(Negation, Sampler):
-    def __init__(self, f: Sampler):
-        super().__init__(f)
-        self.flag = True
+class DifferenceSampler(Difference, Sampler):
+    def __init__(self, lf, rf, candidate_entities):
+        super().__init__(lf, rf)
+        self.lf = lf
+        self.rf = rf
+        self.candidate_entities = candidate_entities
 
     def sample(self):
-        pass
+        lfobjs, lfobjs_easy = self.lf.sample()
+        rfobjs, rfobjs_easy = self.rf.sample()
+        self.objects = lfobjs - rfobjs
+        self.easy_objects = lfobjs_easy - rfobjs_easy
+        return self.objects, self.easy_objects
 
-    def reverse_sample(self):
-        pass
+    def reverse_sample(self, need_to_contain: bool = None, essential_point: int = None):
+        if need_to_contain is False:
+            lfobjs, lfobjs_easy = self.lf.reverse_sample(need_to_contain=False, essential_point=essential_point)
+            rfobjs, rfobjs_easy = self.rf.reverse_sample()
+        else:
+            lfobjs, lfobjs_easy = self.lf.reverse_sample(need_to_contain=True, essential_point=essential_point)
+            rfobjs, rfobjs_easy = self.rf.reverse_sample(need_to_contain=False, essential_point=essential_point)
+        self.objects = lfobjs - rfobjs
+        self.easy_objects = lfobjs_easy - rfobjs_easy
+        return self.objects, self.easy_objects
+
+    def dumps(self):
+        return f'({self.lf.dumps()})-({self.rf.dumps()})'
+
+    def clear(self):
+        self.objects = set()
+        self.easy_objects = set()
+        self.lf.clear()
+        self.rf.clear()
 
 
 class ProjectionSampler(Projection, Sampler):
@@ -257,13 +283,15 @@ class ProjectionSampler(Projection, Sampler):
             meeting_requirement = True
             if need_to_contain is False and essential_point in self.projections[next_point][self.rel]:
                 meeting_requirement = False
-        qobjs, qobjs_easy = self.f.reverse_sample(need_to_contain=True, essential_point=next_point)
+        f_object, f_object_easy = self.f.reverse_sample(need_to_contain=True, essential_point=next_point)
         self.objects = self.projections[next_point][self.rel]
         self.easy_objects = self.projection_origin[next_point][self.rel]
-        for entity in qobjs:
-            self.objects.update(self.projections[entity][self.rel])
-        for entity in qobjs_easy:
-            self.easy_objects.update(self.projection_origin[entity][self.rel])
+        for entity in f_object.copy():
+            if type(entity) == int:
+                self.objects.update(self.projections[entity][self.rel])
+        for entity in f_object.copy():
+            if type(entity) == int:
+                self.easy_objects.update(self.projection_origin[entity][self.rel])
         return self.objects, self.easy_objects
 
     def dumps(self):
@@ -282,7 +310,7 @@ grammar_class = {
     'delim': '()',
     'zop': VariableSampler,
     'uop': {'~': NegationSamplerV1, 'p': ProjectionSampler},
-    'biop': {'&': ConjunctionSampler, '|': DisjunctionSampler}
+    'biop': {'&': ConjunctionSampler, '|': DisjunctionSampler, '-': DifferenceSampler}
 }
 
 
@@ -294,7 +322,7 @@ def get_grammar_class(gc):
     return delim, zop, uop, biop
 
 
-def sample_beta_like(query, gc, projection, projection_origin, reverse_projection, reverse_projection_origin):
+def parse_string(query, gc, projection, projection_origin, reverse_projection, reverse_projection_origin):
     delim, zop, uop, biop = get_grammar_class(gc)
 
     if query == 'e' or query[0] == '{':
@@ -307,12 +335,10 @@ def sample_beta_like(query, gc, projection, projection_origin, reverse_projectio
             entity = int(query[1:i])
             return zop({entity})
     pstack = []
-    print()
     uop_triggers = []
     biop_triggers = []
 
     for i, c in enumerate(query):
-        print(c, end='-')
         if c in delim:  # if there is any composition
             if c == '(':
                 pstack.append(i)
@@ -327,9 +353,9 @@ def sample_beta_like(query, gc, projection, projection_origin, reverse_projectio
                     raise SyntaxError(f"Query {query} is Iiligal")
                 # address the only bracket case
                 if begin == 0 and i == len(query) - 1:
-                    return sample_beta_like(last_dilim_query, grammar_class,
-                                            projection, projection_origin, reverse_projection,
-                                            reverse_projection_origin)
+                    return parse_string(last_dilim_query, grammar_class,
+                                        projection, projection_origin, reverse_projection,
+                                        reverse_projection_origin)
 
         elif c in biop:  # handle the conjunction and disjunction
             if len(pstack) == 0:  # only when at the top of the syntax tree
@@ -340,14 +366,14 @@ def sample_beta_like(query, gc, projection, projection_origin, reverse_projectio
                 uop_triggers.append([i, c])
 
     for i, c in biop_triggers:
-        lf, rf = sample_beta_like(query[:i], grammar_class,
-                                  projection, projection_origin, reverse_projection, reverse_projection_origin), \
-                 sample_beta_like(query[i + 1:], grammar_class,
-                                  projection, projection_origin, reverse_projection, reverse_projection_origin)
+        lf, rf = parse_string(query[:i], grammar_class,
+                              projection, projection_origin, reverse_projection, reverse_projection_origin), \
+                 parse_string(query[i + 1:], grammar_class,
+                              projection, projection_origin, reverse_projection, reverse_projection_origin)
         return biop[c](lf, rf, set(range(len(projection))))
     for i, c in uop_triggers:
-        f = sample_beta_like(query[i + 1:], grammar_class,
-                             projection, projection_origin, reverse_projection, reverse_projection_origin)
+        f = parse_string(query[i + 1:], grammar_class,
+                         projection, projection_origin, reverse_projection, reverse_projection_origin)
         if c == 'p':
             return uop[c](f, projection, projection_origin, reverse_projection, reverse_projection_origin)
         else:
@@ -387,6 +413,30 @@ def read_indexing(data_path):
     id2rel = pickle.load(
         open(os.path.join(data_path, "id2rel.pkl"), 'rb'))
     return ent2id, rel2id, id2ent, id2rel
+
+
+def compare_depth_query(depth1, depth2, depth_dict,
+                        projection_hard, projection_origin, reverse_hard, reverse_origin, grammer_class,
+                        start_point_num, query_num):
+    start_point_set = random.sample(set(range(len(projection_hard))), start_point_num)
+    stored_similarity = collections.defaultdict(dict)
+    for ms1 in depth_dict[depth1][:query_num]:
+        for ms2 in depth_dict[depth2][:query_num]:
+            stored_similarity[ms1][ms2] = []
+            sampler1 = parse_string(ms1, grammar_class, projection_hard, projection_origin, reverse_hard,
+                                    reverse_origin)
+            sampler2 = parse_string(ms2, grammar_class, projection_hard, projection_origin, reverse_hard,
+                                    reverse_origin)
+            for start_point in start_point_set:
+                sampled_ans1, sampled_ans1_easy = sampler1.reverse_sample(need_to_contain=True,
+                                                                          essential_point=start_point)
+                sampled_ans2, sampled_ans2_easy = sampler2.reverse_sample(need_to_contain=True,
+                                                                          essential_point=start_point)
+                all_ans = sampled_ans1.union(sampled_ans2)
+                shared_ans = sampled_ans1.intersection(sampled_ans2)
+                similarity = len(shared_ans) / len(all_ans)
+                stored_similarity[ms1][ms2].append(similarity)
+    return stored_similarity
 
 
 beta_query = {
@@ -438,9 +488,9 @@ if __name__ == "__main__":
     for name in beta_query:
         case = beta_query[name]
         print(f'parsing the query {name}: `{case}`')
-        f = sample_beta_like(case, grammar_class, projection_train, projection_none,
+        f = parse_string(case, grammar_class, projection_train, projection_none,
                              reverse_projection_train, reverse_proection_none)
-        f_valid = sample_beta_like(case, grammar_class, projection_valid, projection_train,
+        f_valid = parse_string(case, grammar_class, projection_valid, projection_train,
                                    reverse_projection_valid, reverse_projection_train)
         a = f_valid.sample()
         b = f_valid.dumps()
@@ -448,15 +498,41 @@ if __name__ == "__main__":
         e = f_valid.dumps()
         print(e)
     '''
+    '''
     for name in partial_beta_query:
         case = partial_beta_query[name]
         print(f'parsing the query {name}: `{case}`')
-        f_valid = sample_beta_like(case, grammar_class, projection_valid, projection_train,
-                                   reverse_projection_valid, reverse_projection_train)
+        f_valid = parse_string(case, grammar_class, projection_valid, projection_train,
+                               reverse_projection_valid, reverse_projection_train)
         e, e_easy = f_valid.sample()
         g = f_valid.dumps()
         h, h_easy = f_valid.reverse_sample()
         i = f_valid.dumps()
         print(g, e, e_easy)
         print(i, h, h_easy)
+    '''
+    import pandas as pd
+
+    generated_meta_string = pd.read_csv('random_meta_query.csv').to_dict()
+    all_depth_meta_string = collections.defaultdict(list)
+    for idx in generated_meta_string['meta_query']:
+        meta_string = generated_meta_string['meta_query'][idx]
+        depth = generated_meta_string['depth'][idx]
+        all_depth_meta_string[depth].append(meta_string)
+    all_similarity = compare_depth_query(depth1=3, depth2=9, depth_dict=all_depth_meta_string,
+                                         projection_hard=projection_train,
+                                         projection_origin=projection_none, reverse_hard=reverse_projection_train,
+                                         reverse_origin=reverse_proection_none, grammer_class=grammar_class,
+                                         start_point_num=10, query_num=10)
+    data = np.zeros(1000, dtype=float)
+    idx = 0
+    for ms1 in all_similarity.keys():
+        for ms2 in all_similarity[ms1].keys():
+            for s in all_similarity[ms1][ms2]:
+                data[idx] = s
+                idx += 1
+    plt.hist(data, bins=40, density=True)
+    plt.show()
+    with open('similarity.txt', 'w') as outfile:
+        json.dump(all_similarity, outfile)
 
