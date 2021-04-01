@@ -35,6 +35,7 @@ class Projection(Formula):
         super().__init__()
         self.f = f
 
+
 class Difference(Formula):
     def __init__(self, lf, rf):
         super().__init__()
@@ -73,6 +74,7 @@ beta_query = {
     '2u': 'p(e)|p(e)',
     'up': 'p(p(e)|p(e))'
 }
+
 
 def generate_meta_query(d=0, max_depth=5):
     if d > max_depth:

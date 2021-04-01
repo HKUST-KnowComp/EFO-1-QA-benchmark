@@ -221,8 +221,13 @@ class DifferenceSampler(Difference, Sampler):
 
     def reverse_sample(self, need_to_contain: bool = None, essential_point: int = None):
         if need_to_contain is False:
-            lfobjs, lfobjs_easy = self.lf.reverse_sample(need_to_contain=False, essential_point=essential_point)
-            rfobjs, rfobjs_easy = self.rf.reverse_sample()
+            choose_formula = random.randint(0, 1)
+            if choose_formula == 0:
+                lfobjs, lfobjs_easy = self.lf.reverse_sample(need_to_contain=False, essential_point=essential_point)
+                rfobjs, rfobjs_easy = self.rf.reverse_sample()
+            else:
+                lfobjs, lfobjs_easy = self.lf.reverse_sample()
+                rfobjs, rfobjs_easy = self.rf.reverse_sample(need_to_contain=True, essential_point=essential_point)
         else:
             lfobjs, lfobjs_easy = self.lf.reverse_sample(need_to_contain=True, essential_point=essential_point)
             rfobjs, rfobjs_easy = self.rf.reverse_sample(need_to_contain=False, essential_point=essential_point)
@@ -284,6 +289,8 @@ class ProjectionSampler(Projection, Sampler):
             if need_to_contain is False and essential_point in self.projections[next_point][self.rel]:
                 meeting_requirement = False
         f_object, f_object_easy = self.f.reverse_sample(need_to_contain=True, essential_point=next_point)
+        if None in f_object:
+            raise ValueError
         self.objects = self.projections[next_point][self.rel]
         self.easy_objects = self.projection_origin[next_point][self.rel]
         for entity in f_object.copy():
@@ -419,6 +426,7 @@ def compare_depth_query(depth1, depth2, depth_dict,
                         projection_hard, projection_origin, reverse_hard, reverse_origin, grammer_class,
                         start_point_num, query_num):
     start_point_set = random.sample(set(range(len(projection_hard))), start_point_num)
+    print(start_point_set)
     stored_similarity = collections.defaultdict(dict)
     for ms1 in depth_dict[depth1][:query_num]:
         for ms2 in depth_dict[depth2][:query_num]:
