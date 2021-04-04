@@ -1,6 +1,6 @@
-from abc import abstractclassmethod, ABC, abstractproperty
+from abc import ABC, abstractclassmethod, abstractproperty
 
-""" 
+"""
 First Order Query (FOQ) is a conceptual idea without any implementation
 First order formula is a string formulation of the FOQ
 
@@ -17,7 +17,7 @@ ZeroOrderObject := e
                     OR {IntegerList}
 IntegerList := Integer
                 OR IntegerList,IntegerList
-Remark: 
+Remark:
     1. If a formula only includes ()&|-ep, it is a meta formula
     2. Otherwise, it is a grounded formula
     3. If a formula doesn't contain any p and e, it is a fully grounded formula.
@@ -41,11 +41,23 @@ class FirstOrderQuery(ABC):
         pass
 
     @abstractclassmethod
+    def lift(self):
+        """ Remove all intermediate objects, grounded entities (ZOO) and relations (FOO)
+        """
+        pass
+
+    @abstractclassmethod
     def additive_ground(self, foq_str, *args, **kwargs):
         pass
 
     @abstractclassmethod
-    def exact_query(self):
+    def deterministic_query(self):
+        """ Consider the first entity / relation
+        """
+        pass
+
+    @abstractclassmethod
+    def random_query(self):
         pass
 
     @abstractclassmethod
@@ -69,9 +81,9 @@ class FirstOrderQuery(ABC):
         pass
 
 
-class ZeroOrderObject(FirstOrderQuery):
+class ZeroOrderObject(FirstOrderQuery, ABC):
     def __init__(self):
-        pass 
+        pass
 
     def top_down_parse(self, *args, **kwargs):
         return
@@ -80,7 +92,7 @@ class ZeroOrderObject(FirstOrderQuery):
     def meta_str(self):
         return type(self).__name__
 
-class FirstOrderObject(FirstOrderQuery):
+class FirstOrderObject(FirstOrderQuery, ABC):
     def __init__(self, q):
         self.operand_q = q
 
@@ -95,7 +107,7 @@ class FirstOrderObject(FirstOrderQuery):
     def meta_str(self):
         return f"{type(self).__name__}({self.operand_q.meta_str})"
 
-class BinaryOps(FirstOrderQuery):
+class BinaryOps(FirstOrderQuery, ABC):
     def __init__(self, lq, rq):
         self.loperand_q, self.roperand_q = lq, rq
 
@@ -233,7 +245,7 @@ def parse_top_foq_str(foq_str, z_obj=VariableQ, f_obj=ProjectionQ, binary_ops=bi
         i, c = top_binary_ops[-1]
         return (binary_ops[c](), (foq_str[:i], foq_str[i+1:]))
 
-    # zero order decision: identify the zero order objects 
+    # zero order decision: identify the zero order objects
     # consider two situations 'e' or '{x1, x2, ..., xn}'
     # you only need to initialize the variable class and assign the variable if necessary
     if foq_str == 'e':
@@ -249,7 +261,7 @@ def parse_top_foq_str(foq_str, z_obj=VariableQ, f_obj=ProjectionQ, binary_ops=bi
     # first order decision: identify the first order objects
     # 'psub_foq_str' or '[p1, p2, ..., pn]sub_foq_str'
     # you should initialize the projection class, assign the possible projections if necessary
-    # you should also return the argument for the 
+    # you should also return the argument for the
     if foq_str[0] == 'p':
         query = f_obj()
         return query, [foq_str[1:]]
