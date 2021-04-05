@@ -1,4 +1,5 @@
 from abc import ABC, abstractclassmethod, abstractproperty
+from typing import Tuple
 from .appfoq import AppFOQEstimator
 
 """
@@ -274,7 +275,11 @@ grammar_class = {
 }
 
 
-def parse_top_foq_formula(foq_formula, z_obj=VariableQ, f_obj=ProjectionQ, binary_ops=binary_ops) -> FirstOrderQuery:
+def parse_top_foq_formula(foq_formula: str,
+                          z_obj: FirstOrderQuery=VariableQ,
+                          f_obj: FirstOrderQuery=ProjectionQ,
+                          binary_ops=binary_ops) -> Tuple[
+                              FirstOrderQuery, Tuple[str]]:
     """ A new function to parse top-level first-order query string
     A first-order string must:
         1. follow the meta grammar
@@ -349,7 +354,7 @@ def parse_top_foq_formula(foq_formula, z_obj=VariableQ, f_obj=ProjectionQ, binar
                 return query, [foq_formula[i+1:]]
 
 
-def parse_foq_formula(foq_formula, grammar_class=grammar_class):
+def parse_foq_formula(foq_formula: str, grammar_class=grammar_class) -> FirstOrderQuery:
     """ This function parse a first order query string (with or without instantiation) into nested classes
     """
     obj, args = parse_top_foq_formula(foq_formula, **grammar_class)
