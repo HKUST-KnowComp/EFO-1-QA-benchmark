@@ -1,15 +1,16 @@
 
 from abc import ABC, abstractclassmethod
+from typing import List
 
-
+IntList = List[int]
 class AppFOQEstimator(ABC):
 
     @abstractclassmethod
-    def get_entity_embedding(self, entity_ids: list(int)):
+    def get_entity_embedding(self, entity_ids: IntList):
         pass
 
     @abstractclassmethod
-    def get_projection_embedding(self, proj_ids: list(int), emb):
+    def get_projection_embedding(self, proj_ids: IntList, emb):
         pass
 
     @abstractclassmethod
