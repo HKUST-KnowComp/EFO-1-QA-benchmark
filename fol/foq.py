@@ -80,20 +80,60 @@ class FirstOrderQuery(ABC):
         pass
 
 
-class ZeroOrderObject(FirstOrderQuery, ABC):
+class VariableQ(FirstOrderQuery):
     def __init__(self):
-        pass
+        super().__init__()
+        self.entities = []
 
-    def top_down_parse(self, *args, **kwargs):
-        return
+    @property
+    def meta_formula(self):
+        return "e"
+
+    @property
+    def ground_formula(self):
+        if self.entities:
+            return "{" + ",".join(str(e) for e in self.entities) + "}"
+        else:
+            return "e"
 
     @property
     def meta_str(self):
         return type(self).__name__
 
-class FirstOrderObject(FirstOrderQuery, ABC):
-    def __init__(self, q: FirstOrderQuery):
-        self.operand_q = q
+    def top_down_parse(self, *args, **kwargs):
+        return
+
+    def lift(self):
+        self.entities = []
+        return super().lift()
+
+    def additive_ground(self, foq_formula, *args, **kwargs):
+        obj, args = parse_top_foq_formula(foq_formula=foq_formula, **kwargs)
+        if isinstance(obj, type(self)):
+            assert len(args) == 0
+            self.entities += obj.entities
+        else:
+            raise ValueError(f"formula {foq_formula} is not in the same equivalence meta query class {self.meta_formula}")
+
+class ProjectionQ(FirstOrderQuery):
+    def __init__(self, q=None):
+        super().__init__(q)
+        self.relations = []
+
+    @property
+    def meta_formula(self):
+        return f"p({self.operand_q.meta_formula})"
+
+    @property
+    def ground_formula(self):
+        if self.relations:
+            return "[" + ",".join(str(r) for r in self.relations) + "]" + f"({self.operand_q.ground_formula})"
+        else:
+            return f"p({self.operand_q.ground_formula})"
+
+    @property
+    def meta_str(self):
+        return f"{type(self).__name__}({self.operand_q.meta_str})"
 
     def top_down_parse(self, operand_str, **kwargs):
         assert len(operand_str) == 1
@@ -102,9 +142,19 @@ class FirstOrderObject(FirstOrderQuery, ABC):
         self.operand_q = obj
         self.operand_q.top_down_parse(args, **kwargs)
 
-    @property
-    def meta_str(self):
-        return f"{type(self).__name__}({self.operand_q.meta_str})"
+    def lift(self):
+        self.relations = []
+        return super().lift()
+
+    def additive_ground(self, foq_formula, *args, **kwargs):
+        obj, args = parse_top_foq_formula(foq_formula=foq_formula, **kwargs)
+        if isinstance(obj, type(self)):
+            self.relations += obj.relations
+            assert len(args) == 1
+            self.operand_q.additive_ground(args[0])
+        else:
+            raise ValueError(f"formula {foq_formula} is not in the same equivalence meta query class {self.meta_formula}")
+
 
 class BinaryOps(FirstOrderQuery, ABC):
     def __init__(self, lq: FirstOrderQuery, rq: FirstOrderQuery):
@@ -139,63 +189,6 @@ class BinaryOps(FirstOrderQuery, ABC):
     def meta_str(self):
         return f"{type(self).__name__}({self.loperand_q.meta_str}, {self.roperand_q.meta_str})"
 
-
-class VariableQ(ZeroOrderObject):
-    def __init__(self):
-        super().__init__()
-        self.entities = []
-
-    @property
-    def meta_formula(self):
-        return "e"
-
-    @property
-    def ground_formula(self):
-        if self.entities:
-            return "{" + ",".join(str(e) for e in self.entities) + "}"
-        else:
-            return "e"
-
-    def lift(self):
-        self.entities = []
-        return super().lift()
-
-    def additive_ground(self, foq_formula, *args, **kwargs):
-        obj, args = parse_top_foq_formula(foq_formula=foq_formula, **kwargs)
-        if isinstance(obj, type(self)):
-            assert len(args) == 0
-            self.entities += obj.entities
-        else:
-            raise ValueError(f"formula {foq_formula} is not in the same equivalence meta query class {self.meta_formula}")
-
-class ProjectionQ(FirstOrderObject):
-    def __init__(self, q=None):
-        super().__init__(q)
-        self.relations = []
-
-    @property
-    def meta_formula(self):
-        return f"p({self.operand_q.meta_formula})"
-
-    @property
-    def ground_formula(self):
-        if self.relations:
-            return "[" + ",".join(str(r) for r in self.relations) + "]" + f"({self.operand_q.ground_formula})"
-        else:
-            return f"p({self.operand_q.ground_formula})"
-
-    def lift(self):
-        self.relations = []
-        return super().lift()
-
-    def additive_ground(self, foq_formula, *args, **kwargs):
-        obj, args = parse_top_foq_formula(foq_formula=foq_formula, **kwargs)
-        if isinstance(obj, type(self)):
-            self.relations += obj.relations
-            assert len(args) == 1
-            self.operand_q.additive_ground(args[0])
-        else:
-            raise ValueError(f"formula {foq_formula} is not in the same equivalence meta query class {self.meta_formula}")
 
 class ConjunctionQ(BinaryOps):
     def __init__(self, lq=None, rq=None):

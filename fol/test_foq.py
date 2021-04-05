@@ -49,6 +49,7 @@ def test_parse_grounded_formula():
         ogobj = parse_foq_formula(gobj.ground_formula)
         assert gobj.ground_formula == ogobj.ground_formula
 
+
 def test_additive_ground():
     for k, v in beta_query.items():
         obj = parse_foq_formula(v)
