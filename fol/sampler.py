@@ -492,7 +492,7 @@ if __name__ == "__main__":
     projection_valid, reverse_projection_valid = load_data('../datasets_knowledge_embedding/FB15k-237/valid.txt',
                                                            all_entity_dict, all_relation_dict, projection_train,
                                                            reverse_projection_train)
-    '''                                                   
+    '''
     for name in beta_query:
         case = beta_query[name]
         print(f'parsing the query {name}: `{case}`')

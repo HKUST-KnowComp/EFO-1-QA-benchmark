@@ -47,7 +47,7 @@ class FirstOrderQuery(ABC):
     #     pass
 
     @abstractclassmethod
-    def additive_ground(self, foq_str, *args, **kwargs):
+    def additive_ground(self, foq_formula, *args, **kwargs):
         pass
 
     # @abstractclassmethod
@@ -99,7 +99,7 @@ class FirstOrderObject(FirstOrderQuery, ABC):
     def top_down_parse(self, operand_str, **kwargs):
         assert len(operand_str) == 1
         operand_str = operand_str[0]
-        obj, args = parse_top_foq_str(foq_str=operand_str, **kwargs)
+        obj, args = parse_top_foq_formula(foq_formula=operand_str, **kwargs)
         self.operand_q = obj
         self.operand_q.top_down_parse(args, **kwargs)
 
@@ -114,22 +114,22 @@ class BinaryOps(FirstOrderQuery, ABC):
     def top_down_parse(self, lroperand_strs, **kwargs):
         assert len(lroperand_strs) == 2
         loperand_str, roperand_str = lroperand_strs
-        lobj, largs = parse_top_foq_str(foq_str=loperand_str, **kwargs)
-        robj, rargs = parse_top_foq_str(foq_str=roperand_str, **kwargs)
+        lobj, largs = parse_top_foq_formula(foq_formula=loperand_str, **kwargs)
+        robj, rargs = parse_top_foq_formula(foq_formula=roperand_str, **kwargs)
         self.loperand_q = lobj
         self.loperand_q.top_down_parse(largs, **kwargs)
         self.roperand_q = robj
         self.roperand_q.top_down_parse(rargs, **kwargs)
 
-    def additive_ground(self, foq_str, *args, **kwargs):
-        obj, args = parse_top_foq_str(foq_str, **kwargs)
+    def additive_ground(self, foq_formula, *args, **kwargs):
+        obj, args = parse_top_foq_formula(foq_formula, **kwargs)
         if isinstance(obj, type(self)):
             assert len(args) == 2
             largs, rargs = args
             self.loperand_q.additive_ground(largs, **kwargs)
             self.roperand_q.additive_ground(rargs, **kwargs)
         else:
-            raise ValueError(f"formula {foq_str} is not in the same equivalence meta query class {self.meta_formula}")
+            raise ValueError(f"formula {foq_formula} is not in the same equivalence meta query class {self.meta_formula}")
 
     @property
     def meta_str(self):
@@ -152,13 +152,13 @@ class VariableQ(ZeroOrderObject):
         else:
             return "e"
 
-    def additive_ground(self, foq_str, *args, **kwargs):
-        obj, args = parse_top_foq_str(foq_str=foq_str, **kwargs)
+    def additive_ground(self, foq_formula, *args, **kwargs):
+        obj, args = parse_top_foq_formula(foq_formula=foq_formula, **kwargs)
         if isinstance(obj, type(self)):
             assert len(args) == 0
             self.entities += obj.entities
         else:
-            raise ValueError(f"formula {foq_str} is not in the same equivalence meta query class {self.meta_formula}")
+            raise ValueError(f"formula {foq_formula} is not in the same equivalence meta query class {self.meta_formula}")
 
 class ProjectionQ(FirstOrderObject):
     def __init__(self, q=None):
@@ -176,14 +176,14 @@ class ProjectionQ(FirstOrderObject):
         else:
             return f"p({self.operand_q.ground_formula})"
 
-    def additive_ground(self, foq_str, *args, **kwargs):
-        obj, args = parse_top_foq_str(foq_str=foq_str, **kwargs)
+    def additive_ground(self, foq_formula, *args, **kwargs):
+        obj, args = parse_top_foq_formula(foq_formula=foq_formula, **kwargs)
         if isinstance(obj, type(self)):
             self.relations += obj.relations
             assert len(args) == 1
             self.operand_q.additive_ground(args[0])
         else:
-            raise ValueError(f"formula {foq_str} is not in the same equivalence meta query class {self.meta_formula}")
+            raise ValueError(f"formula {foq_formula} is not in the same equivalence meta query class {self.meta_formula}")
 
 class ConjunctionQ(BinaryOps):
     def __init__(self, lq=None, rq=None):
@@ -234,20 +234,20 @@ grammar_class = {
 }
 
 
-def parse_top_foq_str(foq_str, z_obj=VariableQ, f_obj=ProjectionQ, binary_ops=binary_ops) -> FirstOrderQuery:
+def parse_top_foq_formula(foq_formula, z_obj=VariableQ, f_obj=ProjectionQ, binary_ops=binary_ops) -> FirstOrderQuery:
     """ A new function to parse top-level first-order query string
     A first-order string must:
         1. follow the meta grammar
         2. e and p are placeholders for entity (zero order object) and projection (first order object)
         3. e and p can be represented by {eid,} or [pid,] by instantiation
-    The output is to breakdown a foq_str into operations and its argument foq str into formulations like
+    The output is to breakdown a foq_formula into operations and its argument foq str into formulations like
     (class_object, [argfoqstr1, argfoqstr2])
     """
 
     # binary operation decision: identify the top-level binary operator and two arguments
     level_stack = []
     top_binary_ops = []
-    for i, c in enumerate(foq_str):
+    for i, c in enumerate(foq_formula):
         if c in "()":  # if there is any composition
             if c == '(':
                 level_stack.append(i)
@@ -257,12 +257,12 @@ def parse_top_foq_str(foq_str, z_obj=VariableQ, f_obj=ProjectionQ, binary_ops=bi
                     if level_stack:
                         continue
                     else:
-                        left_arg_str = foq_str[begin + 1: i]
+                        left_arg_str = foq_formula[begin + 1: i]
                 else:
-                    raise SyntaxError(f"Query {foq_str} is illegal for () delimiters")
+                    raise SyntaxError(f"Query {foq_formula} is illegal for () delimiters")
                 # address the only bracket case
-                if begin == 0 and i == len(foq_str) - 1:
-                    return parse_top_foq_str(left_arg_str, z_obj=z_obj, f_obj=f_obj, binary_ops=binary_ops)
+                if begin == 0 and i == len(foq_formula) - 1:
+                    return parse_top_foq_formula(left_arg_str, z_obj=z_obj, f_obj=f_obj, binary_ops=binary_ops)
 
         elif c in binary_ops:  # handle the conjunction and disjunction
             if len(level_stack) == 0:  # only when at the top of the syntax tree
@@ -270,110 +270,42 @@ def parse_top_foq_str(foq_str, z_obj=VariableQ, f_obj=ProjectionQ, binary_ops=bi
 
     if top_binary_ops:
         i, c = top_binary_ops[-1]
-        return (binary_ops[c](), (foq_str[:i], foq_str[i+1:]))
+        return (binary_ops[c](), (foq_formula[:i], foq_formula[i+1:]))
 
     # zero order decision: identify the zero order objects
     # consider two situations 'e' or '{x1, x2, ..., xn}'
     # you only need to initialize the variable class and assign the variable if necessary
-    if foq_str == 'e':
+    if foq_formula == 'e':
         return z_obj(), []
-    if foq_str[0] == '{' and foq_str[-1] == '}':
+    if foq_formula[0] == '{' and foq_formula[-1] == '}':
         query = z_obj()
         try:
-            query.entities = list(eval(foq_str))
+            query.entities = list(eval(foq_formula))
         except:
-            raise ValueError(f"fail to initialize f{foq_str} as the value of zero order object")
+            raise ValueError(f"fail to initialize f{foq_formula} as the value of zero order object")
         return query, []
 
     # first order decision: identify the first order objects
-    # 'psub_foq_str' or '[p1, p2, ..., pn]sub_foq_str'
+    # 'psub_foq_formula' or '[p1, p2, ..., pn]sub_foq_formula'
     # you should initialize the projection class, assign the possible projections if necessary
     # you should also return the argument for the
-    if foq_str[0] == 'p':
+    if foq_formula[0] == 'p':
         query = f_obj()
-        return query, [foq_str[1:]]
-    if foq_str[0] == '[': # trigger the second situation
-        for i, c in enumerate(foq_str):
+        return query, [foq_formula[1:]]
+    if foq_formula[0] == '[': # trigger the second situation
+        for i, c in enumerate(foq_formula):
             if c == ']':
                 query = f_obj()
                 try:
-                    query.relations = list(eval(foq_str[:i+1]))
+                    query.relations = list(eval(foq_formula[:i+1]))
                 except:
-                    raise ValueError(f"fail to initialize f{foq_str} as the relation of first order object")
-                return query, [foq_str[i+1:]]
+                    raise ValueError(f"fail to initialize f{foq_formula} as the relation of first order object")
+                return query, [foq_formula[i+1:]]
 
 
-def parse_foq_str(foq_str, grammar_class=grammar_class):
+def parse_foq_formula(foq_formula, grammar_class=grammar_class):
     """ This function parse a first order query string (with or without instantiation) into nested classes
     """
-    obj, args = parse_top_foq_str(foq_str, **grammar_class)
+    obj, args = parse_top_foq_formula(foq_formula, **grammar_class)
     obj.top_down_parse(args, **grammar_class)
     return obj
-
-if __name__ == "__main__":
-    beta_query = {
-        '1p': 'p(e)',
-        '2p': 'p(p(e))',
-        '3p': 'p(p(p(e)))',
-        '2i': 'p(e)&p(e)',
-        '3i': 'p(e)&p(e)&p(e)',
-        '2in': 'p(e)-p(e)',
-        '3in': 'p(e)&p(e)-p(e)',
-        'inp': 'p(p(e)-p(e))',
-        'pni': 'p(p(e))-p(e)',
-        'ip': 'p(p(e)&p(e))',
-        'pi': 'p(e)&p(p(e))',
-        '2u': 'p(e)|p(e)',
-        'up': 'p(p(e)|p(e))'
-    }
-    # test 1 print meta string
-    print('-'*10)
-    print("Test 1, parse meta formula")
-    for k, v in beta_query.items():
-        print(f"[Test1] parse beta query {k} with our grammar {v}")
-        obj = parse_foq_str(v)
-        print(f"[Test1][nested class]{obj.meta_str}")
-        print(f"[Test1][meta formula]{obj.meta_formula}")
-        print(f"[Test1][ground formula]{obj.ground_formula}")
-        print()
-
-        oobj = parse_foq_str(obj.meta_formula)
-        assert oobj.meta_formula == obj.meta_formula
-
-    print('-'*10)
-    print("Test 2, parse grounded formula")
-    import random
-    def random_e_ground(foq_str):
-        for i, c in enumerate(foq_str):
-            if c == 'e':
-                return foq_str[:i] + "{" + str(random.randint(0, 100)) + "}" + foq_str[i+1:]
-
-    def random_p_ground(foq_str):
-        for i, c in enumerate(foq_str):
-            if c == 'p':
-                return foq_str[:i] + "[" + str(random.randint(100, 200)) + "]" + foq_str[i+1:]
-
-    for k, v in beta_query.items():
-        gv = random_p_ground(random_e_ground(v))
-        print(f"[Test2] {v} is grounded into {gv}")
-        obj = parse_foq_str(v)
-        gobj = parse_foq_str(gv)
-        print(f"[Test2][Meta Formula] {gobj.meta_formula}")
-        print(f"[Test2][Grounded Formula] {gobj.ground_formula}")
-        print()
-
-        oobj = parse_foq_str(obj.meta_formula)
-        assert gobj.meta_formula == oobj.meta_formula
-        ogobj = parse_foq_str(gobj.ground_formula)
-        assert gobj.ground_formula == ogobj.ground_formula
-
-    print("Test 3, parse grounded formula")
-    for k, v in beta_query.items():
-        obj = parse_foq_str(v)
-        for _ in range(10):
-            gv = random_p_ground(random_e_ground(v))
-            obj.additive_ground(gv)
-            print(f"[Test3][Meta Formula] {obj.meta_formula}")
-            print(f"[Test3][Adder formula] {gv}")
-            print(f"[Test3][Grounded Formula] {obj.ground_formula}")
-
