@@ -1,7 +1,10 @@
 from abc import ABC, abstractclassmethod, abstractproperty
 from typing import Tuple
-from .appfoq import AppFOQEstimator
-
+from fol.appfoq import AppFOQEstimator
+from fol.base import beta_query
+from fol.sampler import read_indexing, load_data
+import random
+import collections
 """
 First Order Query (FOQ) is a conceptual idea without any implementation
 First order formula is a string formulation of the FOQ
@@ -36,6 +39,7 @@ Remark:
 class FirstOrderQuery(ABC):
     def __init__(self):
         self.objects = {}  # this is the intermediate objects during the sampling
+        self.answer_set = {} # this is the answer set for answering deterministic
 
     @abstractproperty
     def ground_formula(self):
@@ -53,15 +57,15 @@ class FirstOrderQuery(ABC):
     def additive_ground(self, foq_formula, *args, **kwargs):
         pass
 
-    # @abstractclassmethod
-    # def backward_sample(self):
-    #     pass
+    @abstractclassmethod
+    def backward_sample(self, reverse_projection, projection, need_to_contain: bool = None, essential_point=None):
+        pass
 
     # @abstractclassmethod
-    # def deterministic_query(self):
-    #     """ Consider the first entity / relation
-    #     """
-    #     pass
+    def deterministic_query(self, projection):
+        #     Consider the first entity / relation
+        #     """
+        pass
 
     @abstractclassmethod
     def embedding_estimation(self, estimator: AppFOQEstimator):
@@ -73,9 +77,9 @@ class FirstOrderQuery(ABC):
         """
         pass
 
-    # @abstractclassmethod
-    # def random_query(self):
-    #     pass
+    @abstractclassmethod
+    def random_query(self, projection):
+         pass
 
     def lift(self):
         """ Remove all intermediate objects, grounded entities (ZOO) and relations (FOO)
@@ -122,12 +126,29 @@ class VariableQ(FirstOrderQuery):
     def top_down_parse(self, *args, **kwargs):
         return
 
+    def deterministic_query(self, projection):
+        return self.entities[0]
+
+    def backward_sample(self, reverse_projection, projection, need_to_contain: bool = None, essential_point=None):
+        if need_to_contain is False:
+            essential_point = random.sample(set(reverse_projection.keys()) - {essential_point}, 1)[0]
+        if need_to_contain is None and essential_point is None:
+            essential_point = random.sample(set(reverse_projection.keys()), 1)[0]
+        self.objects = {essential_point}
+        return self.objects
+
+    def random_query(self, projection):
+        new_variable = random.sample(set(projection.keys()), 1)[0]
+        self.objects.add(new_variable)
+        return self.objects
+
 
 class ProjectionQ(FirstOrderQuery):
     def __init__(self, q: FirstOrderQuery = None):
         super().__init__()
         self.operand_q = q
         self.relations = []
+        self.rel = None
 
     @property
     def ground_formula(self):
@@ -168,6 +189,52 @@ class ProjectionQ(FirstOrderQuery):
         obj, args = parse_top_foq_formula(foq_formula=operand_str, **kwargs)
         self.operand_q = obj
         self.operand_q.top_down_parse(args, **kwargs)
+
+    def deterministic_query(self, projection):
+        rel = self.relations[0]
+        ans = self.operand_q.deterministic_query(projection)
+        self.answer_set = set()
+        for e in ans:
+            self.answer_set.update(projection[ans][rel])
+        return self.answer_set
+
+    def backward_sample(self, reverse_projection, projection, need_to_contain: bool = None, essential_point=None):
+        meeting_requirement = False  # whether have satisfied the essential_point condition
+        # since the projection[next_point][self.rel] may contains essential_point even if not starting from it
+        while meeting_requirement is False:
+            if need_to_contain is False:
+                now_point = random.sample(set(reverse_projection.keys()) - {essential_point}, 1)[0]
+            else:
+                if essential_point is None:
+                    now_point = random.sample(set(reverse_projection.keys()), 1)[0]
+                else:
+                    now_point = essential_point
+            self.rel = random.sample(reverse_projection[now_point].keys(), 1)[0]
+            next_points = reverse_projection[now_point][self.rel]
+            next_point = random.sample(next_points, 1)[0]   # find an incoming edge and a corresponding node
+            meeting_requirement = True
+            if need_to_contain is False and essential_point in projection[next_point][self.rel]:
+                meeting_requirement = False
+        f_object = self.operand_q.backward_sample(reverse_projection, projection, need_to_contain=True, essential_point=next_point)
+        if None in f_object:
+            raise ValueError
+        self.objects = projection[next_point][self.rel]
+        for entity in f_object.copy():
+            if type(entity) == int:
+                self.objects.update(projection[entity][self.rel])
+        return self.objects
+
+    def random_query(self, projection):
+        variable = self.operand_q.random_query(projection)
+        if len(variable) != 0:
+            chosen_variable = random.sample(variable, 1)[0]
+            self.rel = random.sample(projection[chosen_variable].keys(), 1)[0]
+            self.objects = projection[chosen_variable][self.rel]
+            for e in variable:
+                self.objects.update(projection[e][self.rel])
+            return self.objects
+        else:
+            return set(), set()
 
 
 class BinaryOps(FirstOrderQuery):
@@ -226,6 +293,38 @@ class ConjunctionQ(BinaryOps):
         lemb, remb = super().embedding_estimation(estimator)
         return estimator.get_conjunction_embedding(lemb, remb)
 
+    def deterministic_query(self, projection):
+        l_ans = self.loperand_q.deterministic_query(projection)
+        r_ans = self.roperand_q.deterministic_query(projection)
+        return l_ans.intersection(r_ans)
+
+    def backward_sample(self, reverse_projection, projection, need_to_contain: bool = None, essential_point=None):
+        if essential_point is None:
+            essential_point = random.sample(set(projection.keys()), 1)[0]
+        if need_to_contain is False:
+            choose_formula = random.randint(0, 1)
+            if choose_formula == 0:
+                lobjs = self.loperand_q.backward_sample(
+                    reverse_projection, projection, need_to_contain=False, essential_point=essential_point)
+                robjs = self.roperand_q.backward_sample(reverse_projection, projection)
+            else:
+                lobjs = self.loperand_q.backward_sample(reverse_projection, projection)
+                robjs = self.roperand_q.backward_sample(
+                    reverse_projection, projection, need_to_contain=False, essential_point=essential_point)
+        else:  # By default, choose a common start point.
+            lobjs = self.loperand_q.backward_sample(
+                reverse_projection, projection, need_to_contain=True, essential_point=essential_point)
+            robjs = self.roperand_q.backward_sample(
+                reverse_projection, projection, need_to_contain=True, essential_point=essential_point)
+        self.objects = lobjs.intersection(robjs)
+        return self.objects
+
+    def random_query(self, projection):
+        lobjs = self.loperand_q.random_query(projection)
+        robjs = self.roperand_q.random_query(projection)
+        self.objects = lobjs.intersection(robjs)
+        return self.objects
+
 
 class DisjunctionQ(BinaryOps):
     def __init__(self, lq=None, rq=None):
@@ -242,6 +341,38 @@ class DisjunctionQ(BinaryOps):
     def embedding_estimation(self, estimator: AppFOQEstimator):
         lemb, remb = super().embedding_estimation(estimator)
         return estimator.get_disjunction_embedding(lemb, remb)
+
+    def deterministic_query(self, projection):
+        l_ans = self.loperand_q.deterministic_query(projection)
+        r_ans = self.roperand_q.deterministic_query(projection)
+        return l_ans.union(r_ans)
+
+    def backward_sample(self, reverse_projection, projection, need_to_contain: bool = None, essential_point=None):
+        if essential_point is None:
+            essential_point = random.sample(set(projection.keys()), 1)[0]
+        if need_to_contain is False:
+            lobjs = self.loperand_q.backward_sample(
+                reverse_projection, projection, need_to_contain=False, essential_point=essential_point)
+            robjs = self.roperand_q.backward_sample(
+                reverse_projection, projection, need_to_contain=False, essential_point=essential_point)
+        else:
+            choose_formula = random.randint(0, 1)
+            if choose_formula == 0:
+                lobjs = self.loperand_q.backward_sample(
+                    reverse_projection, projection, need_to_contain=True, essential_point=essential_point)
+                robjs = self.roperand_q.backward_sample(reverse_projection, projection)
+            else:
+                lobjs = self.loperand_q.backward_sample(reverse_projection, projection)
+                robjs = self.roperand_q.backward_sample(
+                    reverse_projection, projection, need_to_contain=True, essential_point=essential_point)
+        self.objects = lobjs.union(robjs)
+        return self.objects
+
+    def random_query(self, projection):
+        lobjs = self.loperand_q.random_query(projection)
+        robjs = self.roperand_q.random_query(projection)
+        self.objects = lobjs.union(robjs)
+        return self.objects
 
 
 class DifferenceQ(BinaryOps):
@@ -260,6 +391,36 @@ class DifferenceQ(BinaryOps):
         lemb, remb = super().embedding_estimation(estimator)
         return estimator.get_difference_embedding(lemb, remb)
 
+    def deterministic_query(self, projection):
+        l_ans = self.loperand_q.deterministic_query(projection)
+        r_ans = self.roperand_q.deterministic_query(projection)
+        return l_ans - r_ans
+
+    def backward_sample(self, reverse_projection, projection, need_to_contain: bool = None, essential_point=None):
+        if need_to_contain is False:
+            choose_formula = random.randint(0, 1)
+            if choose_formula == 0:
+                lfobjs = self.loperand_q.backward_sample(
+                    reverse_projection, projection, need_to_contain=False, essential_point=essential_point)
+                rfobjs = self.roperand_q.backward_sample(reverse_projection, projection)
+            else:
+                lfobjs = self.loperand_q.backward_sample(reverse_projection, projection,)
+                rfobjs = self.roperand_q.backward_sample(
+                    reverse_projection, projection, need_to_contain=True, essential_point=essential_point)
+        else:
+            lfobjs = self.loperand_q.backward_sample(
+                reverse_projection, projection, need_to_contain=True, essential_point=essential_point)
+            rfobjs = self.roperand_q.backward_sample(
+                reverse_projection, projection, need_to_contain=False, essential_point=essential_point)
+        self.objects = lfobjs - rfobjs
+        return self.objects
+
+    def random_query(self, projection):
+        lfobjs = self.loperand_q.random_query(projection)
+        rfobjs = self.roperand_q.random_query(projection)
+        self.objects = lfobjs - rfobjs
+        return self.objects
+
 
 # you should specifiy the binary operator, zero order object, first order object
 binary_ops = {
@@ -276,10 +437,10 @@ grammar_class = {
 
 
 def parse_top_foq_formula(foq_formula: str,
-                          z_obj: FirstOrderQuery=VariableQ,
-                          f_obj: FirstOrderQuery=ProjectionQ,
+                          z_obj: FirstOrderQuery = VariableQ,
+                          f_obj: FirstOrderQuery = ProjectionQ,
                           binary_ops=binary_ops) -> Tuple[
-                              FirstOrderQuery, Tuple[str]]:
+    FirstOrderQuery, Tuple[str]]:
     """ A new function to parse top-level first-order query string
     A first-order string must:
         1. follow the meta grammar
@@ -319,7 +480,7 @@ def parse_top_foq_formula(foq_formula: str,
 
     if top_binary_ops:
         i, c = top_binary_ops[-1]
-        return (binary_ops[c](), (foq_formula[:i], foq_formula[i+1:]))
+        return (binary_ops[c](), (foq_formula[:i], foq_formula[i + 1:]))
 
     # zero order decision: identify the zero order objects
     # consider two situations 'e' or '{x1, x2, ..., xn}'
@@ -347,11 +508,11 @@ def parse_top_foq_formula(foq_formula: str,
             if c == ']':
                 query = f_obj()
                 try:
-                    query.relations = list(eval(foq_formula[:i+1]))
+                    query.relations = list(eval(foq_formula[:i + 1]))
                 except:
                     raise ValueError(
                         f"fail to initialize f{foq_formula} as the relation of first order object")
-                return query, [foq_formula[i+1:]]
+                return query, [foq_formula[i + 1:]]
 
 
 def parse_foq_formula(foq_formula: str, grammar_class=grammar_class) -> FirstOrderQuery:
@@ -360,3 +521,27 @@ def parse_foq_formula(foq_formula: str, grammar_class=grammar_class) -> FirstOrd
     obj, args = parse_top_foq_formula(foq_formula, **grammar_class)
     obj.top_down_parse(args, **grammar_class)
     return obj
+
+
+if __name__ == '__main__':
+    stanford_data_path = '../data/FB15k-237-betae'
+    all_entity_dict, all_relation_dict, id2ent, id2rel = read_indexing(stanford_data_path)
+    projection_none = {}
+    reverse_proection_none = {}
+    for i in all_entity_dict.values():
+        projection_none[i] = collections.defaultdict(set)
+        reverse_proection_none[i] = collections.defaultdict(set)
+    projection_train, reverse_projection_train = load_data('../datasets_knowledge_embedding/FB15k-237/train.txt',
+                                                           all_entity_dict, all_relation_dict, projection_none,
+                                                           reverse_proection_none)
+    projection_valid, reverse_projection_valid = load_data('../datasets_knowledge_embedding/FB15k-237/valid.txt',
+                                                           all_entity_dict, all_relation_dict, projection_train,
+                                                           reverse_projection_train)
+
+    for name in beta_query:
+        query_structure = beta_query[name]
+        ansclass = parse_foq_formula(foq_formula=query_structure)
+        ans_objects = ansclass.backward_sample(reverse_projection_train, projection_train)
+        ans_2 = ansclass.random_query(projection_train)
+        print(ans_objects, ans_2)
+
