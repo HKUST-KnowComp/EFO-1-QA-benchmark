@@ -40,33 +40,33 @@ class FirstOrderQuery(ABC):
         """
         pass
 
-    @abstractclassmethod
-    def lift(self):
-        """ Remove all intermediate objects, grounded entities (ZOO) and relations (FOO)
-        """
-        pass
+    # @abstractclassmethod
+    # def lift(self):
+    #     """ Remove all intermediate objects, grounded entities (ZOO) and relations (FOO)
+    #     """
+    #     pass
 
     @abstractclassmethod
     def additive_ground(self, foq_str, *args, **kwargs):
         pass
 
-    @abstractclassmethod
-    def deterministic_query(self):
-        """ Consider the first entity / relation
-        """
-        pass
+    # @abstractclassmethod
+    # def deterministic_query(self):
+    #     """ Consider the first entity / relation
+    #     """
+    #     pass
 
-    @abstractclassmethod
-    def random_query(self):
-        pass
+    # @abstractclassmethod
+    # def random_query(self):
+    #     pass
 
-    @abstractclassmethod
-    def embedding_estimation(self):
-        pass
+    # @abstractclassmethod
+    # def embedding_estimation(self):
+    #     pass
 
-    @abstractclassmethod
-    def backward_sample(self):
-        pass
+    # @abstractclassmethod
+    # def backward_sample(self):
+    #     pass
 
     @abstractproperty
     def meta_str(self):
@@ -93,7 +93,7 @@ class ZeroOrderObject(FirstOrderQuery, ABC):
         return type(self).__name__
 
 class FirstOrderObject(FirstOrderQuery, ABC):
-    def __init__(self, q):
+    def __init__(self, q: FirstOrderQuery):
         self.operand_q = q
 
     def top_down_parse(self, operand_str, **kwargs):
@@ -108,7 +108,7 @@ class FirstOrderObject(FirstOrderQuery, ABC):
         return f"{type(self).__name__}({self.operand_q.meta_str})"
 
 class BinaryOps(FirstOrderQuery, ABC):
-    def __init__(self, lq, rq):
+    def __init__(self, lq: FirstOrderQuery, rq: FirstOrderQuery):
         self.loperand_q, self.roperand_q = lq, rq
 
     def top_down_parse(self, lroperand_strs, **kwargs):
@@ -120,6 +120,16 @@ class BinaryOps(FirstOrderQuery, ABC):
         self.loperand_q.top_down_parse(largs, **kwargs)
         self.roperand_q = robj
         self.roperand_q.top_down_parse(rargs, **kwargs)
+
+    def additive_ground(self, foq_str, *args, **kwargs):
+        obj, args = parse_top_foq_str(foq_str, **kwargs)
+        if isinstance(obj, type(self)):
+            assert len(args) == 2
+            largs, rargs = args
+            self.loperand_q.additive_ground(largs, **kwargs)
+            self.roperand_q.additive_ground(rargs, **kwargs)
+        else:
+            raise ValueError(f"formula {foq_str} is not in the same equivalence meta query class {self.meta_formula}")
 
     @property
     def meta_str(self):
@@ -142,6 +152,14 @@ class VariableQ(ZeroOrderObject):
         else:
             return "e"
 
+    def additive_ground(self, foq_str, *args, **kwargs):
+        obj, args = parse_top_foq_str(foq_str=foq_str, **kwargs)
+        if isinstance(obj, type(self)):
+            assert len(args) == 0
+            self.entities += obj.entities
+        else:
+            raise ValueError(f"formula {foq_str} is not in the same equivalence meta query class {self.meta_formula}")
+
 class ProjectionQ(FirstOrderObject):
     def __init__(self, q=None):
         super().__init__(q)
@@ -157,6 +175,15 @@ class ProjectionQ(FirstOrderObject):
             return "[" + ",".join(str(r) for r in self.relations) + "]" + f"({self.operand_q.ground_formula})"
         else:
             return f"p({self.operand_q.ground_formula})"
+
+    def additive_ground(self, foq_str, *args, **kwargs):
+        obj, args = parse_top_foq_str(foq_str=foq_str, **kwargs)
+        if isinstance(obj, type(self)):
+            self.relations += obj.relations
+            assert len(args) == 1
+            self.operand_q.additive_ground(args[0])
+        else:
+            raise ValueError(f"formula {foq_str} is not in the same equivalence meta query class {self.meta_formula}")
 
 class ConjunctionQ(BinaryOps):
     def __init__(self, lq=None, rq=None):
@@ -339,3 +366,14 @@ if __name__ == "__main__":
         assert gobj.meta_formula == oobj.meta_formula
         ogobj = parse_foq_str(gobj.ground_formula)
         assert gobj.ground_formula == ogobj.ground_formula
+
+    print("Test 3, parse grounded formula")
+    for k, v in beta_query.items():
+        obj = parse_foq_str(v)
+        for _ in range(10):
+            gv = random_p_ground(random_e_ground(v))
+            obj.additive_ground(gv)
+            print(f"[Test3][Meta Formula] {obj.meta_formula}")
+            print(f"[Test3][Adder formula] {gv}")
+            print(f"[Test3][Grounded Formula] {obj.ground_formula}")
+
