@@ -1,10 +1,8 @@
+import random
 from abc import ABC, abstractclassmethod, abstractproperty
 from typing import Tuple
 from fol.appfoq import AppFOQEstimator
-from fol.base import beta_query
-from fol.sampler import read_indexing, load_data
-import random
-import collections
+
 """
 First Order Query (FOQ) is a conceptual idea without any implementation
 First order formula is a string formulation of the FOQ
@@ -521,27 +519,4 @@ def parse_foq_formula(foq_formula: str, grammar_class=grammar_class) -> FirstOrd
     obj, args = parse_top_foq_formula(foq_formula, **grammar_class)
     obj.top_down_parse(args, **grammar_class)
     return obj
-
-
-if __name__ == '__main__':
-    stanford_data_path = '../data/FB15k-237-betae'
-    all_entity_dict, all_relation_dict, id2ent, id2rel = read_indexing(stanford_data_path)
-    projection_none = {}
-    reverse_proection_none = {}
-    for i in all_entity_dict.values():
-        projection_none[i] = collections.defaultdict(set)
-        reverse_proection_none[i] = collections.defaultdict(set)
-    projection_train, reverse_projection_train = load_data('../datasets_knowledge_embedding/FB15k-237/train.txt',
-                                                           all_entity_dict, all_relation_dict, projection_none,
-                                                           reverse_proection_none)
-    projection_valid, reverse_projection_valid = load_data('../datasets_knowledge_embedding/FB15k-237/valid.txt',
-                                                           all_entity_dict, all_relation_dict, projection_train,
-                                                           reverse_projection_train)
-
-    for name in beta_query:
-        query_structure = beta_query[name]
-        ansclass = parse_foq_formula(foq_formula=query_structure)
-        ans_objects = ansclass.backward_sample(reverse_projection_train, projection_train)
-        ans_2 = ansclass.random_query(projection_train)
-        print(ans_objects, ans_2)
 
