@@ -40,11 +40,10 @@ class FirstOrderQuery(ABC):
         """
         pass
 
-    # @abstractclassmethod
-    # def lift(self):
-    #     """ Remove all intermediate objects, grounded entities (ZOO) and relations (FOO)
-    #     """
-    #     pass
+    def lift(self):
+        """ Remove all intermediate objects, grounded entities (ZOO) and relations (FOO)
+        """
+        self.objects = {}
 
     @abstractclassmethod
     def additive_ground(self, foq_formula, *args, **kwargs):
@@ -131,6 +130,11 @@ class BinaryOps(FirstOrderQuery, ABC):
         else:
             raise ValueError(f"formula {foq_formula} is not in the same equivalence meta query class {self.meta_formula}")
 
+    def lift(self):
+        self.loperand_q.list()
+        self.roperand_q.list()
+        return super().lift()
+
     @property
     def meta_str(self):
         return f"{type(self).__name__}({self.loperand_q.meta_str}, {self.roperand_q.meta_str})"
@@ -151,6 +155,10 @@ class VariableQ(ZeroOrderObject):
             return "{" + ",".join(str(e) for e in self.entities) + "}"
         else:
             return "e"
+
+    def lift(self):
+        self.entities = []
+        return super().lift()
 
     def additive_ground(self, foq_formula, *args, **kwargs):
         obj, args = parse_top_foq_formula(foq_formula=foq_formula, **kwargs)
@@ -175,6 +183,10 @@ class ProjectionQ(FirstOrderObject):
             return "[" + ",".join(str(r) for r in self.relations) + "]" + f"({self.operand_q.ground_formula})"
         else:
             return f"p({self.operand_q.ground_formula})"
+
+    def lift(self):
+        self.relations = []
+        return super().lift()
 
     def additive_ground(self, foq_formula, *args, **kwargs):
         obj, args = parse_top_foq_formula(foq_formula=foq_formula, **kwargs)
