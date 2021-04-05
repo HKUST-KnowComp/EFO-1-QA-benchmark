@@ -1,4 +1,5 @@
 from abc import ABC, abstractclassmethod, abstractproperty
+from .appfoq import AppFOQEstimator
 
 """
 First Order Query (FOQ) is a conceptual idea without any implementation
@@ -30,42 +31,14 @@ Remark:
         To prepare the data for parallel computing, we can do `additive_ground`.
 """
 
+
 class FirstOrderQuery(ABC):
     def __init__(self):
-        self.objects = {}
+        self.objects = {}  # this is the intermediate objects during the sampling
 
-    @abstractclassmethod
-    def top_down_parse(self, *args, **kwargs):
-        """ Parse meta or grounded formula
-        """
+    @abstractproperty
+    def ground_formula(self):
         pass
-
-    def lift(self):
-        """ Remove all intermediate objects, grounded entities (ZOO) and relations (FOO)
-        """
-        self.objects = {}
-
-    @abstractclassmethod
-    def additive_ground(self, foq_formula, *args, **kwargs):
-        pass
-
-    # @abstractclassmethod
-    # def deterministic_query(self):
-    #     """ Consider the first entity / relation
-    #     """
-    #     pass
-
-    # @abstractclassmethod
-    # def random_query(self):
-    #     pass
-
-    # @abstractclassmethod
-    # def embedding_estimation(self):
-    #     pass
-
-    # @abstractclassmethod
-    # def backward_sample(self):
-    #     pass
 
     @abstractproperty
     def meta_str(self):
@@ -75,19 +48,44 @@ class FirstOrderQuery(ABC):
     def meta_formula(self):
         pass
 
-    @abstractproperty
-    def ground_formula(self):
+    @abstractclassmethod
+    def additive_ground(self, foq_formula, *args, **kwargs):
         pass
+
+    # @abstractclassmethod
+    # def backward_sample(self):
+    #     pass
+
+    # @abstractclassmethod
+    # def deterministic_query(self):
+    #     """ Consider the first entity / relation
+    #     """
+    #     pass
+
+    @abstractclassmethod
+    def embedding_estimation(self, estimator: AppFOQEstimator):
+        pass
+
+    @abstractclassmethod
+    def top_down_parse(self, *args, **kwargs):
+        """ Parse meta or grounded formula
+        """
+        pass
+
+    # @abstractclassmethod
+    # def random_query(self):
+    #     pass
+
+    def lift(self):
+        """ Remove all intermediate objects, grounded entities (ZOO) and relations (FOO)
+        """
+        self.objects = {}
 
 
 class VariableQ(FirstOrderQuery):
     def __init__(self):
         super().__init__()
         self.entities = []
-
-    @property
-    def meta_formula(self):
-        return "e"
 
     @property
     def ground_formula(self):
@@ -97,15 +95,12 @@ class VariableQ(FirstOrderQuery):
             return "e"
 
     @property
+    def meta_formula(self):
+        return "e"
+
+    @property
     def meta_str(self):
         return type(self).__name__
-
-    def top_down_parse(self, *args, **kwargs):
-        return
-
-    def lift(self):
-        self.entities = []
-        return super().lift()
 
     def additive_ground(self, foq_formula, *args, **kwargs):
         obj, args = parse_top_foq_formula(foq_formula=foq_formula, **kwargs)
@@ -113,17 +108,25 @@ class VariableQ(FirstOrderQuery):
             assert len(args) == 0
             self.entities += obj.entities
         else:
-            raise ValueError(f"formula {foq_formula} is not in the same equivalence meta query class {self.meta_formula}")
+            raise ValueError(
+                f"formula {foq_formula} is not in the same equivalence meta query class {self.meta_formula}")
+
+    def embedding_estimation(self, estimator: AppFOQEstimator):
+        return estimator.get_entity_embedding(self.entities)
+
+    def lift(self):
+        self.entities = []
+        return super().lift()
+
+    def top_down_parse(self, *args, **kwargs):
+        return
+
 
 class ProjectionQ(FirstOrderQuery):
-    def __init__(self, q=None):
+    def __init__(self, q: FirstOrderQuery = None):
         super().__init__()
         self.operand_q = q
         self.relations = []
-
-    @property
-    def meta_formula(self):
-        return f"p({self.operand_q.meta_formula})"
 
     @property
     def ground_formula(self):
@@ -133,19 +136,12 @@ class ProjectionQ(FirstOrderQuery):
             return f"p({self.operand_q.ground_formula})"
 
     @property
+    def meta_formula(self):
+        return f"p({self.operand_q.meta_formula})"
+
+    @property
     def meta_str(self):
         return f"{type(self).__name__}({self.operand_q.meta_str})"
-
-    def top_down_parse(self, operand_str, **kwargs):
-        assert len(operand_str) == 1
-        operand_str = operand_str[0]
-        obj, args = parse_top_foq_formula(foq_formula=operand_str, **kwargs)
-        self.operand_q = obj
-        self.operand_q.top_down_parse(args, **kwargs)
-
-    def lift(self):
-        self.relations = []
-        return super().lift()
 
     def additive_ground(self, foq_formula, *args, **kwargs):
         obj, args = parse_top_foq_formula(foq_formula=foq_formula, **kwargs)
@@ -154,12 +150,53 @@ class ProjectionQ(FirstOrderQuery):
             assert len(args) == 1
             self.operand_q.additive_ground(args[0])
         else:
-            raise ValueError(f"formula {foq_formula} is not in the same equivalence meta query class {self.meta_formula}")
+            raise ValueError(
+                f"formula {foq_formula} is not in the same equivalence meta query class {self.meta_formula}")
+
+    def embedding_estimation(self, estimator: AppFOQEstimator):
+        operand_emb = self.operand_q.embedding_estimation(estimator=estimator)
+        return estimator.get_projection_embedding(self.relations, operand_emb)
+
+    def lift(self):
+        self.relations = []
+        return super().lift()
+
+    def top_down_parse(self, operand_str, **kwargs):
+        assert len(operand_str) == 1
+        operand_str = operand_str[0]
+        obj, args = parse_top_foq_formula(foq_formula=operand_str, **kwargs)
+        self.operand_q = obj
+        self.operand_q.top_down_parse(args, **kwargs)
 
 
-class BinaryOps(FirstOrderQuery, ABC):
+class BinaryOps(FirstOrderQuery):
     def __init__(self, lq: FirstOrderQuery, rq: FirstOrderQuery):
         self.loperand_q, self.roperand_q = lq, rq
+
+    @property
+    def meta_str(self):
+        return f"{type(self).__name__}({self.loperand_q.meta_str}, {self.roperand_q.meta_str})"
+
+    def additive_ground(self, foq_formula, *args, **kwargs):
+        obj, args = parse_top_foq_formula(foq_formula, **kwargs)
+        if isinstance(obj, type(self)):
+            assert len(args) == 2
+            largs, rargs = args
+            self.loperand_q.additive_ground(largs, **kwargs)
+            self.roperand_q.additive_ground(rargs, **kwargs)
+        else:
+            raise ValueError(
+                f"formula {foq_formula} is not in the same equivalence meta query class {self.meta_formula}")
+
+    def embedding_estimation(self, estimator: AppFOQEstimator):
+        lemb = self.loperand_q.embedding_estimation(estimator=estimator)
+        remb = self.roperand_q.embedding_estimation(estimator=estimator)
+        return lemb, remb
+
+    def lift(self):
+        self.loperand_q.list()
+        self.roperand_q.list()
+        return super().lift()
 
     def top_down_parse(self, lroperand_strs, **kwargs):
         assert len(lroperand_strs) == 2
@@ -171,61 +208,58 @@ class BinaryOps(FirstOrderQuery, ABC):
         self.roperand_q = robj
         self.roperand_q.top_down_parse(rargs, **kwargs)
 
-    def additive_ground(self, foq_formula, *args, **kwargs):
-        obj, args = parse_top_foq_formula(foq_formula, **kwargs)
-        if isinstance(obj, type(self)):
-            assert len(args) == 2
-            largs, rargs = args
-            self.loperand_q.additive_ground(largs, **kwargs)
-            self.roperand_q.additive_ground(rargs, **kwargs)
-        else:
-            raise ValueError(f"formula {foq_formula} is not in the same equivalence meta query class {self.meta_formula}")
-
-    def lift(self):
-        self.loperand_q.list()
-        self.roperand_q.list()
-        return super().lift()
-
-    @property
-    def meta_str(self):
-        return f"{type(self).__name__}({self.loperand_q.meta_str}, {self.roperand_q.meta_str})"
-
 
 class ConjunctionQ(BinaryOps):
     def __init__(self, lq=None, rq=None):
         super().__init__(lq, rq)
 
     @property
+    def ground_formula(self):
+        return f"({self.loperand_q.ground_formula})&({self.roperand_q.ground_formula})"
+
+    @property
     def meta_formula(self):
         return f"({self.loperand_q.meta_formula})&({self.roperand_q.meta_formula})"
 
-    @property
-    def ground_formula(self):
-        return f"({self.loperand_q.ground_formula})&({self.roperand_q.ground_formula})"
+    def embedding_estimation(self, estimator: AppFOQEstimator):
+        lemb, remb = super().embedding_estimation(estimator)
+        return estimator.get_conjunction_embedding(lemb, remb)
+
 
 class DisjunctionQ(BinaryOps):
     def __init__(self, lq=None, rq=None):
         super().__init__(lq, rq)
 
     @property
+    def ground_formula(self):
+        return f"({self.loperand_q.ground_formula})|({self.roperand_q.ground_formula})"
+
+    @property
     def meta_formula(self):
         return f"({self.loperand_q.meta_formula})|({self.roperand_q.meta_formula})"
 
-    @property
-    def ground_formula(self):
-        return f"({self.loperand_q.ground_formula})|({self.roperand_q.ground_formula})"
+    def embedding_estimation(self, estimator: AppFOQEstimator):
+        lemb, remb = super().embedding_estimation(estimator)
+        return estimator.get_disjunction_embedding(lemb, remb)
+
 
 class DifferenceQ(BinaryOps):
     def __init__(self, lq=None, rq=None):
         super().__init__(lq, rq)
 
     @property
+    def ground_formula(self):
+        return f"({self.loperand_q.ground_formula})-({self.roperand_q.ground_formula})"
+
+    @property
     def meta_formula(self):
         return f"({self.loperand_q.meta_formula})-({self.roperand_q.meta_formula})"
 
-    @property
-    def ground_formula(self):
-        return f"({self.loperand_q.ground_formula})-({self.roperand_q.ground_formula})"
+    def embedding_estimation(self, estimator: AppFOQEstimator):
+        lemb, remb = super().embedding_estimation(estimator)
+        return estimator.get_difference_embedding(lemb, remb)
+
+
 # you should specifiy the binary operator, zero order object, first order object
 binary_ops = {
     '|': DisjunctionQ,
@@ -265,10 +299,14 @@ def parse_top_foq_formula(foq_formula, z_obj=VariableQ, f_obj=ProjectionQ, binar
                     else:
                         left_arg_str = foq_formula[begin + 1: i]
                 else:
-                    raise SyntaxError(f"Query {foq_formula} is illegal for () delimiters")
+                    raise SyntaxError(
+                        f"Query {foq_formula} is illegal for () delimiters")
                 # address the only bracket case
                 if begin == 0 and i == len(foq_formula) - 1:
-                    return parse_top_foq_formula(left_arg_str, z_obj=z_obj, f_obj=f_obj, binary_ops=binary_ops)
+                    return parse_top_foq_formula(left_arg_str,
+                                                 z_obj=z_obj,
+                                                 f_obj=f_obj,
+                                                 binary_ops=binary_ops)
 
         elif c in binary_ops:  # handle the conjunction and disjunction
             if len(level_stack) == 0:  # only when at the top of the syntax tree
@@ -288,7 +326,8 @@ def parse_top_foq_formula(foq_formula, z_obj=VariableQ, f_obj=ProjectionQ, binar
         try:
             query.entities = list(eval(foq_formula))
         except:
-            raise ValueError(f"fail to initialize f{foq_formula} as the value of zero order object")
+            raise ValueError(
+                f"fail to initialize f{foq_formula} as the value of zero order object")
         return query, []
 
     # first order decision: identify the first order objects
@@ -298,14 +337,15 @@ def parse_top_foq_formula(foq_formula, z_obj=VariableQ, f_obj=ProjectionQ, binar
     if foq_formula[0] == 'p':
         query = f_obj()
         return query, [foq_formula[1:]]
-    if foq_formula[0] == '[': # trigger the second situation
+    if foq_formula[0] == '[':  # trigger the second situation
         for i, c in enumerate(foq_formula):
             if c == ']':
                 query = f_obj()
                 try:
                     query.relations = list(eval(foq_formula[:i+1]))
                 except:
-                    raise ValueError(f"fail to initialize f{foq_formula} as the relation of first order object")
+                    raise ValueError(
+                        f"fail to initialize f{foq_formula} as the relation of first order object")
                 return query, [foq_formula[i+1:]]
 
 
