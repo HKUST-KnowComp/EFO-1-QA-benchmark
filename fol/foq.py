@@ -117,7 +117,8 @@ class VariableQ(FirstOrderQuery):
 
 class ProjectionQ(FirstOrderQuery):
     def __init__(self, q=None):
-        super().__init__(q)
+        super().__init__()
+        self.operand_q = q
         self.relations = []
 
     @property
