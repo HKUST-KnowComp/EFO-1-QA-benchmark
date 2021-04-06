@@ -95,7 +95,7 @@ def test_embedding_estimation():
 
 
 def test_sample():
-    stanford_data_path = '../data/FB15k-237-betae'
+    stanford_data_path = 'data/FB15k-237-betae'
     all_entity_dict, all_relation_dict, id2ent, id2rel = read_indexing(
         stanford_data_path)  # TODO: this function may be moved to other data utilities
     projection_none = {}
@@ -103,10 +103,10 @@ def test_sample():
     for i in all_entity_dict.values():
         projection_none[i] = collections.defaultdict(set)
         reverse_proection_none[i] = collections.defaultdict(set)
-    projection_train, reverse_projection_train = load_data('../datasets_knowledge_embedding/FB15k-237/train.txt',
+    projection_train, reverse_projection_train = load_data('datasets_knowledge_embedding/FB15k-237/train.txt',
                                                            all_entity_dict, all_relation_dict, projection_none,
                                                            reverse_proection_none)
-    projection_valid, reverse_projection_valid = load_data('../datasets_knowledge_embedding/FB15k-237/valid.txt',
+    projection_valid, reverse_projection_valid = load_data('datasets_knowledge_embedding/FB15k-237/valid.txt',
                                                            all_entity_dict, all_relation_dict, projection_train,
                                                            reverse_projection_train)
 
@@ -117,3 +117,7 @@ def test_sample():
             reverse_projection_train, projection_train)
         ans_2 = ansclass.random_query(projection_train)
         print(ans_objects, ans_2)
+
+# TODO: implement
+def test_backward_sample():
+    pass

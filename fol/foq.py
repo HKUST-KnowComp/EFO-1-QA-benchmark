@@ -1,3 +1,4 @@
+from pickle import APPEND
 import random
 from abc import ABC, abstractclassmethod, abstractproperty
 from typing import Tuple
@@ -36,7 +37,8 @@ Remark:
 
 class FirstOrderQuery(ABC):
     def __init__(self):
-        self.objects = {}  # this is the intermediate objects during the sampling
+        # self.objects = {}  # this is the intermediate objects during the sampling
+        # FIXME: remove self.object since it is non-necessary
         self.answer_set = {} # this is the answer set for answering deterministic
 
     @abstractproperty
@@ -56,13 +58,15 @@ class FirstOrderQuery(ABC):
         pass
 
     @abstractclassmethod
-    def backward_sample(self, reverse_projection, projection, need_to_contain: bool = None, essential_point=None):
+    def backward_sample(self, projs, rprojs,
+                        contain: bool=None,
+                        keypoint: int=None,
+                        cumulative: bool=False, **kwargs):
         pass
 
-    # @abstractclassmethod
+    @abstractclassmethod
     def deterministic_query(self, projection):
         #     Consider the first entity / relation
-        #     """
         pass
 
     @abstractclassmethod
@@ -76,16 +80,20 @@ class FirstOrderQuery(ABC):
         pass
 
     @abstractclassmethod
-    def random_query(self, projection):
+    def random_query(self, projs, cumulative: bool=False):
          pass
 
+    @abstractclassmethod
     def lift(self):
         """ Remove all intermediate objects, grounded entities (ZOO) and relations (FOO)
         """
-        self.objects = {}
+        pass
 
 
 class VariableQ(FirstOrderQuery):
+    """
+    The `self.objects` inherented from the parent class is not used
+    """
     def __init__(self):
         super().__init__()
         self.entities = []
@@ -125,28 +133,44 @@ class VariableQ(FirstOrderQuery):
         return
 
     def deterministic_query(self, projection):
-        return self.entities[0]
+        return set(self.entities[0])
 
-    def backward_sample(self, reverse_projection, projection, need_to_contain: bool = None, essential_point=None):
-        if need_to_contain is False:
-            essential_point = random.sample(set(reverse_projection.keys()) - {essential_point}, 1)[0]
-        if need_to_contain is None and essential_point is None:
-            essential_point = random.sample(set(reverse_projection.keys()), 1)[0]
-        self.objects = {essential_point}
-        return self.objects
+    def backward_sample(self, projs, rprojs,
+                        contain: bool=None,
+                        keypoint: int=None,
+                        cumulative: bool=False, **kwargs):
+        if keypoint:
+            if contain:
+                new_entity = [keypoint]
+            else:
+                new_entity = random.sample(set(projs.keys()) - {keypoint}, 1)
+        else:
+            new_entity = random.sample(set(projs.keys()), 1)
 
-    def random_query(self, projection):
-        new_variable = random.sample(set(projection.keys()), 1)[0]
-        self.objects.add(new_variable)
-        return self.objects
+        if cumulative:
+            self.entities.append(new_entity)
+        else:
+            self.entities = [new_entity]
+
+        return set(new_entity)
+
+    def random_query(self, projs, cumulative=False):
+        new_variable = random.sample(set(projs.keys()), 1)[0]
+        if cumulative:
+            self.entities.append(self.entities)
+        else:
+            self.entities = [new_variable]
+        return set(new_variable)
 
 
 class ProjectionQ(FirstOrderQuery):
+    """
+    `self.relations` describes the relation ids by the KG
+    """
     def __init__(self, q: FirstOrderQuery = None):
         super().__init__()
         self.operand_q = q
         self.relations = []
-        self.rel = None
 
     @property
     def ground_formula(self):
@@ -188,51 +212,73 @@ class ProjectionQ(FirstOrderQuery):
         self.operand_q = obj
         self.operand_q.top_down_parse(args, **kwargs)
 
-    def deterministic_query(self, projection):
+    def deterministic_query(self, projs):
         rel = self.relations[0]
-        ans = self.operand_q.deterministic_query(projection)
-        self.answer_set = set()
-        for e in ans:
-            self.answer_set.update(projection[ans][rel])
-        return self.answer_set
+        result = self.operand_q.deterministic_query(projs)
+        answer = set()
+        for e in result:
+            answer.update(projs[e][rel])
+        return answer
 
-    def backward_sample(self, reverse_projection, projection, need_to_contain: bool = None, essential_point=None):
-        meeting_requirement = False  # whether have satisfied the essential_point condition
+    def backward_sample(self, projs, rprojs,
+                        contain: bool=None,
+                        keypoint: int=None,
+                        cumulative: bool=False, **kwargs):
         # since the projection[next_point][self.rel] may contains essential_point even if not starting from it
-        while meeting_requirement is False:
-            if need_to_contain is False:
-                now_point = random.sample(set(reverse_projection.keys()) - {essential_point}, 1)[0]
-            else:
-                if essential_point is None:
-                    now_point = random.sample(set(reverse_projection.keys()), 1)[0]
+        while True:
+            if keypoint is not None:
+                if contain:
+                    cursor = keypoint
                 else:
-                    now_point = essential_point
-            self.rel = random.sample(reverse_projection[now_point].keys(), 1)[0]
-            next_points = reverse_projection[now_point][self.rel]
-            next_point = random.sample(next_points, 1)[0]   # find an incoming edge and a corresponding node
-            meeting_requirement = True
-            if need_to_contain is False and essential_point in projection[next_point][self.rel]:
-                meeting_requirement = False
-        f_object = self.operand_q.backward_sample(reverse_projection, projection, need_to_contain=True, essential_point=next_point)
-        if None in f_object:
-            raise ValueError
-        self.objects = projection[next_point][self.rel]
-        for entity in f_object.copy():
-            if type(entity) == int:
-                self.objects.update(projection[entity][self.rel])
-        return self.objects
+                    cursor = random.sample(set(rprojs.keys()) - {keypoint}, 1)[0]
+            else:
+                cursor = random.sample(set(rprojs.keys()), 1)[0]
 
-    def random_query(self, projection):
-        variable = self.operand_q.random_query(projection)
-        if len(variable) != 0:
-            chosen_variable = random.sample(variable, 1)[0]
-            self.rel = random.sample(projection[chosen_variable].keys(), 1)[0]
-            self.objects = projection[chosen_variable][self.rel]
-            for e in variable:
-                self.objects.update(projection[e][self.rel])
-            return self.objects
+            relation = random.sample(rprojs[cursor].keys(), 1)[0]
+            parents = rprojs[cursor][relation]
+            parent = random.sample(parents, 1)[0]   # find an incoming edge and a corresponding node
+
+            if keypoint:
+                if (keypoint in projs[parent][relation]) == contain:
+                    break
+            else:
+                break
+
+        p_object = self.operand_q.backward_sample(projs, rprojs,
+            contain=True, keypoint=parent, cumulative=cumulative, **kwargs)
+        if None in p_object: # FIXME: why this is a none in return type
+            raise ValueError
+
+        objects = projs[parent][relation]
+        for entity in p_object: # FIXME: there used to be a copy
+            if isinstance(entity, int):
+                objects.update(projs[entity][self.rel])
+
+        if cumulative:
+            self.relations.append(relation)
         else:
-            return set(), set()
+            self.relations = [relation]
+
+        return objects
+
+    def random_query(self, projs, cumulative=False):
+        variable = self.operand_q.random_query(projs, cumulative)
+        objects = set()
+        if len(variable) == 0:
+            return objects
+
+        chosen_variable = random.sample(variable, 1)[0]
+        relation = random.sample(projs[chosen_variable].keys(), 1)[0]
+
+        if cumulative:
+            self.relations.append(relation)
+        else:
+            self.relations = [relation]
+
+        objects = projs[chosen_variable][relation]
+        for e in list(variable):
+            objects.update(projs[e][relation])
+        return objects
 
 
 class BinaryOps(FirstOrderQuery):
@@ -260,8 +306,8 @@ class BinaryOps(FirstOrderQuery):
         return lemb, remb
 
     def lift(self):
-        self.loperand_q.list()
-        self.roperand_q.list()
+        self.loperand_q.lift()
+        self.roperand_q.lift()
         return super().lift()
 
     def top_down_parse(self, lroperand_strs, **kwargs):
@@ -291,37 +337,44 @@ class ConjunctionQ(BinaryOps):
         lemb, remb = super().embedding_estimation(estimator)
         return estimator.get_conjunction_embedding(lemb, remb)
 
-    def deterministic_query(self, projection):
-        l_ans = self.loperand_q.deterministic_query(projection)
-        r_ans = self.roperand_q.deterministic_query(projection)
-        return l_ans.intersection(r_ans)
+    def deterministic_query(self, projs):
+        l_result = self.loperand_q.deterministic_query(projs)
+        r_result = self.roperand_q.deterministic_query(projs)
+        return l_result.intersection(r_result)
 
-    def backward_sample(self, reverse_projection, projection, need_to_contain: bool = None, essential_point=None):
-        if essential_point is None:
-            essential_point = random.sample(set(projection.keys()), 1)[0]
-        if need_to_contain is False:
-            choose_formula = random.randint(0, 1)
-            if choose_formula == 0:
+    def backward_sample(self, projs, rprojs,
+                        contain: bool=True,
+                        keypoint: int=None,
+                        cumulative: bool=False, **kwargs):
+        if keypoint:
+            if contain:
                 lobjs = self.loperand_q.backward_sample(
-                    reverse_projection, projection, need_to_contain=False, essential_point=essential_point)
-                robjs = self.roperand_q.backward_sample(reverse_projection, projection)
-            else:
-                lobjs = self.loperand_q.backward_sample(reverse_projection, projection)
+                    projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
                 robjs = self.roperand_q.backward_sample(
-                    reverse_projection, projection, need_to_contain=False, essential_point=essential_point)
-        else:  # By default, choose a common start point.
+                    projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
+            else:
+                choose_formula = random.randint(0, 1)
+                if choose_formula == 0:
+                    lobjs = self.loperand_q.backward_sample(
+                        projs, rprojs, contain=False, keypoint=keypoint, cumulative=cumulative)
+                    robjs = self.roperand_q.backward_sample(projs, rprojs, cumulative=cumulative)
+                else:
+                    lobjs = self.loperand_q.backward_sample(projs, rprojs, cumulative=cumulative)
+                    robjs = self.roperand_q.backward_sample(
+                        projs, rprojs, contain=False, keypoint=keypoint, cumulative=cumulative)
+        else:
+            keypoint = random.sample(set(projs.keys()), 1)[0]
             lobjs = self.loperand_q.backward_sample(
-                reverse_projection, projection, need_to_contain=True, essential_point=essential_point)
+                projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
             robjs = self.roperand_q.backward_sample(
-                reverse_projection, projection, need_to_contain=True, essential_point=essential_point)
-        self.objects = lobjs.intersection(robjs)
-        return self.objects
+                projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
 
-    def random_query(self, projection):
-        lobjs = self.loperand_q.random_query(projection)
-        robjs = self.roperand_q.random_query(projection)
-        self.objects = lobjs.intersection(robjs)
-        return self.objects
+        return lobjs.intersection(robjs)
+
+    def random_query(self, projs, cumulative=False):
+        lobjs = self.loperand_q.random_query(projs, cumulative)
+        robjs = self.roperand_q.random_query(projs, cumulative)
+        return lobjs.intersection(robjs)
 
 
 class DisjunctionQ(BinaryOps):
@@ -340,37 +393,43 @@ class DisjunctionQ(BinaryOps):
         lemb, remb = super().embedding_estimation(estimator)
         return estimator.get_disjunction_embedding(lemb, remb)
 
-    def deterministic_query(self, projection):
-        l_ans = self.loperand_q.deterministic_query(projection)
-        r_ans = self.roperand_q.deterministic_query(projection)
-        return l_ans.union(r_ans)
+    def deterministic_query(self, projs):
+        l_result = self.loperand_q.deterministic_query(projs)
+        r_result = self.roperand_q.deterministic_query(projs)
+        return l_result.union(r_result)
 
-    def backward_sample(self, reverse_projection, projection, need_to_contain: bool = None, essential_point=None):
-        if essential_point is None:
-            essential_point = random.sample(set(projection.keys()), 1)[0]
-        if need_to_contain is False:
-            lobjs = self.loperand_q.backward_sample(
-                reverse_projection, projection, need_to_contain=False, essential_point=essential_point)
-            robjs = self.roperand_q.backward_sample(
-                reverse_projection, projection, need_to_contain=False, essential_point=essential_point)
-        else:
-            choose_formula = random.randint(0, 1)
-            if choose_formula == 0:
-                lobjs = self.loperand_q.backward_sample(
-                    reverse_projection, projection, need_to_contain=True, essential_point=essential_point)
-                robjs = self.roperand_q.backward_sample(reverse_projection, projection)
+    def backward_sample(self, projs, rprojs,
+                        contain: bool=True,
+                        keypoint: int=None,
+                        cumulative: bool=False, **kwargs):
+        if keypoint:
+            if contain:
+                choose_formula = random.randint(0, 1)
+                if choose_formula == 0:
+                    lobjs = self.loperand_q.backward_sample(
+                        projs, rprojs, conatin=True, keypoint=keypoint, cumulative=cumulative)
+                    robjs = self.roperand_q.backward_sample(projs, rprojs, cumulative=cumulative)
+                else:
+                    lobjs = self.loperand_q.backward_sample(projs, rprojs, cumulative=cumulative)
+                    robjs = self.roperand_q.backward_sample(
+                        projs, rprojs, conatin=True, keypoint=keypoint, cumulative=cumulative)
             else:
-                lobjs = self.loperand_q.backward_sample(reverse_projection, projection)
+                lobjs = self.loperand_q.backward_sample(
+                    projs, rprojs, contain=False, keypoint=keypoint, cumulative=cumulative)
                 robjs = self.roperand_q.backward_sample(
-                    reverse_projection, projection, need_to_contain=True, essential_point=essential_point)
-        self.objects = lobjs.union(robjs)
-        return self.objects
+                    projs, rprojs, contain=False, keypoint=keypoint, cumulative=cumulative)
+        else:
+            lobjs = self.loperand_q.backward_sample(
+                projs, rprojs, cumulative=cumulative)
+            robjs = self.roperand_q.backward_sample(
+                projs, rprojs, cumulative=cumulative)
 
-    def random_query(self, projection):
-        lobjs = self.loperand_q.random_query(projection)
-        robjs = self.roperand_q.random_query(projection)
-        self.objects = lobjs.union(robjs)
-        return self.objects
+        return lobjs.union(robjs)
+
+    def random_query(self, projs, cumulative=False):
+        lobjs = self.loperand_q.random_query(projs, cumulative)
+        robjs = self.roperand_q.random_query(projs, cumulative)
+        return lobjs.union(robjs)
 
 
 class DifferenceQ(BinaryOps):
@@ -389,38 +448,47 @@ class DifferenceQ(BinaryOps):
         lemb, remb = super().embedding_estimation(estimator)
         return estimator.get_difference_embedding(lemb, remb)
 
-    def deterministic_query(self, projection):
-        l_ans = self.loperand_q.deterministic_query(projection)
-        r_ans = self.roperand_q.deterministic_query(projection)
-        return l_ans - r_ans
+    def deterministic_query(self, projs):
+        l_result = self.loperand_q.deterministic_query(projs)
+        r_result = self.roperand_q.deterministic_query(projs)
+        return l_result - r_result
 
-    def backward_sample(self, reverse_projection, projection, need_to_contain: bool = None, essential_point=None):
-        if need_to_contain is False:
-            choose_formula = random.randint(0, 1)
-            if choose_formula == 0:
-                lfobjs = self.loperand_q.backward_sample(
-                    reverse_projection, projection, need_to_contain=False, essential_point=essential_point)
-                rfobjs = self.roperand_q.backward_sample(reverse_projection, projection)
+    def backward_sample(self, projs, rprojs,
+                        contain: bool=True,
+                        keypoint: int=None,
+                        cumulative: bool=False, **kwargs):
+        if keypoint:
+            if contain:
+                lobjs = self.loperand_q.backward_sample(
+                    projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
+                robjs = self.roperand_q.backward_sample(
+                    projs, rprojs, contain=False, keypoint=keypoint, cumulative=cumulative)
             else:
-                lfobjs = self.loperand_q.backward_sample(reverse_projection, projection,)
-                rfobjs = self.roperand_q.backward_sample(
-                    reverse_projection, projection, need_to_contain=True, essential_point=essential_point)
+                choose_formula = random.randint(0, 1)
+                if choose_formula == 0:
+                    lobjs = self.loperand_q.backward_sample(
+                        projs, rprojs, contain=False, keypoint=keypoint, cumulative=cumulative)
+                    robjs = self.roperand_q.backward_sample(
+                        projs, rprojs, cumulative=cumulative)
+                else:
+                    lobjs = self.loperand_q.backward_sample(
+                        projs, rprojs, cumulative=cumulative)
+                    robjs = self.roperand_q.backward_sample(
+                        projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
         else:
-            lfobjs = self.loperand_q.backward_sample(
-                reverse_projection, projection, need_to_contain=True, essential_point=essential_point)
-            rfobjs = self.roperand_q.backward_sample(
-                reverse_projection, projection, need_to_contain=False, essential_point=essential_point)
-        self.objects = lfobjs - rfobjs
-        return self.objects
+            lobjs = self.loperand_q.backward_sample(
+                projs, rprojs, cumulative=cumulative)
+            robjs = self.roperand_q.backward_sample(
+                projs, rprojs, cumulative=cumulative)
 
-    def random_query(self, projection):
-        lfobjs = self.loperand_q.random_query(projection)
-        rfobjs = self.roperand_q.random_query(projection)
-        self.objects = lfobjs - rfobjs
-        return self.objects
+        return lobjs - robjs
+
+    def random_query(self, projs, cumulative=False):
+        lobjs = self.loperand_q.random_query(projs, cumulative)
+        robjs = self.roperand_q.random_query(projs, cumulative)
+        return lobjs - robjs
 
 
-# you should specifiy the binary operator, zero order object, first order object
 binary_ops = {
     '|': DisjunctionQ,
     '&': ConjunctionQ,
