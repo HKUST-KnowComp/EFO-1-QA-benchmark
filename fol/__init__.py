@@ -1,3 +1,2 @@
-from .base import (beta_query, Conjunction, Difference, Disjunction, Negation, Projection,
-                   Variable, generate_meta_query)
-from .base import grammar_class as base_grammar_class
+from .foq import parse_foq_formula, FirstOrderQuery
+from .appfoq import AppFOQEstimator, TransE_Tnorm

@@ -4,6 +4,7 @@ from typing import List
 import torch
 from torch import nn
 
+
 IntList = List[int]
 
 
@@ -30,7 +31,7 @@ class AppFOQEstimator(ABC):
         pass
 
     @abstractclassmethod
-    def criterion(self, answer_emb: torch.Tensor, answer_estimation: List[IntList]):
+    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList])-> torch.Tensor:
         pass
 
 class TransE_Tnorm(AppFOQEstimator, nn.Module):
@@ -40,6 +41,7 @@ class TransE_Tnorm(AppFOQEstimator, nn.Module):
                                               embedding_dim=3)
         self.relation_embeddings = nn.Embedding(num_embeddings=100,
                                                 embedding_dim=3)
+        self.loss_func = nn.MSELoss()
 
     def get_entity_embedding(self, entity_ids: IntList):
         xe = torch.tensor(entity_ids)
@@ -60,5 +62,13 @@ class TransE_Tnorm(AppFOQEstimator, nn.Module):
     def get_difference_embedding(self, lemb, remb):
         return torch.clamp(lemb - remb, 0)
 
-    def criterion(self, answer_emb: torch.Tensor, answer_estimation: List[IntList]):
-        return super().criterion(answer_emb, answer_estimation)
+    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]):
+        batch_size = pred_emb.shape[0]
+        loss = 0
+        for b in range(batch_size):
+            num_ans = len(answer_set[b])
+            answer = torch.tensor(answer_set[b])
+            a_emb = self.entity_embeddings(answer).reshape(-1, num_ans)
+            p_emb = pred_emb[b].unsqueeze(-1)
+            loss += self.loss_func(p_emb, a_emb)
+        return loss

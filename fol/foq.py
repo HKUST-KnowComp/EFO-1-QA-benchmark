@@ -556,7 +556,7 @@ def parse_top_foq_formula(foq_formula: str,
     if foq_formula[0] == '{' and foq_formula[-1] == '}':
         query = z_obj()
         try:
-            query.entities = list(eval(foq_formula))
+            query.entities = list(eval('[' + foq_formula[1:-1] + ']'))
         except:
             raise ValueError(
                 f"fail to initialize f{foq_formula} as the value of zero order object")
