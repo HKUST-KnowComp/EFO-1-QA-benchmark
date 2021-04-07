@@ -1,15 +1,21 @@
+import argparse
+import yaml
+import os
+
 import torch
-from torch import optim
 import tqdm
+from torch import optim
 
 from fol import TransE_Tnorm, parse_foq_formula
 
+cmdparser = argparse.ArgumentParser()
+cmdparser.add_argument("--cfg")
+
 if __name__ == "__main__":
-    mock_dataset = ("[7,8,9]([1,2,2]({1,1,3})&[3,3,4]({6,5,6}))", [[2], [4], [6]])
+    mock_dataset = ("[7,8,9]([1,2,2]({1,1,3})&[3,3,4]({6,5,6}))", [[1, 2], [3], [4, 5, 6]])
     X, Y = mock_dataset
     foq_instance = parse_foq_formula(X)
     print(foq_instance.ground_formula)
-
 
     model = TransE_Tnorm()
     opt = optim.SGD(model.parameters(), lr=1e-3)

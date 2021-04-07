@@ -2,7 +2,7 @@ from pickle import APPEND
 import random
 from abc import ABC, abstractclassmethod, abstractproperty
 from typing import Tuple
-from fol.appfoq import AppFOQEstimator
+from fol.appfoq import AppFOQEstimator, IntList
 
 """
 First Order Query (FOQ) is a conceptual idea without any implementation
@@ -39,18 +39,19 @@ class FirstOrderQuery(ABC):
     def __init__(self):
         # self.objects = {}  # this is the intermediate objects during the sampling
         # FIXME: remove self.object since it is non-necessary
-        self.answer_set = {} # this is the answer set for answering deterministic
-
-    @abstractproperty
-    def ground_formula(self):
+        # self.answer_set = {} # this is the answer set for answering deterministic
         pass
 
     @abstractproperty
-    def meta_str(self):
+    def ground_formula(self) -> str:
         pass
 
     @abstractproperty
-    def meta_formula(self):
+    def meta_str(self) -> str:
+        pass
+
+    @abstractproperty
+    def meta_formula(self) -> str:
         pass
 
     @abstractclassmethod
@@ -81,7 +82,7 @@ class FirstOrderQuery(ABC):
 
     @abstractclassmethod
     def random_query(self, projs, cumulative: bool=False):
-         pass
+        pass
 
     @abstractclassmethod
     def lift(self):
@@ -89,6 +90,9 @@ class FirstOrderQuery(ABC):
         """
         pass
 
+    @abstractclassmethod
+    def check_ground(self, n_instance=None):
+        pass
 
 class VariableQ(FirstOrderQuery):
     """
@@ -161,6 +165,9 @@ class VariableQ(FirstOrderQuery):
         else:
             self.entities = [new_variable]
         return set(new_variable)
+
+    def check_ground(self, n_instance=None):
+        assert n_instance == len(self.entities)
 
 
 class ProjectionQ(FirstOrderQuery):
@@ -280,6 +287,12 @@ class ProjectionQ(FirstOrderQuery):
             objects.update(projs[e][relation])
         return objects
 
+    def check_ground(self, n_instance=None):
+        if n_instance is None:
+            self.operand_q.check_ground(len(self.relations))
+        else:
+            assert n_instance == len(self.relations)
+            self.operand_q.check_ground(n_instance=n_instance)
 
 class BinaryOps(FirstOrderQuery):
     def __init__(self, lq: FirstOrderQuery, rq: FirstOrderQuery):
@@ -320,6 +333,9 @@ class BinaryOps(FirstOrderQuery):
         self.roperand_q = robj
         self.roperand_q.top_down_parse(rargs, **kwargs)
 
+    def check_ground(self, n_instance=None):
+        self.loperand_q.check_ground(n_instance=n_instance)
+        self.roperand_q.check_ground(n_instance=n_instance)
 
 class ConjunctionQ(BinaryOps):
     def __init__(self, lq=None, rq=None):
