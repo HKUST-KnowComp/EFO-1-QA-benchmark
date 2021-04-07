@@ -2,7 +2,8 @@ import torch
 from torch import optim
 import tqdm
 
-from fol import TransE_Tnorm, parse_foq_formula
+from fol import TransE_Tnorm, parse_foq_formula, BetaReasoning
+
 
 if __name__ == "__main__":
     mock_dataset = ("[7,8,9]([1,2,2]({1,1,3})&[3,3,4]({6,5,6}))", [[2], [4], [6]])
@@ -11,7 +12,7 @@ if __name__ == "__main__":
     print(foq_instance.ground_formula)
 
 
-    model = TransE_Tnorm()
+    model = BetaReasoning(nentity=10, nrelation=10, hidden_dim=200, gamma=20, use_cuda=0, dim_list=[100, 100], num_layers=2)
     opt = optim.SGD(model.parameters(), lr=1e-3)
 
     with tqdm.trange(10000) as t:
