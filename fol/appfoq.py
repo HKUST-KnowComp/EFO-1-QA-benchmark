@@ -12,14 +12,10 @@ IntList = List[int]
 class AppFOQEstimator(ABC, nn.Module):
 
     @abstractmethod
-    def get_entity_embedding(self, entity_ids: IntList):
-    @abstractclassmethod
     def get_entity_embedding(self, entity_ids: torch.Tensor):
         pass
 
     @abstractmethod
-    def get_projection_embedding(self, proj_ids: IntList, emb):
-    @abstractclassmethod
     def get_projection_embedding(self, proj_ids: torch.Tensor, emb):
         pass
 
@@ -161,15 +157,13 @@ class BetaReasoning(AppFOQEstimator, nn.Module):
                                              self.projection_regularizer,
                                              num_layers)
 
-    def get_entity_embedding(self, entity_ids: IntList):
-        xe = torch.tensor(entity_ids)
-        emb = self.entity_embeddings(xe)
+    def get_entity_embedding(self, entity_ids: torch.IntTensor):
+        emb = self.entity_embeddings(entity_ids)
         return self.entity_regularizer(emb)
 
-    def get_projection_embedding(self, proj_ids: IntList, emb):
+    def get_projection_embedding(self, proj_ids: torch.IntTensor, emb):
         assert emb.shape[0] == len(proj_ids)
-        xp = torch.tensor(proj_ids)
-        rel_emb = self.entity_regularizer(self.relation_embeddings(xp))
+        rel_emb = self.entity_regularizer(self.relation_embeddings(proj_ids))
         pro_emb = self.projection_net(emb, rel_emb)
         return pro_emb
 

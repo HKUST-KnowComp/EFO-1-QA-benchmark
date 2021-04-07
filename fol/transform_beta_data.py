@@ -78,7 +78,7 @@ def transform_query(query, meta_formula):
     return new_query
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":    # TODO: 2u-DM left
     data_path = '../data/FB15k-237-betae'
     train_queries = pickle.load(
         open(os.path.join(data_path, "train-queries.pkl"), 'rb'))

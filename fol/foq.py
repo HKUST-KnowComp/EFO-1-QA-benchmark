@@ -62,9 +62,9 @@ class FirstOrderQuery(ABC):
 
     @abstractclassmethod
     def backward_sample(self, projs, rprojs,
-                        contain: bool=None,
-                        keypoint: int=None,
-                        cumulative: bool=False, **kwargs):
+                        contain: bool = None,
+                        keypoint: int = None,
+                        cumulative: bool = False, **kwargs):
         pass
 
     @abstractclassmethod
@@ -83,7 +83,7 @@ class FirstOrderQuery(ABC):
         pass
 
     @abstractclassmethod
-    def random_query(self, projs, cumulative: bool=False):
+    def random_query(self, projs, cumulative: bool = False):
         pass
 
     @abstractclassmethod
@@ -96,10 +96,12 @@ class FirstOrderQuery(ABC):
     def check_ground(self, n_instance=None):
         pass
 
+
 class VariableQ(FirstOrderQuery):
     """
     The `self.objects` inherented from the parent class is not used
     """
+
     def __init__(self):
         super().__init__()
         self.entities = []
@@ -131,8 +133,10 @@ class VariableQ(FirstOrderQuery):
 
     def embedding_estimation(self, estimator: AppFOQEstimator, batch_indices=None, device="cpu"):
         if self.tentities is None: self.tentities = torch.tensor(self.entities)
-        if batch_indices: ent = self.tentities[torch.tensor(batch_indices)]
-        else: ent = self.tentities
+        if batch_indices:
+            ent = self.tentities[torch.tensor(batch_indices)]
+        else:
+            ent = self.tentities
         return estimator.get_entity_embedding(ent.to(device))
 
     def lift(self):
@@ -148,9 +152,9 @@ class VariableQ(FirstOrderQuery):
         return {self.entities[0]}
 
     def backward_sample(self, projs, rprojs,
-                        contain: bool=None,
-                        keypoint: int=None,
-                        cumulative: bool=False, **kwargs):
+                        contain: bool = None,
+                        keypoint: int = None,
+                        cumulative: bool = False, **kwargs):
         if keypoint:
             if contain:
                 new_entity = [keypoint]
@@ -182,6 +186,7 @@ class ProjectionQ(FirstOrderQuery):
     """
     `self.relations` describes the relation ids by the KG
     """
+
     def __init__(self, q: FirstOrderQuery = None):
         super().__init__()
         self.operand_q = q
@@ -215,10 +220,12 @@ class ProjectionQ(FirstOrderQuery):
 
     def embedding_estimation(self, estimator: AppFOQEstimator, batch_indices=None, device='cpu'):
         if self.trelations is None: self.trelations = torch.tensor(self.relations)
-        if batch_indices: rel = self.trelations[torch.tensor(batch_indices)]
-        else: rel = self.trelations
+        if batch_indices:
+            rel = self.trelations[torch.tensor(batch_indices)]
+        else:
+            rel = self.trelations
         operand_emb = self.operand_q.embedding_estimation(estimator, batch_indices, device)
-        return estimator.get_projection_embedding(rel, operand_emb)
+        return estimator.get_projection_embedding(rel.to(device), operand_emb)
 
     def lift(self):
         self.relations = []
@@ -241,9 +248,9 @@ class ProjectionQ(FirstOrderQuery):
         return answer
 
     def backward_sample(self, projs, rprojs,
-                        contain: bool=None,
-                        keypoint: int=None,
-                        cumulative: bool=False, **kwargs):
+                        contain: bool = None,
+                        keypoint: int = None,
+                        cumulative: bool = False, **kwargs):
         # since the projection[next_point][self.rel] may contains essential_point even if not starting from it
         while True:
             if keypoint is not None:
@@ -256,7 +263,7 @@ class ProjectionQ(FirstOrderQuery):
 
             relation = random.sample(rprojs[cursor].keys(), 1)[0]
             parents = rprojs[cursor][relation]
-            parent = random.sample(parents, 1)[0]   # find an incoming edge and a corresponding node
+            parent = random.sample(parents, 1)[0]  # find an incoming edge and a corresponding node
 
             if keypoint:
                 if (keypoint in projs[parent][relation]) == contain:
@@ -307,6 +314,7 @@ class ProjectionQ(FirstOrderQuery):
             assert n_instance == len(self.relations)
             self.operand_q.check_ground(n_instance=n_instance)
 
+
 class BinaryOps(FirstOrderQuery):
     def __init__(self, lq: FirstOrderQuery, rq: FirstOrderQuery):
         self.loperand_q, self.roperand_q = lq, rq
@@ -350,6 +358,7 @@ class BinaryOps(FirstOrderQuery):
         self.loperand_q.check_ground(n_instance=n_instance)
         self.roperand_q.check_ground(n_instance=n_instance)
 
+
 class ConjunctionQ(BinaryOps):
     def __init__(self, lq=None, rq=None):
         super().__init__(lq, rq)
@@ -372,9 +381,9 @@ class ConjunctionQ(BinaryOps):
         return l_result.intersection(r_result)
 
     def backward_sample(self, projs, rprojs,
-                        contain: bool=True,
-                        keypoint: int=None,
-                        cumulative: bool=False, **kwargs):
+                        contain: bool = True,
+                        keypoint: int = None,
+                        cumulative: bool = False, **kwargs):
         if keypoint:
             if contain:
                 lobjs = self.loperand_q.backward_sample(
@@ -428,9 +437,9 @@ class DisjunctionQ(BinaryOps):
         return l_result.union(r_result)
 
     def backward_sample(self, projs, rprojs,
-                        contain: bool=True,
-                        keypoint: int=None,
-                        cumulative: bool=False, **kwargs):
+                        contain: bool = True,
+                        keypoint: int = None,
+                        cumulative: bool = False, **kwargs):
         if keypoint:
             if contain:
                 choose_formula = random.randint(0, 1)
@@ -483,9 +492,9 @@ class DifferenceQ(BinaryOps):
         return l_result - r_result
 
     def backward_sample(self, projs, rprojs,
-                        contain: bool=True,
-                        keypoint: int=None,
-                        cumulative: bool=False, **kwargs):
+                        contain: bool = True,
+                        keypoint: int = None,
+                        cumulative: bool = False, **kwargs):
         if keypoint:
             if contain:
                 lobjs = self.loperand_q.backward_sample(
@@ -616,4 +625,3 @@ def parse_foq_formula(foq_formula: str, grammar_class=grammar_class) -> FirstOrd
     obj, args = parse_top_foq_formula(foq_formula, **grammar_class)
     obj.top_down_parse(args, **grammar_class)
     return obj
-

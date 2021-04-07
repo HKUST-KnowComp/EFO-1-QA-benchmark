@@ -34,7 +34,7 @@ def complete_ground(foq_formula):
     return foq_formula
 
 
- beta_query = {
+beta_query = {
     '1p': 'p(e)',
     '2p': 'p(p(e))',
     '3p': 'p(p(p(e)))',
