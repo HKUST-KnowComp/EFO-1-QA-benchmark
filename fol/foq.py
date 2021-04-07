@@ -2,7 +2,9 @@ from pickle import APPEND
 import random
 from abc import ABC, abstractclassmethod, abstractproperty
 from typing import Tuple
-from fol.appfoq import AppFOQEstimator
+
+import torch
+from fol.appfoq import AppFOQEstimator, IntList
 
 """
 First Order Query (FOQ) is a conceptual idea without any implementation
@@ -39,18 +41,19 @@ class FirstOrderQuery(ABC):
     def __init__(self):
         # self.objects = {}  # this is the intermediate objects during the sampling
         # FIXME: remove self.object since it is non-necessary
-        self.answer_set = {} # this is the answer set for answering deterministic
-
-    @abstractproperty
-    def ground_formula(self):
+        # self.answer_set = {} # this is the answer set for answering deterministic
         pass
 
     @abstractproperty
-    def meta_str(self):
+    def ground_formula(self) -> str:
         pass
 
     @abstractproperty
-    def meta_formula(self):
+    def meta_str(self) -> str:
+        pass
+
+    @abstractproperty
+    def meta_formula(self) -> str:
         pass
 
     @abstractclassmethod
@@ -70,7 +73,7 @@ class FirstOrderQuery(ABC):
         pass
 
     @abstractclassmethod
-    def embedding_estimation(self, estimator: AppFOQEstimator):
+    def embedding_estimation(self, estimator: AppFOQEstimator, batch_indices, device):
         pass
 
     @abstractclassmethod
@@ -81,7 +84,7 @@ class FirstOrderQuery(ABC):
 
     @abstractclassmethod
     def random_query(self, projs, cumulative: bool=False):
-         pass
+        pass
 
     @abstractclassmethod
     def lift(self):
@@ -89,6 +92,9 @@ class FirstOrderQuery(ABC):
         """
         pass
 
+    @abstractclassmethod
+    def check_ground(self, n_instance=None):
+        pass
 
 class VariableQ(FirstOrderQuery):
     """
@@ -97,6 +103,7 @@ class VariableQ(FirstOrderQuery):
     def __init__(self):
         super().__init__()
         self.entities = []
+        self.tentities = None
 
     @property
     def ground_formula(self):
@@ -122,11 +129,15 @@ class VariableQ(FirstOrderQuery):
             raise ValueError(
                 f"formula {foq_formula} is not in the same equivalence meta query class {self.meta_formula}")
 
-    def embedding_estimation(self, estimator: AppFOQEstimator):
-        return estimator.get_entity_embedding(self.entities)
+    def embedding_estimation(self, estimator: AppFOQEstimator, batch_indices=None, device="cpu"):
+        if self.tentities is None: self.tentities = torch.tensor(self.entities)
+        if batch_indices: ent = self.tentities[torch.tensor(batch_indices)]
+        else: ent = self.tentities
+        return estimator.get_entity_embedding(ent.to(device))
 
     def lift(self):
         self.entities = []
+        self.tentities = None
         return super().lift()
 
     def top_down_parse(self, *args, **kwargs):
@@ -163,6 +174,9 @@ class VariableQ(FirstOrderQuery):
             self.entities = [new_variable]
         return {new_variable}
 
+    def check_ground(self, n_instance=None):
+        assert n_instance == len(self.entities)
+
 
 class ProjectionQ(FirstOrderQuery):
     """
@@ -172,6 +186,7 @@ class ProjectionQ(FirstOrderQuery):
         super().__init__()
         self.operand_q = q
         self.relations = []
+        self.trelations = None
 
     @property
     def ground_formula(self):
@@ -198,12 +213,16 @@ class ProjectionQ(FirstOrderQuery):
             raise ValueError(
                 f"formula {foq_formula} is not in the same equivalence meta query class {self.meta_formula}")
 
-    def embedding_estimation(self, estimator: AppFOQEstimator):
-        operand_emb = self.operand_q.embedding_estimation(estimator=estimator)
-        return estimator.get_projection_embedding(self.relations, operand_emb)
+    def embedding_estimation(self, estimator: AppFOQEstimator, batch_indices=None, device='cpu'):
+        if self.trelations is None: self.trelations = torch.tensor(self.relations)
+        if batch_indices: rel = self.trelations[torch.tensor(batch_indices)]
+        else: rel = self.trelations
+        operand_emb = self.operand_q.embedding_estimation(estimator, batch_indices, device)
+        return estimator.get_projection_embedding(rel, operand_emb)
 
     def lift(self):
         self.relations = []
+        self.trelations = None
         return super().lift()
 
     def top_down_parse(self, operand_str, **kwargs):
@@ -281,6 +300,12 @@ class ProjectionQ(FirstOrderQuery):
             objects.update(projs[e][relation])
         return objects
 
+    def check_ground(self, n_instance=None):
+        if n_instance is None:
+            self.operand_q.check_ground(len(self.relations))
+        else:
+            assert n_instance == len(self.relations)
+            self.operand_q.check_ground(n_instance=n_instance)
 
 class BinaryOps(FirstOrderQuery):
     def __init__(self, lq: FirstOrderQuery, rq: FirstOrderQuery):
@@ -301,9 +326,9 @@ class BinaryOps(FirstOrderQuery):
             raise ValueError(
                 f"formula {foq_formula} is not in the same equivalence meta query class {self.meta_formula}")
 
-    def embedding_estimation(self, estimator: AppFOQEstimator):
-        lemb = self.loperand_q.embedding_estimation(estimator=estimator)
-        remb = self.roperand_q.embedding_estimation(estimator=estimator)
+    def embedding_estimation(self, estimator: AppFOQEstimator, batch_indices=None, device='cpu'):
+        lemb = self.loperand_q.embedding_estimation(estimator, batch_indices, device)
+        remb = self.roperand_q.embedding_estimation(estimator, batch_indices, device)
         return lemb, remb
 
     def lift(self):
@@ -321,6 +346,9 @@ class BinaryOps(FirstOrderQuery):
         self.roperand_q = robj
         self.roperand_q.top_down_parse(rargs, **kwargs)
 
+    def check_ground(self, n_instance=None):
+        self.loperand_q.check_ground(n_instance=n_instance)
+        self.roperand_q.check_ground(n_instance=n_instance)
 
 class ConjunctionQ(BinaryOps):
     def __init__(self, lq=None, rq=None):
@@ -334,8 +362,8 @@ class ConjunctionQ(BinaryOps):
     def meta_formula(self):
         return f"({self.loperand_q.meta_formula})&({self.roperand_q.meta_formula})"
 
-    def embedding_estimation(self, estimator: AppFOQEstimator):
-        lemb, remb = super().embedding_estimation(estimator)
+    def embedding_estimation(self, estimator: AppFOQEstimator, batch_indices=None, device='cpu'):
+        lemb, remb = super().embedding_estimation(estimator, batch_indices, device)
         return estimator.get_conjunction_embedding(lemb, remb)
 
     def deterministic_query(self, projs):
@@ -390,8 +418,8 @@ class DisjunctionQ(BinaryOps):
     def meta_formula(self):
         return f"({self.loperand_q.meta_formula})|({self.roperand_q.meta_formula})"
 
-    def embedding_estimation(self, estimator: AppFOQEstimator):
-        lemb, remb = super().embedding_estimation(estimator)
+    def embedding_estimation(self, estimator: AppFOQEstimator, batch_indices=None, device='cpu'):
+        lemb, remb = super().embedding_estimation(estimator, batch_indices, device)
         return estimator.get_disjunction_embedding(lemb, remb)
 
     def deterministic_query(self, projs):
@@ -445,8 +473,8 @@ class DifferenceQ(BinaryOps):
     def meta_formula(self):
         return f"({self.loperand_q.meta_formula})-({self.roperand_q.meta_formula})"
 
-    def embedding_estimation(self, estimator: AppFOQEstimator):
-        lemb, remb = super().embedding_estimation(estimator)
+    def embedding_estimation(self, estimator: AppFOQEstimator, batch_indices=None, device='cpu'):
+        lemb, remb = super().embedding_estimation(estimator, batch_indices, device)
         return estimator.get_difference_embedding(lemb, remb)
 
     def deterministic_query(self, projs):
