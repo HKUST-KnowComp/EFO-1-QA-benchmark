@@ -133,6 +133,7 @@ class VariableQ(FirstOrderQuery):
         return
 
     def deterministic_query(self, projection):  # TODO: change to return a list of set
+        print(self.entities)
         return {self.entities[0]}
 
     def backward_sample(self, projs, rprojs,
@@ -160,7 +161,7 @@ class VariableQ(FirstOrderQuery):
             self.entities.append(self.entities)
         else:
             self.entities = [new_variable]
-        return set(new_variable)
+        return {new_variable}
 
 
 class ProjectionQ(FirstOrderQuery):
