@@ -34,7 +34,7 @@ def complete_ground(foq_formula):
     return foq_formula
 
 
-beta_query = {
+ beta_query = {
     '1p': 'p(e)',
     '2p': 'p(p(e))',
     '3p': 'p(p(p(e)))',
@@ -118,6 +118,7 @@ def test_sample():
         ans_another = check_instance.deterministic_query(projection_train)
         assert ans_another == ans_sample
 
+
 # TODO: implement
 
 
@@ -134,6 +135,7 @@ def test_backward_sample():
                                                            all_entity_dict, all_relation_dict, projection_none,
                                                            reverse_proection_none)
     for name in beta_query:
+        print(name)
         query_structure = beta_query[name]
         ansclass = parse_foq_formula(foq_formula=query_structure)
         ans_back_sample = ansclass.backward_sample(
@@ -145,3 +147,8 @@ def test_backward_sample():
         ans_another = check_instance.deterministic_query(projection_train)
         assert ans_another == ans_check_back_sample
 
+
+if __name__ == "__main__":
+    test_backward_sample()
+    test_sample()
+    print('a')
