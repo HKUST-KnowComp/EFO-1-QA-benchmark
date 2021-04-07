@@ -43,7 +43,8 @@ beta_query = {
     '2in': 'p(e)-p(e)',
     '3in': 'p(e)&p(e)-p(e)',
     'inp': 'p(p(e)-p(e))',
-    'pni': 'p(p(e))-p(e)',
+    'pin': 'p(p(e))-p(e)',
+    'pni': 'p(e)-p(p(e))',
     'ip': 'p(p(e)&p(e))',
     'pi': 'p(e)&p(p(e))',
     '2u': 'p(e)|p(e)',
@@ -106,18 +107,41 @@ def test_sample():
     projection_train, reverse_projection_train = load_data('datasets_knowledge_embedding/FB15k-237/train.txt',
                                                            all_entity_dict, all_relation_dict, projection_none,
                                                            reverse_proection_none)
-    projection_valid, reverse_projection_valid = load_data('datasets_knowledge_embedding/FB15k-237/valid.txt',
-                                                           all_entity_dict, all_relation_dict, projection_train,
-                                                           reverse_projection_train)
-
     for name in beta_query:
         query_structure = beta_query[name]
         ansclass = parse_foq_formula(foq_formula=query_structure)
-        ans_objects = ansclass.backward_sample(
-            reverse_projection_train, projection_train)
-        ans_2 = ansclass.random_query(projection_train)
-        print(ans_objects, ans_2)
+        ans_sample = ansclass.random_query(projection_train, cumulative=True)
+        ans_check_sample = ansclass.deterministic_query(projection_train)
+        assert ans_sample == ans_check_sample
+        query_string = ansclass.ground_formula
+        check_instance = parse_foq_formula(query_string)
+        ans_another = check_instance.deterministic_query(projection_train)
+        assert ans_another == ans_sample
 
 # TODO: implement
+
+
 def test_backward_sample():
-    pass
+    stanford_data_path = 'data/FB15k-237-betae'
+    all_entity_dict, all_relation_dict, id2ent, id2rel = read_indexing(
+        stanford_data_path)  # TODO: this function may be moved to other data utilities
+    projection_none = {}
+    reverse_proection_none = {}
+    for i in all_entity_dict.values():
+        projection_none[i] = collections.defaultdict(set)
+        reverse_proection_none[i] = collections.defaultdict(set)
+    projection_train, reverse_projection_train = load_data('datasets_knowledge_embedding/FB15k-237/train.txt',
+                                                           all_entity_dict, all_relation_dict, projection_none,
+                                                           reverse_proection_none)
+    for name in beta_query:
+        query_structure = beta_query[name]
+        ansclass = parse_foq_formula(foq_formula=query_structure)
+        ans_back_sample = ansclass.backward_sample(
+            reverse_projection_train, projection_train, cumulative=True)
+        ans_check_back_sample = ansclass.deterministic_query(projection_train)
+        assert ans_check_back_sample == ans_back_sample
+        query_string = ansclass.ground_formula
+        check_instance = parse_foq_formula(query_string)
+        ans_another = check_instance.deterministic_query(projection_train)
+        assert ans_another == ans_check_back_sample
+

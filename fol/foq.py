@@ -132,8 +132,8 @@ class VariableQ(FirstOrderQuery):
     def top_down_parse(self, *args, **kwargs):
         return
 
-    def deterministic_query(self, projection):
-        return set(self.entities[0])
+    def deterministic_query(self, projection):  # TODO: change to return a list of set
+        return {self.entities[0]}
 
     def backward_sample(self, projs, rprojs,
                         contain: bool=None,
@@ -245,14 +245,14 @@ class ProjectionQ(FirstOrderQuery):
                 break
 
         p_object = self.operand_q.backward_sample(projs, rprojs,
-            contain=True, keypoint=parent, cumulative=cumulative, **kwargs)
-        if None in p_object: # FIXME: why this is a none in return type
+                                                  contain=True, keypoint=parent, cumulative=cumulative, **kwargs)
+        if None in p_object:  # FIXME: why this is a none in return type
             raise ValueError
 
-        objects = projs[parent][relation]
-        for entity in p_object: # FIXME: there used to be a copy
+        objects = set()
+        for entity in p_object:  # FIXME: there used to be a copy
             if isinstance(entity, int):
-                objects.update(projs[entity][self.rel])
+                objects.update(projs[entity][relation])
 
         if cumulative:
             self.relations.append(relation)
