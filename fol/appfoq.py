@@ -8,14 +8,14 @@ from torch import nn
 IntList = List[int]
 
 
-class AppFOQEstimator(ABC):
+class AppFOQEstimator(ABC, nn.Module):
 
     @abstractclassmethod
-    def get_entity_embedding(self, entity_ids: IntList):
+    def get_entity_embedding(self, entity_ids: torch.Tensor):
         pass
 
     @abstractclassmethod
-    def get_projection_embedding(self, proj_ids: IntList, emb):
+    def get_projection_embedding(self, proj_ids: torch.Tensor, emb):
         pass
 
     @abstractclassmethod
@@ -34,7 +34,7 @@ class AppFOQEstimator(ABC):
     def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList])-> torch.Tensor:
         pass
 
-class TransE_Tnorm(AppFOQEstimator, nn.Module):
+class TransE_Tnorm(AppFOQEstimator):
     def __init__(self) -> None:
         super().__init__()
         self.entity_embeddings = nn.Embedding(num_embeddings=100,
@@ -43,14 +43,12 @@ class TransE_Tnorm(AppFOQEstimator, nn.Module):
                                                 embedding_dim=3)
         self.loss_func = nn.MSELoss()
 
-    def get_entity_embedding(self, entity_ids: IntList):
-        xe = torch.tensor(entity_ids)
-        return self.entity_embeddings(xe)
+    def get_entity_embedding(self, entity_ids: torch.IntTensor):
+        return self.entity_embeddings(entity_ids)
 
-    def get_projection_embedding(self, proj_ids: IntList, emb):
-        assert emb.shape[0] == len(proj_ids)
-        xp = torch.tensor(proj_ids)
-        return self.relation_embeddings(xp) + emb
+    def get_projection_embedding(self, proj_ids: torch.IntTensor, emb):
+        assert emb.shape[0] == proj_ids.shape[0]
+        return self.relation_embeddings(proj_ids) + emb
 
     def get_conjunction_embedding(self, lemb, remb):
         assert lemb.shape

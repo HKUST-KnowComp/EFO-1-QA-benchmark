@@ -23,6 +23,7 @@ if __name__ == "__main__":
     with tqdm.trange(10000) as t:
         for i in t:
             opt.zero_grad()
+            # pred = foq_instance.embedding_estimation(estimator=model, batch_indices=[i % 3])
             pred = foq_instance.embedding_estimation(estimator=model)
             loss = model.criterion(pred, Y)
             loss.backward()
