@@ -1,4 +1,4 @@
-from abc import ABC, abstractclassmethod
+from abc import ABC, abstractclassmethod, abstractmethod
 from typing import List
 
 import torch
@@ -11,28 +11,28 @@ IntList = List[int]
 
 class AppFOQEstimator(ABC):
 
-    @abstractclassmethod
+    @abstractmethod
     def get_entity_embedding(self, entity_ids: IntList):
         pass
 
-    @abstractclassmethod
+    @abstractmethod
     def get_projection_embedding(self, proj_ids: IntList, emb):
         pass
 
-    @abstractclassmethod
+    @abstractmethod
     def get_conjunction_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
         pass
 
-    @abstractclassmethod
+    @abstractmethod
     def get_disjunction_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
         pass
 
-    @abstractclassmethod
+    @abstractmethod
     def get_difference_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
         pass
 
-    @abstractclassmethod
-    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList])-> torch.Tensor:
+    @abstractmethod
+    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList], false_answer_set: List[IntList]) -> torch.Tensor:
         pass
 
 class TransE_Tnorm(AppFOQEstimator, nn.Module):
@@ -194,7 +194,7 @@ class BetaReasoning(AppFOQEstimator, nn.Module):
         alpha_embedding, beta_embedding = torch.chunk(pred_emb, 2, dim=-1)
         query_dist = torch.distributions.beta.Beta(alpha_embedding, beta_embedding)
         chosen_answer = random.choice(answer_set)
-        answer_embedding = self.get_entity_embedding(chosen_answer)
+        answer_embedding = self.get_entity_embedding(chosen_answer)   # TODO: negative_sampling
         answer_alpha, answer_beta = torch.chunk(answer_embedding, 2, dim=-1)
         answer_dist = torch.distributions.beta.Beta(answer_alpha, answer_beta)
         logit = self.gamma - torch.norm(torch.distributions.kl.kl_divergence(answer_dist, query_dist), p=1, dim=-1)
