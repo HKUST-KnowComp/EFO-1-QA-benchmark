@@ -1,25 +1,32 @@
+action: train  # one of [train, train+valid, train+test, valid, test]
 data:
-  path: data/FB15k-237-betae
+  type: beta
+  data_folder: data/FB15k-237-betae
   cpu: 10
 train:
-  negative_sample_size: 128
+  negative_sample_size: 128  # for each positive sample
   batch_size: 512
-  test_batch_size: 1
   learning_rate: 0.0001
   steps: 100000
+  log_every_steps: 100
   warm_up_steps: None
-  tasks: 1p.2p.3p.1i.2i
-evaluate:
-  valid_steps: 30000
-  log_steps: 100
-  test_valid_log_steps: 1000
+  meta_queries: 
+    - 1p
+    - 2p
+    - 3p
+    - 1i
+    - 2i
+evaluate:  # only used when valid/test in action
+  batch_size: 1
+  evaluate_every_steps: 30000
+  log_every_steps: 100
   print: true
   tasks: 1p.2p.3p.1i.2i
-result:
-  checkpoint_steps: 50000
-  case_path: default
-embedding:
-  geometry: beta # one of [vec, box, beta, dm]
+logging:
+  checkpoint_every: 50000
+  logging_path: default
+estimator:
+  embedding: beta # one of [Transe, box, beta, dm]
   beta:
     entity_dim: 400
     relation_dim: 400
