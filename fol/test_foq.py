@@ -1,9 +1,9 @@
 import collections
 import random
 
-from .appfoq import TransE_Tnorm
-from .foq import *
-from .sampler import load_data, read_indexing
+from fol.appfoq import TransE_Tnorm
+from fol.foq import *
+from fol.sampler import load_data, read_indexing
 
 
 def random_e_ground(foq_formula):
@@ -119,9 +119,6 @@ def test_sample():
         assert ans_another == ans_sample
 
 
-# TODO: implement
-
-
 def test_backward_sample():
     stanford_data_path = 'data/FB15k-237-betae'
     all_entity_dict, all_relation_dict, id2ent, id2rel = read_indexing(
@@ -135,11 +132,10 @@ def test_backward_sample():
                                                            all_entity_dict, all_relation_dict, projection_none,
                                                            reverse_proection_none)
     for name in beta_query:
-        print(name)
         query_structure = beta_query[name]
         ansclass = parse_foq_formula(foq_formula=query_structure)
         ans_back_sample = ansclass.backward_sample(
-            reverse_projection_train, projection_train, cumulative=True)
+            projection_train, reverse_projection_train, cumulative=True)
         ans_check_back_sample = ansclass.deterministic_query(projection_train)
         assert ans_check_back_sample == ans_back_sample
         query_string = ansclass.ground_formula
@@ -151,4 +147,7 @@ def test_backward_sample():
 if __name__ == "__main__":
     test_backward_sample()
     test_sample()
-    print('a')
+    test_additive_ground()
+    test_embedding_estimation()
+    test_parse_grounded_formula()
+    test_parse_meta_formula()

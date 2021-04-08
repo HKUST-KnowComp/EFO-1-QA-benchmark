@@ -148,7 +148,6 @@ class VariableQ(FirstOrderQuery):
         return
 
     def deterministic_query(self, projection):  # TODO: change to return a list of set
-        print(self.entities)
         return {self.entities[0]}
 
     def backward_sample(self, projs, rprojs,
@@ -164,16 +163,16 @@ class VariableQ(FirstOrderQuery):
             new_entity = random.sample(set(projs.keys()), 1)
 
         if cumulative:
-            self.entities.append(new_entity)
+            self.entities.append(new_entity[0])
         else:
-            self.entities = [new_entity]
+            self.entities = new_entity
 
         return set(new_entity)
 
     def random_query(self, projs, cumulative=False):
         new_variable = random.sample(set(projs.keys()), 1)[0]
         if cumulative:
-            self.entities.append(self.entities)
+            self.entities.append(new_variable)
         else:
             self.entities = [new_variable]
         return {new_variable}
@@ -292,6 +291,10 @@ class ProjectionQ(FirstOrderQuery):
         variable = self.operand_q.random_query(projs, cumulative)
         objects = set()
         if len(variable) == 0:
+            if cumulative:
+                self.relations.append(0)
+            else:
+                self.relations = []  # TODO: perhaps another way to deal with it
             return objects
 
         chosen_variable = random.sample(variable, 1)[0]
@@ -302,7 +305,7 @@ class ProjectionQ(FirstOrderQuery):
         else:
             self.relations = [relation]
 
-        objects = projs[chosen_variable][relation]
+        objects = set()
         for e in list(variable):
             objects.update(projs[e][relation])
         return objects
@@ -445,12 +448,12 @@ class DisjunctionQ(BinaryOps):
                 choose_formula = random.randint(0, 1)
                 if choose_formula == 0:
                     lobjs = self.loperand_q.backward_sample(
-                        projs, rprojs, conatin=True, keypoint=keypoint, cumulative=cumulative)
+                        projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
                     robjs = self.roperand_q.backward_sample(projs, rprojs, cumulative=cumulative)
                 else:
                     lobjs = self.loperand_q.backward_sample(projs, rprojs, cumulative=cumulative)
                     robjs = self.roperand_q.backward_sample(
-                        projs, rprojs, conatin=True, keypoint=keypoint, cumulative=cumulative)
+                        projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
             else:
                 lobjs = self.loperand_q.backward_sample(
                     projs, rprojs, contain=False, keypoint=keypoint, cumulative=cumulative)
