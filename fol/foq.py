@@ -631,3 +631,25 @@ def parse_foq_formula(foq_formula: str, grammar_class=grammar_class) -> FirstOrd
     obj, args = parse_top_foq_formula(foq_formula, **grammar_class)
     obj.top_down_parse(args, **grammar_class)
     return obj
+
+def gen_foq_meta_formula(depth=0, max_depth=3, early_terminate=False):
+    if depth >= max_depth or early_terminate:
+        return "p(e)"
+    
+    et_choice = random.randint(0, 2)
+    if et_choice == 0:
+        et1, et2 = False, False
+    elif et_choice == 1:
+        et1, et2 = True, False
+    elif et_choice == 2:
+        et1, et2 = False, True
+    
+    t = random.randint(0, 3)
+    if t == 0:
+        return f"p({gen_foq_meta_formula(depth+1, max_depth, early_terminate)})"
+    elif t == 1:
+        return f"({gen_foq_meta_formula(depth+1, max_depth, et1)})&({gen_foq_meta_formula(depth+1, max_depth, et2)})"
+    elif t == 2:
+        return f"({gen_foq_meta_formula(depth+1, max_depth, et1)})|({gen_foq_meta_formula(depth+1, max_depth, et2)})"
+    elif t == 3:
+        return f"({gen_foq_meta_formula(depth+1, max_depth, et1)})-({gen_foq_meta_formula(depth+1, max_depth, et2)})"

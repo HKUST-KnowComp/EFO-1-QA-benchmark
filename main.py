@@ -9,8 +9,8 @@ from torch import optim
 from fol import TransEEstimator, parse_foq_formula, BetaEstimator
 
 
-cmdparser = argparse.ArgumentParser()
-cmdparser.add_argument("--cfg")
+parser = argparse.ArgumentParser()
+parser.add_argument("--cfg")
 
 if __name__ == "__main__":
     mock_dataset = ("[7,8,9]([1,2,2]({1,1,3})&[3,3,4]({6,5,6}))", [[1, 2], [3], [4, 5, 6]])
