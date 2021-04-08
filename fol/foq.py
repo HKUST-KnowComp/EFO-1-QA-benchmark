@@ -1,6 +1,6 @@
 from pickle import APPEND
 import random
-from abc import ABC, abstractclassmethod, abstractproperty
+from abc import ABC, abstractmethod, abstractproperty
 from typing import Tuple
 
 import torch
@@ -44,57 +44,63 @@ class FirstOrderQuery(ABC):
         # self.answer_set = {} # this is the answer set for answering deterministic
         pass
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def ground_formula(self) -> str:
         pass
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def meta_str(self) -> str:
         pass
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def meta_formula(self) -> str:
         pass
 
-    @abstractclassmethod
+    @abstractmethod
     def additive_ground(self, foq_formula, *args, **kwargs):
         pass
 
-    @abstractclassmethod
+    @abstractmethod
     def backward_sample(self, projs, rprojs,
                         contain: bool = None,
                         keypoint: int = None,
                         cumulative: bool = False, **kwargs):
         pass
 
-    @abstractclassmethod
+    @abstractmethod
     def deterministic_query(self, projection):
         #     Consider the first entity / relation
         pass
 
-    @abstractclassmethod
+    @abstractmethod
     def embedding_estimation(self, estimator: AppFOQEstimator, batch_indices, device):
         pass
 
-    @abstractclassmethod
+    @abstractmethod
     def top_down_parse(self, *args, **kwargs):
         """ Parse meta or grounded formula
         """
         pass
 
-    @abstractclassmethod
+    @abstractmethod
     def random_query(self, projs, cumulative: bool = False):
         pass
 
-    @abstractclassmethod
+    @abstractmethod
     def lift(self):
         """ Remove all intermediate objects, grounded entities (ZOO) and relations (FOO)
         """
         pass
 
-    @abstractclassmethod
-    def check_ground(self, n_instance=None):
+    @abstractmethod
+    def check_ground(self) -> int:
         pass
+
+    def __len__(self):
+        return self.check_ground()
 
 
 class VariableQ(FirstOrderQuery):
@@ -177,8 +183,8 @@ class VariableQ(FirstOrderQuery):
             self.entities = [new_variable]
         return {new_variable}
 
-    def check_ground(self, n_instance=None):
-        assert n_instance == len(self.entities)
+    def check_ground(self):
+        return len(self.entities)
 
 
 class ProjectionQ(FirstOrderQuery):
@@ -310,12 +316,10 @@ class ProjectionQ(FirstOrderQuery):
             objects.update(projs[e][relation])
         return objects
 
-    def check_ground(self, n_instance=None):
-        if n_instance is None:
-            self.operand_q.check_ground(len(self.relations))
-        else:
-            assert n_instance == len(self.relations)
-            self.operand_q.check_ground(n_instance=n_instance)
+    def check_ground(self):
+        n_inst = self.operand_q.check_ground()
+        assert len(self.relations) == n_inst
+        return n_inst
 
 
 class BinaryOps(FirstOrderQuery):
@@ -357,9 +361,11 @@ class BinaryOps(FirstOrderQuery):
         self.roperand_q = robj
         self.roperand_q.top_down_parse(rargs, **kwargs)
 
-    def check_ground(self, n_instance=None):
-        self.loperand_q.check_ground(n_instance=n_instance)
-        self.roperand_q.check_ground(n_instance=n_instance)
+    def check_ground(self):
+        l_n_inst = self.loperand_q.check_ground()
+        r_n_inst = self.roperand_q.check_ground()
+        assert l_n_inst == r_n_inst
+        return l_n_inst
 
 
 class ConjunctionQ(BinaryOps):
@@ -628,3 +634,25 @@ def parse_foq_formula(foq_formula: str, grammar_class=grammar_class) -> FirstOrd
     obj, args = parse_top_foq_formula(foq_formula, **grammar_class)
     obj.top_down_parse(args, **grammar_class)
     return obj
+
+def gen_foq_meta_formula(depth=0, max_depth=3, early_terminate=False):
+    if depth >= max_depth or early_terminate:
+        return "p(e)"
+    
+    et_choice = random.randint(0, 2)
+    if et_choice == 0:
+        et1, et2 = False, False
+    elif et_choice == 1:
+        et1, et2 = True, False
+    elif et_choice == 2:
+        et1, et2 = False, True
+    
+    t = random.randint(0, 3)
+    if t == 0:
+        return f"p({gen_foq_meta_formula(depth+1, max_depth, early_terminate)})"
+    elif t == 1:
+        return f"({gen_foq_meta_formula(depth+1, max_depth, et1)})&({gen_foq_meta_formula(depth+1, max_depth, et2)})"
+    elif t == 2:
+        return f"({gen_foq_meta_formula(depth+1, max_depth, et1)})|({gen_foq_meta_formula(depth+1, max_depth, et2)})"
+    elif t == 3:
+        return f"({gen_foq_meta_formula(depth+1, max_depth, et1)})-({gen_foq_meta_formula(depth+1, max_depth, et2)})"

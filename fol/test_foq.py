@@ -1,9 +1,9 @@
 import collections
 import random
 
-from fol.appfoq import TransE_Tnorm
-from fol.foq import *
-from fol.sampler import load_data, read_indexing
+from .appfoq import TransEEstimator
+from .foq import *
+from .sampler import load_data, read_indexing
 
 
 def random_e_ground(foq_formula):
@@ -92,7 +92,7 @@ def test_embedding_estimation():
             cg_formula = complete_ground(v)
             obj.additive_ground(cg_formula)
         print(f"multi-instantiation for formula {obj.ground_formula}")
-        obj.embedding_estimation(estimator=TransE_Tnorm())
+        obj.embedding_estimation(estimator=TransEEstimator())
 
 
 def test_sample():
@@ -119,6 +119,9 @@ def test_sample():
         assert ans_another == ans_sample
 
 
+# TODO: implement
+
+
 def test_backward_sample():
     stanford_data_path = 'data/FB15k-237-betae'
     all_entity_dict, all_relation_dict, id2ent, id2rel = read_indexing(
@@ -143,6 +146,11 @@ def test_backward_sample():
         ans_another = check_instance.deterministic_query(projection_train)
         assert ans_another == ans_check_back_sample
 
+
+def test_gen_foq_meta_formula():
+    for i in range(100):
+        mf = gen_foq_meta_formula()
+        parse_foq_formula(mf)
 
 if __name__ == "__main__":
     test_backward_sample()
