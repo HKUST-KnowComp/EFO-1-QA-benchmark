@@ -78,7 +78,7 @@ def transform_query(query, meta_formula):
     return new_query
 
 
-if __name__ == "__main__":    # TODO: 2u-DM left
+if __name__ == "__main__":
     data_path = '../data/FB15k-237-betae'
     train_queries = pickle.load(
         open(os.path.join(data_path, "train-queries.pkl"), 'rb'))
@@ -92,7 +92,7 @@ if __name__ == "__main__":    # TODO: 2u-DM left
                                                            all_entity_dict, all_relation_dict, projection_none,
                                                            reverse_proection_none)
     import pandas as pd
-    for beta_structure in query_name_dict.keys():
+    for beta_structure in train_queries.keys():
         my_train_data = collections.defaultdict(list)
         beta_name = query_name_dict[beta_structure]
         my_name = beta_query[beta_name]
