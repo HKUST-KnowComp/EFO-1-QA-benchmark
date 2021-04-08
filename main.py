@@ -6,7 +6,7 @@ import torch
 import tqdm
 from torch import optim
 
-from fol import TransE_Tnorm, parse_foq_formula, BetaReasoning
+from fol import TransEEstimator, parse_foq_formula, BetaEstimator
 
 
 cmdparser = argparse.ArgumentParser()
@@ -17,7 +17,7 @@ if __name__ == "__main__":
     X, Y = mock_dataset
     foq_instance = parse_foq_formula(X)
     print(foq_instance.ground_formula)
-    model = BetaReasoning(
+    model = BetaEstimator(
         nentity=10, nrelation=10, hidden_dim=200, gamma=20, use_cuda=0, dim_list=[100, 100], num_layers=2)
     opt = optim.SGD(model.parameters(), lr=1e-3)
 

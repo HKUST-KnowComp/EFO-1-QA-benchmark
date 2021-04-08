@@ -1,4 +1,4 @@
-from abc import ABC, abstractclassmethod, abstractmethod
+from abc import ABC, abstractmethod
 from typing import List
 
 import torch
@@ -35,7 +35,7 @@ class AppFOQEstimator(ABC, nn.Module):
     def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList], false_answer_set: List[IntList]) -> torch.Tensor:
         pass
 
-class TransE_Tnorm(AppFOQEstimator):
+class TransEEstimator(AppFOQEstimator):
     def __init__(self) -> None:
         super().__init__()
         self.entity_embeddings = nn.Embedding(num_embeddings=100,
@@ -131,7 +131,7 @@ class BetaIntersection(nn.Module):
         return alpha_embedding, beta_embedding
 
 
-class BetaReasoning(AppFOQEstimator, nn.Module):
+class BetaEstimator(AppFOQEstimator):
     def __init__(self, nentity, nrelation, hidden_dim, gamma, use_cuda, dim_list, num_layers):
         super().__init__()
         self.nentity = nentity
@@ -189,7 +189,7 @@ class BetaReasoning(AppFOQEstimator, nn.Module):
     def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]) -> torch.Tensor:
         alpha_embedding, beta_embedding = torch.chunk(pred_emb, 2, dim=-1)
         query_dist = torch.distributions.beta.Beta(alpha_embedding, beta_embedding)
-        chosen_answer = random.choice(answer_set)
+        chosen_answer = torch.tensor(random.choice(answer_set))
         answer_embedding = self.get_entity_embedding(chosen_answer)   # TODO: negative_sampling
         answer_alpha, answer_beta = torch.chunk(answer_embedding, 2, dim=-1)
         answer_dist = torch.distributions.beta.Beta(answer_alpha, answer_beta)
