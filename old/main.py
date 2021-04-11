@@ -390,7 +390,8 @@ def main(args):
     logging.info('#max steps: %d' % args.max_steps)
     logging.info('Evaluate unoins using: %s' % args.evaluate_union)
 
-    train_queries, train_answers, valid_queries, valid_hard_answers, valid_easy_answers, test_queries, test_hard_answers, test_easy_answers = load_data(
+    train_queries, train_answers, valid_queries, valid_hard_answers, valid_easy_answers, test_queries,\
+        test_hard_answers, test_easy_answers = load_data(
         args, train_tasks, test_tasks, args.number_of_queries, args.number_of_entities)
 
     logging.info("Training info:")

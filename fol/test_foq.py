@@ -1,9 +1,9 @@
 import collections
 import random
 
-from .appfoq import TransEEstimator
-from .foq import *
-from .sampler import load_data, read_indexing
+from fol.appfoq import TransEEstimator
+from fol.foq import *
+from fol.sampler import load_data, read_indexing
 
 
 def random_e_ground(foq_formula):
@@ -151,6 +151,7 @@ def test_gen_foq_meta_formula():
     for i in range(100):
         mf = gen_foq_meta_formula()
         parse_foq_formula(mf)
+
 
 if __name__ == "__main__":
     test_backward_sample()

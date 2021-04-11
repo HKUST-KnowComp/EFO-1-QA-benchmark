@@ -35,6 +35,7 @@ class AppFOQEstimator(ABC, nn.Module):
     def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList], false_answer_set: List[IntList]) -> torch.Tensor:
         pass
 
+
 class TransEEstimator(AppFOQEstimator):
     def __init__(self) -> None:
         super().__init__()
@@ -186,7 +187,7 @@ class BetaEstimator(AppFOQEstimator):
         r_neg_emb = 1./remb
         return self.get_disjunction_embedding(lemb, r_neg_emb)
 
-    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]) -> torch.Tensor:
+    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList], false_answer_set: List[IntList]) -> torch.Tensor:
         alpha_embedding, beta_embedding = torch.chunk(pred_emb, 2, dim=-1)
         query_dist = torch.distributions.beta.Beta(alpha_embedding, beta_embedding)
         chosen_answer = torch.tensor(random.choice(answer_set))
@@ -195,3 +196,127 @@ class BetaEstimator(AppFOQEstimator):
         answer_dist = torch.distributions.beta.Beta(answer_alpha, answer_beta)
         logit = self.gamma - torch.norm(torch.distributions.kl.kl_divergence(answer_dist, query_dist), p=1, dim=-1)
         return -F.logsigmoid(torch.sum(logit))
+
+
+class BoxOffsetIntersection(nn.Module):
+
+    def __init__(self, dim):
+        super(BoxOffsetIntersection, self).__init__()
+        self.dim = dim
+        self.layer1 = nn.Linear(self.dim, self.dim)
+        self.layer2 = nn.Linear(self.dim, self.dim)
+
+        nn.init.xavier_uniform_(self.layer1.weight)
+        nn.init.xavier_uniform_(self.layer2.weight)
+
+    def forward(self, embeddings):
+        layer1_act = F.relu(self.layer1(embeddings))
+        layer1_mean = torch.mean(layer1_act, dim=0)
+        gate = torch.sigmoid(self.layer2(layer1_mean))
+        offset, _ = torch.min(embeddings, dim=0)
+
+        return offset * gate
+
+
+class CenterIntersection(nn.Module):   # Todo: in box ,this seems to be a 2*self.dim, self.dim
+
+    def __init__(self, dim):
+        super(CenterIntersection, self).__init__()
+        self.dim = dim
+        self.layer1 = nn.Linear(self.dim, self.dim)
+        self.layer2 = nn.Linear(self.dim, self.dim)
+
+        nn.init.xavier_uniform_(self.layer1.weight)
+        nn.init.xavier_uniform_(self.layer2.weight)
+
+    def forward(self, embeddings):
+        layer1_act = F.relu(self.layer1(embeddings))  # (num_conj, dim)
+        attention = F.softmax(self.layer2(layer1_act),
+                              dim=0)  # (num_conj, dim)
+        embedding = torch.sum(attention * embeddings, dim=0)
+
+        return embedding
+
+
+def identity(x):
+    return x
+
+
+class BoxEstimator(AppFOQEstimator):
+    def __init__(self, nentity, nrelation, hidden_dim, gamma, use_cuda, entity_dim, box_mode):
+        super().__init__()
+        self.nentity = nentity
+        self.nrelation = nrelation
+        self.hidden_dim = hidden_dim
+        self.use_cuda = use_cuda
+        if use_cuda >= 0 and torch.cuda.is_available():
+            self.device = torch.device('cuda:{}'.format(use_cuda))
+        else:
+            self.device = torch.device('cpu')
+        self.gamma = gamma
+        self.entity_dim = entity_dim
+        self.entity_embeddings = nn.Embedding(num_embeddings=nentity,
+                                              embedding_dim=self.entity_dim)
+        self.relation_embeddings = nn.Embedding(num_embeddings=nrelation,
+                                                embedding_dim=self.entity_dim)
+        self.offset_embeddings = nn.Embedding(num_embeddings=nrelation, embedding_dim=self.entity_dim)
+        self.offset_regularizer = Regularizer(0, 0, 1e9)
+        self.center_net = CenterIntersection(self.entity_dim)
+        self.offset_net = BoxOffsetIntersection(self.entity_dim)
+        box_activation, self.cen = box_mode  # In box it's \alpha in computing logits
+        if box_activation == 'none':
+            self.func = identity
+        elif box_activation == 'relu':
+            self.func = F.relu
+        elif box_activation == 'softplus':
+            self.func = F.softplus
+        else:
+            assert False, "No valid activation function!"
+
+    def get_entity_embedding(self, entity_ids: torch.IntTensor):
+        center_emb = self.entity_embeddings(entity_ids)
+        if self.use_cuda >= 0:
+            offset_emb = torch.zeros_like(center_emb).to(self.device)
+        else:
+            offset_emb = torch.zeros_like(center_emb)
+        return torch.cat((center_emb, offset_emb), dim=-1)
+
+    def get_projection_embedding(self, proj_ids: torch.IntTensor, emb):
+        assert emb.shape[0] == len(proj_ids)
+        rel_emb, r_offset_emb = self.relation_embeddings(proj_ids), self.offset_embeddings(proj_ids)
+        r_offset_emb = self.offset_regularizer(r_offset_emb)
+        q_emb, q_off_emb = torch.chunk(emb, 2, dim=-1)
+        q_emb = torch.add(q_emb, rel_emb)
+        q_off_emb = torch.add(q_off_emb, self.func(r_offset_emb))
+        return torch.cat((q_emb, q_off_emb), dim=-1)
+
+    def get_disjunction_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
+        assert False, "boc cannot handle disjunction"
+
+    def get_difference_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
+        assert False, "box cannot handle negation"
+
+    def get_conjunction_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
+        l_center, l_offset = torch.chunk(lemb, 2, dim=-1)
+        r_center, r_offset = torch.chunk(remb, 2, dim=-1)
+        new_center = self.center_net(torch.stack((l_center, r_center)))
+        new_offset = self.offset_net(torch.stack((l_offset, r_offset)))
+        new_offset = self.offset_regularizer(new_offset)
+        return torch.cat((new_center, new_offset), dim=-1)
+
+    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList], false_answer_set: List[IntList]) -> torch.Tensor:
+        chosen_answer = []
+        for each_query_ans in answer_set:
+            ans = random.choice(each_query_ans)
+            chosen_answer.append(ans)
+        chosen_answer = torch.IntTensorensor(chosen_answer)
+        entity_all_embedding = self.get_entity_embedding(chosen_answer)   # b*d
+        entity_embedding, _ = torch.chunk(entity_all_embedding, 2, dim=-1)
+        query_center_embedding, query_offset_embedding = torch.chunk(pred_emb, 2, dim=-1)
+        delta = (entity_embedding - query_center_embedding).abs()  # Todo: think of this computation.
+        distance_out = F.relu(delta - query_offset_embedding)
+        distance_in = torch.min(delta, query_offset_embedding)
+        logit = self.gamma - \
+                torch.norm(distance_out, p=1, dim=-1) - self.cen * \
+                torch.norm(distance_in, p=1, dim=-1)
+        return torch.sum(-F.logsigmoid(logit))
