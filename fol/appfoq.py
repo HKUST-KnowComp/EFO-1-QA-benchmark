@@ -309,7 +309,7 @@ class BoxEstimator(AppFOQEstimator):
         for each_query_ans in answer_set:
             ans = random.choice(each_query_ans)
             chosen_answer.append(ans)
-        chosen_answer = torch.IntTensorensor(chosen_answer)
+        chosen_answer = torch.tensor(chosen_answer, dtype=torch.int)
         entity_all_embedding = self.get_entity_embedding(chosen_answer)   # b*d
         entity_embedding, _ = torch.chunk(entity_all_embedding, 2, dim=-1)
         query_center_embedding, query_offset_embedding = torch.chunk(pred_emb, 2, dim=-1)

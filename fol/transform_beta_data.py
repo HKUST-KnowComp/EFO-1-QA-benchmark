@@ -131,14 +131,13 @@ if __name__ == "__main__":
     projection_valid, reverse_projection_valid = load_data('../datasets_knowledge_embedding/FB15k-237/valid.txt',
                                                            all_entity_dict, all_relation_dict, projection_train,
                                                            reverse_projection_train)
-    projection_test, reverse_projection_test = load_data('../datasets_knowledge_embedding/FB15k-237/valid.txt',
+    projection_test, reverse_projection_test = load_data('../datasets_knowledge_embedding/FB15k-237/test.txt',
                                                          all_entity_dict, all_relation_dict, projection_valid,
                                                          reverse_projection_valid)
     import pandas as pd
     answer_none = collections.defaultdict(set)
-    '''
     store_query_with_check(train_queries, answer_none, train_answers,
-                           '../transformed_data/FB15k-237-betae/', projection_none, projection_train, mode='train')'''
+                           '../transformed_data/FB15k-237-betae/', projection_none, projection_train, mode='train')
     store_query_with_check(valid_queries, valid_easy_ans, valid_hard_ans,
                            '../transformed_data/FB15k-237-betae/', projection_train, projection_valid, mode='valid')
     store_query_with_check(test_queries, test_easy_ans, test_hard_ans,
