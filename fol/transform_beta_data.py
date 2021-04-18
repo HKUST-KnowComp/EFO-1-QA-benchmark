@@ -111,26 +111,26 @@ def store_query_with_check(queries, easy_answers, hard_answers, store_fold, proj
 
 if __name__ == "__main__":
     data_path = '../data/FB15k-237-betae'
-    train_queries = pickle.load(
-        open(os.path.join(data_path, "train-queries.pkl"), 'rb'))
-    train_answers = pickle.load(
-        open(os.path.join(data_path, "train-answers.pkl"), 'rb'))
-    valid_queries = pickle.load(open(os.path.join(data_path, "valid-queries.pkl"), 'rb'))
-    valid_easy_ans = pickle.load(open(os.path.join(data_path, "valid-easy-answers.pkl"), 'rb'))
-    valid_hard_ans = pickle.load(open(os.path.join(data_path, "valid-hard-answers.pkl"), 'rb'))
-    test_queries = pickle.load(open(os.path.join(data_path, "test-queries.pkl"), 'rb'))
-    test_easy_ans = pickle.load(open(os.path.join(data_path, "test-easy-answers.pkl"), 'rb'))
-    test_hard_ans = pickle.load(open(os.path.join(data_path, "test-hard-answers.pkl"), 'rb'))
     stanford_data_path = '../data/FB15k-237-betae'
     all_entity_dict, all_relation_dict, id2ent, id2rel = read_indexing(stanford_data_path)
     projection_none = [collections.defaultdict(set) for i in range(len(all_entity_dict))]
     reverse_projection_none = [collections.defaultdict(set) for i in range(len(all_entity_dict))]
+    train_queries = pickle.load(
+        open(os.path.join(data_path, "train-queries.pkl"), 'rb'))
+    train_answers = pickle.load(
+        open(os.path.join(data_path, "train-answers.pkl"), 'rb'))
     projection_train, reverse_projection_train = load_data('../datasets_knowledge_embedding/FB15k-237/train.txt',
                                                            all_entity_dict, all_relation_dict, projection_none,
                                                            reverse_projection_none)
+    valid_queries = pickle.load(open(os.path.join(data_path, "valid-queries.pkl"), 'rb'))
+    valid_easy_ans = pickle.load(open(os.path.join(data_path, "valid-easy-answers.pkl"), 'rb'))
+    valid_hard_ans = pickle.load(open(os.path.join(data_path, "valid-hard-answers.pkl"), 'rb'))
     projection_valid, reverse_projection_valid = load_data('../datasets_knowledge_embedding/FB15k-237/valid.txt',
                                                            all_entity_dict, all_relation_dict, projection_train,
                                                            reverse_projection_train)
+    test_queries = pickle.load(open(os.path.join(data_path, "test-queries.pkl"), 'rb'))
+    test_easy_ans = pickle.load(open(os.path.join(data_path, "test-easy-answers.pkl"), 'rb'))
+    test_hard_ans = pickle.load(open(os.path.join(data_path, "test-hard-answers.pkl"), 'rb'))
     projection_test, reverse_projection_test = load_data('../datasets_knowledge_embedding/FB15k-237/test.txt',
                                                          all_entity_dict, all_relation_dict, projection_valid,
                                                          reverse_projection_valid)

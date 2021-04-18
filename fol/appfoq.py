@@ -1,12 +1,53 @@
 from abc import ABC, abstractmethod
 from typing import List
 
+import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
 import random
 
 IntList = List[int]
+
+
+def negative_sampling(answer_set: List[IntList], negative_size: int, entity_num: int):
+    all_chosen_ans = []
+    all_chosen_false_ans = []
+    subsampling_weight = torch.zeros(len(answer_set))
+    for i in range(len(answer_set)):
+        all_chosen_ans.append(random.choice(answer_set[i]))
+        subsampling_weight[i] = len(answer_set[i])
+        now_false_ans_size = 0
+        negative_sample_list = []
+        while now_false_ans_size < negative_size:
+            negative_sample = np.random.randint(
+                entity_num, size=negative_size * 2)
+            mask = np.in1d(
+                negative_sample,
+                answer_set[i],
+                assume_unique=True,
+                invert=True
+            )
+            negative_sample = negative_sample[mask]
+            negative_sample_list.append(negative_sample)
+            now_false_ans_size += negative_sample.size
+        negative_sample = np.concatenate(negative_sample_list)[
+            :negative_size]
+        all_chosen_false_ans.append(negative_sample)
+    subsampling_weight = torch.sqrt(1 / subsampling_weight)
+    return all_chosen_ans, all_chosen_false_ans, subsampling_weight
+
+
+def compute_final_loss(positive_logit, negative_logit, subsampling_weight):
+    positive_score = F.logsigmoid(positive_logit)
+    negative_score = F.logsigmoid(-negative_logit)
+    negative_score = torch.mean(negative_score, dim=1)
+    positive_loss = -(positive_score * subsampling_weight)
+    negative_loss = -(negative_score * subsampling_weight)
+    loss = (positive_loss + negative_loss) / 2
+    loss /= subsampling_weight.sum()
+    loss = loss.sum()
+    return loss
 
 
 class AppFOQEstimator(ABC, nn.Module):
@@ -32,7 +73,7 @@ class AppFOQEstimator(ABC, nn.Module):
         pass
 
     @abstractmethod
-    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList], false_answer_set: List[IntList]) -> torch.Tensor:
+    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]) -> torch.Tensor:
         pass
 
 
@@ -74,7 +115,7 @@ class TransEEstimator(AppFOQEstimator):
         return loss
 
 
-class Regularizer():
+class Regularizer:
     def __init__(self, base_add, min_val, max_val):
         self.base_add = base_add
         self.min_val = min_val
@@ -133,7 +174,7 @@ class BetaIntersection(nn.Module):
 
 
 class BetaEstimator(AppFOQEstimator):
-    def __init__(self, nentity, nrelation, hidden_dim, gamma, use_cuda, dim_list, num_layers):
+    def __init__(self, nentity, nrelation, hidden_dim, gamma, use_cuda, dim_list, num_layers, negative_size):
         super().__init__()
         self.nentity = nentity
         self.nrelation = nrelation
@@ -144,6 +185,7 @@ class BetaEstimator(AppFOQEstimator):
         else:
             self.device = torch.device('cpu')
         self.gamma = gamma
+        self.negative_size = negative_size
         self.entity_dim, self.relation_dim = dim_list
         self.entity_embeddings = nn.Embedding(num_embeddings=nentity,
                                               embedding_dim=self.entity_dim*2)
@@ -187,15 +229,27 @@ class BetaEstimator(AppFOQEstimator):
         r_neg_emb = 1./remb
         return self.get_disjunction_embedding(lemb, r_neg_emb)
 
-    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList], false_answer_set: List[IntList]) -> torch.Tensor:
+    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]) -> torch.Tensor:
         alpha_embedding, beta_embedding = torch.chunk(pred_emb, 2, dim=-1)
         query_dist = torch.distributions.beta.Beta(alpha_embedding, beta_embedding)
-        chosen_answer = torch.tensor(random.choice(answer_set))
-        answer_embedding = self.get_entity_embedding(chosen_answer)   # TODO: negative_sampling
-        answer_alpha, answer_beta = torch.chunk(answer_embedding, 2, dim=-1)
-        answer_dist = torch.distributions.beta.Beta(answer_alpha, answer_beta)
-        logit = self.gamma - torch.norm(torch.distributions.kl.kl_divergence(answer_dist, query_dist), p=1, dim=-1)
-        return -F.logsigmoid(torch.sum(logit))
+        chosen_ans, chosen_false_ans, subsampling_weight = \
+            negative_sampling(answer_set, negative_size=self.negative_size, entity_num=self.nentity)
+        answer_embedding = self.get_entity_embedding(torch.tensor(chosen_ans, dtype=torch.int))
+        positive_logit = self.compute_logit(answer_embedding, query_dist)
+        negative_embedding_list = []
+        for i in range(len(chosen_false_ans)):
+            neg_embedding = self.get_entity_embedding(torch.tensor(chosen_false_ans[i], dtype=torch.int))  # n*dim
+            negative_embedding_list.append(neg_embedding)
+        all_negative_embedding = torch.stack(negative_embedding_list, dim=0)  # batch*n*dim
+        negative_logit = self.compute_logit(all_negative_embedding, query_dist)  # b*n
+        loss = compute_final_loss(positive_logit, negative_logit, subsampling_weight)
+        return loss
+
+    def compute_logit(self, entity_emb, query_dist):
+        entity_alpha, entity_beta = torch.chunk(entity_emb, 2, dim=-1)
+        entity_dist = torch.distributions.beta.Beta(entity_alpha, entity_beta)
+        logit = self.gamma - torch.norm(torch.distributions.kl.kl_divergence(entity_dist, query_dist), p=1, dim=-1)
+        return logit
 
 
 class BoxOffsetIntersection(nn.Module):
@@ -243,7 +297,7 @@ def identity(x):
 
 
 class BoxEstimator(AppFOQEstimator):
-    def __init__(self, nentity, nrelation, hidden_dim, gamma, use_cuda, entity_dim, box_mode):
+    def __init__(self, nentity, nrelation, hidden_dim, gamma, use_cuda, entity_dim, box_mode, negative_size):
         super().__init__()
         self.nentity = nentity
         self.nrelation = nrelation
@@ -254,6 +308,7 @@ class BoxEstimator(AppFOQEstimator):
         else:
             self.device = torch.device('cpu')
         self.gamma = gamma
+        self.negative_size = negative_size
         self.entity_dim = entity_dim
         self.entity_embeddings = nn.Embedding(num_embeddings=nentity,
                                               embedding_dim=self.entity_dim)
@@ -291,7 +346,7 @@ class BoxEstimator(AppFOQEstimator):
         return torch.cat((q_emb, q_off_emb), dim=-1)
 
     def get_disjunction_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
-        assert False, "boc cannot handle disjunction"
+        assert False, "box cannot handle disjunction"
 
     def get_difference_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
         assert False, "box cannot handle negation"
@@ -304,19 +359,27 @@ class BoxEstimator(AppFOQEstimator):
         new_offset = self.offset_regularizer(new_offset)
         return torch.cat((new_center, new_offset), dim=-1)
 
-    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList], false_answer_set: List[IntList]) -> torch.Tensor:
-        chosen_answer = []
-        for each_query_ans in answer_set:
-            ans = random.choice(each_query_ans)
-            chosen_answer.append(ans)
+    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]) -> torch.Tensor:
+        chosen_answer, chosen_false_answer, subsampling_weight = \
+            negative_sampling(answer_set, negative_size=self.negative_size, entity_num=self.nentity)
         chosen_answer = torch.tensor(chosen_answer, dtype=torch.int)
-        entity_all_embedding = self.get_entity_embedding(chosen_answer)   # b*d
-        entity_embedding, _ = torch.chunk(entity_all_embedding, 2, dim=-1)
-        query_center_embedding, query_offset_embedding = torch.chunk(pred_emb, 2, dim=-1)
-        delta = (entity_embedding - query_center_embedding).abs()  # Todo: think of this computation.
+        positive_all_embedding = self.get_entity_embedding(chosen_answer)   # b*d
+        positive_embedding, _ = torch.chunk(positive_all_embedding, 2, dim=-1)
+        negative_embedding_list = []
+        for i in range(len(chosen_false_answer)):
+            neg_embedding = self.get_entity_embedding(torch.tensor(chosen_false_answer[i], dtype=torch.int))  # n*dim
+            negative_embedding_list.append(neg_embedding)
+        all_negative_embedding = torch.stack(negative_embedding_list, dim=0)  # batch*n*dim
+        negative_embedding, _ = torch.chunk(all_negative_embedding, 2, dim=-1)
+        positive_logit = self.compute_logit(positive_embedding, pred_emb)
+        negative_logit = self.compute_logit(negative_embedding, pred_emb)
+        loss = compute_final_loss(positive_logit, negative_logit, subsampling_weight)
+        return loss
+
+    def compute_logit(self, entity_emb, query_emb):
+        query_center_embedding, query_offset_embedding = torch.chunk(query_emb, 2, dim=-1)
+        delta = (entity_emb - query_center_embedding).abs()
         distance_out = F.relu(delta - query_offset_embedding)
         distance_in = torch.min(delta, query_offset_embedding)
-        logit = self.gamma - \
-                torch.norm(distance_out, p=1, dim=-1) - self.cen * \
-                torch.norm(distance_in, p=1, dim=-1)
-        return torch.sum(-F.logsigmoid(logit))
+        logit = self.gamma - torch.norm(distance_out, p=1, dim=-1) - self.cen * torch.norm(distance_in, p=1, dim=-1)
+        return logit
