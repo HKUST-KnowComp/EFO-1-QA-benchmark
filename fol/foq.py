@@ -635,6 +635,7 @@ def parse_foq_formula(foq_formula: str, grammar_class=grammar_class) -> FirstOrd
     obj.top_down_parse(args, **grammar_class)
     return obj
 
+
 def gen_foq_meta_formula(depth=0, max_depth=3, early_terminate=False):
     if depth >= max_depth or early_terminate:
         return "p(e)"

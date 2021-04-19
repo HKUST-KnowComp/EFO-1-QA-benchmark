@@ -119,9 +119,6 @@ def test_sample():
         assert ans_another == ans_sample
 
 
-# TODO: implement
-
-
 def test_backward_sample():
     stanford_data_path = 'data/FB15k-237-betae'
     all_entity_dict, all_relation_dict, id2ent, id2rel = read_indexing(
@@ -160,3 +157,4 @@ if __name__ == "__main__":
     test_embedding_estimation()
     test_parse_grounded_formula()
     test_parse_meta_formula()
+    test_gen_foq_meta_formula()
