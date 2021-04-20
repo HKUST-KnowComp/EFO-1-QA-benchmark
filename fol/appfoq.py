@@ -10,12 +10,12 @@ import random
 IntList = List[int]
 
 
-def negative_sampling(answer_set: List[IntList], negative_size: int, entity_num: int):
+def negative_sampling(answer_set: List[IntList], negative_size: int, entity_num: int, k=1):
     all_chosen_ans = []
     all_chosen_false_ans = []
     subsampling_weight = torch.zeros(len(answer_set))
     for i in range(len(answer_set)):
-        all_chosen_ans.append(random.choice(answer_set[i]))
+        all_chosen_ans.append(random.choices(answer_set[i], k=k))
         subsampling_weight[i] = len(answer_set[i])
         now_false_ans_size = 0
         negative_sample_list = []
@@ -32,7 +32,7 @@ def negative_sampling(answer_set: List[IntList], negative_size: int, entity_num:
             negative_sample_list.append(negative_sample)
             now_false_ans_size += negative_sample.size
         negative_sample = np.concatenate(negative_sample_list)[
-            :negative_size]
+                          :negative_size]
         all_chosen_false_ans.append(negative_sample)
     subsampling_weight = torch.sqrt(1 / subsampling_weight)
     return all_chosen_ans, all_chosen_false_ans, subsampling_weight
@@ -188,7 +188,7 @@ class BetaEstimator(AppFOQEstimator):
         self.negative_size = negative_size
         self.entity_dim, self.relation_dim = dim_list
         self.entity_embeddings = nn.Embedding(num_embeddings=nentity,
-                                              embedding_dim=self.entity_dim*2)
+                                              embedding_dim=self.entity_dim * 2)
         self.relation_embeddings = nn.Embedding(num_embeddings=nrelation,
                                                 embedding_dim=self.relation_dim)
         self.entity_regularizer = Regularizer(0, 0.05, 1e9)
@@ -220,13 +220,13 @@ class BetaEstimator(AppFOQEstimator):
         return embedding
 
     def get_disjunction_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
-        l_neg = 1./lemb
-        r_neg = 1./remb
+        l_neg = 1. / lemb
+        r_neg = 1. / remb
         neg_emb = self.get_conjunction_embedding(l_neg, r_neg)
-        return 1./neg_emb
+        return 1. / neg_emb
 
     def get_difference_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):  # a-b = a and(-b)
-        r_neg_emb = 1./remb
+        r_neg_emb = 1. / remb
         return self.get_disjunction_embedding(lemb, r_neg_emb)
 
     def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]) -> torch.Tensor:
@@ -237,7 +237,7 @@ class BetaEstimator(AppFOQEstimator):
         answer_embedding = self.get_entity_embedding(torch.tensor(chosen_ans, dtype=torch.int))
         positive_logit = self.compute_logit(answer_embedding, query_dist)
         negative_embedding_list = []
-        for i in range(len(chosen_false_ans)):
+        for i in range(len(chosen_false_ans)):  # todo: is there a way to parallelize
             neg_embedding = self.get_entity_embedding(torch.tensor(chosen_false_ans[i], dtype=torch.int))  # n*dim
             negative_embedding_list.append(neg_embedding)
         all_negative_embedding = torch.stack(negative_embedding_list, dim=0)  # batch*n*dim
@@ -272,7 +272,7 @@ class BoxOffsetIntersection(nn.Module):
         return offset * gate
 
 
-class CenterIntersection(nn.Module):   # Todo: in box ,this seems to be a 2*self.dim, self.dim
+class CenterIntersection(nn.Module):  # Todo: in box ,this seems to be a 2*self.dim, self.dim
 
     def __init__(self, dim):
         super(CenterIntersection, self).__init__()
@@ -363,7 +363,7 @@ class BoxEstimator(AppFOQEstimator):
         chosen_answer, chosen_false_answer, subsampling_weight = \
             negative_sampling(answer_set, negative_size=self.negative_size, entity_num=self.nentity)
         chosen_answer = torch.tensor(chosen_answer, dtype=torch.int)
-        positive_all_embedding = self.get_entity_embedding(chosen_answer)   # b*d
+        positive_all_embedding = self.get_entity_embedding(chosen_answer)  # b*d
         positive_embedding, _ = torch.chunk(positive_all_embedding, 2, dim=-1)
         negative_embedding_list = []
         for i in range(len(chosen_false_answer)):

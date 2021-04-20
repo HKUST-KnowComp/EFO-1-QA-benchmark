@@ -45,7 +45,7 @@ if __name__ == '__main__':
     depth_dict = collections.defaultdict(list)
     store_dict = collections.defaultdict(list)
     depth_low, depth_high = 3, 5
-    start_point_num, query_num = 10, 100
+    start_point_num, query_num = 10, 10
     store_fold = '../data'
     for i in range(query_num):
         depth_low_q = gen_foq_meta_formula(max_depth=depth_low)
@@ -68,7 +68,7 @@ if __name__ == '__main__':
                 all_similarity[idx] = k
                 query_similarity[int(idx/start_point_num)] += k/start_point_num
                 idx += 1
-    plt.hist(all_similarity, bins=20, density=False)
+    plt.hist(all_similarity, bins=20, density=True)
     plt.show()
     plt.hist(query_similarity, bins=20, density=True)
     plt.show()
