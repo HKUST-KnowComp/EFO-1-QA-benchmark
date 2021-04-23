@@ -1,4 +1,6 @@
 action: train  # one of [train, train+valid, train+test, valid, test]
+seed: 0
+cuda: -1
 data:
   type: beta
   data_folder: data/FB15k-237-betae
@@ -10,6 +12,8 @@ train:
   steps: 100000
   log_every_steps: 100
   warm_up_steps: None
+  evaluate_every_steps: 30000
+  save_every_steps: None
   meta_queries: 
     - 1p
     - 2p
@@ -18,7 +22,6 @@ train:
     - 2i
 evaluate:  # only used when valid/test in action
   batch_size: 1
-  evaluate_every_steps: 30000
   log_every_steps: 100
   print: true
   tasks: 1p.2p.3p.1i.2i
@@ -32,11 +35,15 @@ estimator:
     relation_dim: 400
     hidden_dim: 1600
     num_layers: 2
+    evaluate_union: DM # one of [DM, DNF]
+    gamma: 60
   box:
     entity_dim: 400
     relation_dim: 400
     offset_activation: None
     center_reg: 0.02
+    gamma: 60
+    alpha: 3
   dm:
     entity_dim: 2
     relation_dim: 2

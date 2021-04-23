@@ -132,7 +132,8 @@ class BetaIntersection(nn.Module):
 
 
 class BetaEstimator(AppFOQEstimator):
-    def __init__(self, nentity, nrelation, hidden_dim, gamma, use_cuda, dim_list, num_layers):
+    def __init__(self, nentity, nrelation, hidden_dim, gamma, use_cuda,
+                 entity_dim, relation_dim, num_layers, evaluate_union):
         super().__init__()
         self.nentity = nentity
         self.nrelation = nrelation
@@ -143,7 +144,7 @@ class BetaEstimator(AppFOQEstimator):
         else:
             self.device = torch.device('cpu')
         self.gamma = gamma
-        self.entity_dim, self.relation_dim = dim_list
+        self.entity_dim, self.relation_dim = entity_dim, relation_dim
         self.entity_embeddings = nn.Embedding(num_embeddings=nentity,
                                               embedding_dim=self.entity_dim*2)
         self.relation_embeddings = nn.Embedding(num_embeddings=nrelation,
