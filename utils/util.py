@@ -200,6 +200,38 @@ def read_indexing(data_path):
     return ent2id, rel2id, id2ent, id2rel
 
 
-def load_our_query(datapath):
-    data = pd.read_csv(datapath)
-    return data.to_dict()
+def load_our_query(data_folder, mode, tasks):
+    all_data = []
+    for task in tasks:
+        datapath = os.path.join(data_folder, f'{mode}_{task}.csv')
+        data = pd.read_csv(datapath)
+        data_dict = data.to_dict()  # A dict of dict ,first key is ['query', 'answer_set'], second is idx.
+        for idx in data_dict['query']:
+            query = data_dict['query'][idx]
+            beta_name = task
+            if mode == 'train':
+                answer = parse_ans_set(data['answer_set'][idx])
+                all_data.append([query, answer, beta_name])
+            elif mode == 'valid' or 'test':
+                easy_ans = parse_ans_set(data['easy_answer_sey'][idx])
+                hard_ans = parse_ans_set(data['hard_answer_set'][idx])
+                all_data.append([query, easy_ans, hard_ans, beta_name])
+    return all_data
+
+
+def parse_ans_set(answer_set: str):
+    ans_list = answer_set.strip().split(',')
+    if len(ans_list) != 1:
+        for i in range(len(ans_list)):
+            if i == 0:
+                ans_list[i] = int(ans_list[i][1:])
+            elif i == len(ans_list) - 1:
+                ans_list[i] = int(ans_list[i][:-1])
+            else:
+                ans_list[i] = int(ans_list[i])
+    else:
+        ans_list[0] = int(ans_list[0][1:-1])
+
+    return ans_list
+
+
