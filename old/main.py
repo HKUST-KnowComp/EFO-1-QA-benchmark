@@ -67,7 +67,7 @@ def parse_args(args=None):
                         action='store_true', help="test_overfitting")
 
     parser.add_argument('--data_path', type=str,
-                        default="data/FB15k-237-betae", help="KG data path")
+                        default="../data/FB15k-237-betae", help="KG data path")
     parser.add_argument('-n', '--negative_sample_size', default=128,
                         type=int, help="negative entities sampled per query")
     parser.add_argument('-d', '--hidden_dim', default=400,
@@ -115,8 +115,8 @@ def parse_args(args=None):
     parser.add_argument('--train_tasks', default='1p.2i', type=str,
                         help="tasks connected by dot, refer to the BetaE paper for detailed meaning and structure of each task")
     parser.add_argument('--seed', default=0, type=int, help="random seed")
-    parser.add_argument('-betam', '--beta_mode', default="(400,1600,2)", type=str,
-                        help='(relation_dim,hidden_dim,num_layer) for BetaE relational projection')
+    parser.add_argument('-betam', '--beta_mode', default="(1600,2)", type=str,
+                        help='(hidden_dim,num_layer) for BetaE relational projection')
     parser.add_argument('-GMM', '--GMM_mode', default="(0,5)",
                         type=str, help='(use_Gaussian,topk) for GMM')
     parser.add_argument('-boxm', '--box_mode', default="(none,0.02)", type=str,
@@ -390,7 +390,8 @@ def main(args):
     logging.info('#max steps: %d' % args.max_steps)
     logging.info('Evaluate unoins using: %s' % args.evaluate_union)
 
-    train_queries, train_answers, valid_queries, valid_hard_answers, valid_easy_answers, test_queries, test_hard_answers, test_easy_answers = load_data(
+    train_queries, train_answers, valid_queries, valid_hard_answers, valid_easy_answers, test_queries,\
+        test_hard_answers, test_easy_answers = load_data(
         args, train_tasks, test_tasks, args.number_of_queries, args.number_of_entities)
 
     logging.info("Training info:")

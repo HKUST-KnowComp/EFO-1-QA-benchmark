@@ -85,7 +85,7 @@ class TrainDataset(Dataset):
         return positive_sample, negative_sample, subsample_weight, query, query_structure
 
     @staticmethod
-    def count_frequency(queries, answer, start=4):
+    def count_frequency(queries, answer, start=4):   # Note that's a start
         count = {}
         for query, qtype in queries:
             count[query] = start + len(answer[query])

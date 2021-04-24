@@ -78,41 +78,67 @@ def transform_query(query, meta_formula):
     return new_query
 
 
-if __name__ == "__main__":    # TODO: 2u-DM left
+def store_query_with_check(queries, easy_answers, hard_answers, store_fold, projection_easy, projection_hard, mode):
+    for beta_structure in queries.keys():
+        my_train_data = collections.defaultdict(list)
+        beta_name = query_name_dict[beta_structure]
+        my_name = beta_query[beta_name]
+        query_set = queries[beta_structure]
+        for i, query in enumerate(query_set):
+            easy_ans = easy_answers[query]
+            hard_ans = hard_answers[query]
+            our_form_query = transform_query(query, beta_name)
+            query_instance = parse_foq_formula(our_form_query)
+            easy_ans_check = query_instance.deterministic_query(projection_easy)
+            hard_ans_check = query_instance.deterministic_query(projection_hard) - easy_ans_check
+            if easy_ans_check != easy_ans:
+                print(query, our_form_query, easy_ans, easy_ans_check)
+                raise ValueError
+            if hard_ans_check != hard_ans:
+                print(query, our_form_query, hard_ans, hard_ans_check)
+                raise ValueError
+            my_train_data['query'].append(our_form_query)
+            my_train_data['id'].append(i)
+            if mode == 'test' or mode == 'valid':
+                my_train_data['easy_answer_set'].append(easy_ans)
+                my_train_data['hard_answer_set'].append(hard_ans)
+            elif mode == 'train':
+                my_train_data['answer_set'].append(hard_ans)
+        df = pd.DataFrame(data=my_train_data)
+        store_path = os.path.join(store_fold, f"{mode}_{beta_name}.csv")
+        df.to_csv(store_path, index=False)
+
+
+if __name__ == "__main__":
     data_path = '../data/FB15k-237-betae'
+    stanford_data_path = '../data/FB15k-237-betae'
+    all_entity_dict, all_relation_dict, id2ent, id2rel = read_indexing(stanford_data_path)
+    projection_none = [collections.defaultdict(set) for i in range(len(all_entity_dict))]
+    reverse_projection_none = [collections.defaultdict(set) for i in range(len(all_entity_dict))]
     train_queries = pickle.load(
         open(os.path.join(data_path, "train-queries.pkl"), 'rb'))
     train_answers = pickle.load(
         open(os.path.join(data_path, "train-answers.pkl"), 'rb'))
-    stanford_data_path = '../data/FB15k-237-betae'
-    all_entity_dict, all_relation_dict, id2ent, id2rel = read_indexing(stanford_data_path)
-    projection_none = [collections.defaultdict(set) for i in range(len(all_entity_dict))]
-    reverse_proection_none = [collections.defaultdict(set) for i in range(len(all_entity_dict))]
     projection_train, reverse_projection_train = load_data('../datasets_knowledge_embedding/FB15k-237/train.txt',
                                                            all_entity_dict, all_relation_dict, projection_none,
-                                                           reverse_proection_none)
+                                                           reverse_projection_none)
+    valid_queries = pickle.load(open(os.path.join(data_path, "valid-queries.pkl"), 'rb'))
+    valid_easy_ans = pickle.load(open(os.path.join(data_path, "valid-easy-answers.pkl"), 'rb'))
+    valid_hard_ans = pickle.load(open(os.path.join(data_path, "valid-hard-answers.pkl"), 'rb'))
+    projection_valid, reverse_projection_valid = load_data('../datasets_knowledge_embedding/FB15k-237/valid.txt',
+                                                           all_entity_dict, all_relation_dict, projection_train,
+                                                           reverse_projection_train)
+    test_queries = pickle.load(open(os.path.join(data_path, "test-queries.pkl"), 'rb'))
+    test_easy_ans = pickle.load(open(os.path.join(data_path, "test-easy-answers.pkl"), 'rb'))
+    test_hard_ans = pickle.load(open(os.path.join(data_path, "test-hard-answers.pkl"), 'rb'))
+    projection_test, reverse_projection_test = load_data('../datasets_knowledge_embedding/FB15k-237/test.txt',
+                                                         all_entity_dict, all_relation_dict, projection_valid,
+                                                         reverse_projection_valid)
     import pandas as pd
-    for beta_structure in query_name_dict.keys():
-        my_train_data = collections.defaultdict(list)
-        beta_name = query_name_dict[beta_structure]
-        my_name = beta_query[beta_name]
-        train_set = train_queries[beta_structure]
-        for i, query in enumerate(train_set):
-            ans = train_answers[query]
-            our_form_query = transform_query(query, beta_name)
-            query_instance = parse_foq_formula(our_form_query)
-            ans_check = query_instance.deterministic_query(projection_train)
-            if ans_check != ans:
-                print(query, our_form_query, ans, ans_check)
-                raise ValueError
-            my_train_data['query'].append(our_form_query)
-            my_train_data['answer_set'].append(ans)
-            my_train_data['id'].append(i)
-        df = pd.DataFrame(data=my_train_data)
-        store_path = os.path.join('../transformed_data/FB15k-237-betae/', f"train_{beta_name}.csv")
-        df.to_csv(store_path, index=False)
-
-
-
-
-
+    answer_none = collections.defaultdict(set)
+    store_query_with_check(train_queries, answer_none, train_answers,
+                           '../transformed_data/FB15k-237-betae/', projection_none, projection_train, mode='train')
+    store_query_with_check(valid_queries, valid_easy_ans, valid_hard_ans,
+                           '../transformed_data/FB15k-237-betae/', projection_train, projection_valid, mode='valid')
+    store_query_with_check(test_queries, test_easy_ans, test_hard_ans,
+                           '../transformed_data/FB15k-237-betae/', projection_valid, projection_test, mode='test')

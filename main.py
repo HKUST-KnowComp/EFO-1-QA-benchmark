@@ -9,10 +9,12 @@ from torch import optim
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.tensorboard import SummaryWriter
 
-from fol import TransEEstimator, parse_foq_formula, BetaEstimator
+from fol import TransEEstimator, parse_foq_formula, BetaEstimator, BoxEstimator
 from utils.util import *
 from utils.dataloader import TestDataset,TrainDataset, SingledirectionalOneShotIterator
 from fol.base import beta_query
+
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--cfg")
