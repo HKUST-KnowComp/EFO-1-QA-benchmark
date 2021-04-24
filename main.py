@@ -73,11 +73,66 @@ def train_step(model, opt, iterator, writer):
 
 def test_step(model, iterator, mode, writer):
     batch_flattened_query = next(iterator)
+    query_dict = collections.defaultdict(list)  # A dict with key of beta_name, value= list of queries
+    easy_ans_dict = collections.defaultdict(list)
+    hard_ans_dict = collections.defaultdict(list)
     for idx in range(len(batch_flattened_query[0])):
-        query = batch_flattened_query[0][idx]
-        easy_ans, hard_ans = batch_flattened_query[1][idx], batch_flattened_query[2][idx]
-        query_instance = parse_foq_formula(query)
-        query_instance.embedding_estimation(estimator=model)
+        query, easy_ans, hard_ans, beta_name = batch_flattened_query[0][idx],batch_flattened_query[1][idx], \
+                                               batch_flattened_query[2][idx], batch_flattened_query[3][idx]
+        query_dict[beta_name].append(query)
+        easy_ans_dict[beta_name].append(easy_ans)
+        hard_ans_dict[beta_name].append(hard_ans)
+    for beta_name in query_dict:
+        meta_formula = beta_query[beta_name]
+        query_instance = parse_foq_formula(meta_formula)
+        for query in query_dict[beta_name]:
+            query_instance.additive_ground(query)
+        pred = query_instance.embedding_estimation(estimator=model)
+        all_entity_ans = torch.LongTensor(range(model.nentity))
+        all_entity_loss = model.criterion(pred, all_entity_ans)  # TODO: fixes criterion as logit
+        argsort = torch.argsort(all_entity_loss, dim=1, descending=True)
+        # if it is the same shape with test_batch_size, we can reuse batch_entity_range without creating a new one
+        if len(argsort) == test_batch_size:
+            # achieve the ranking of all entities
+            ranking = ranking.scatter_(
+                1, argsort, model.batch_entity_range)
+        else:  # otherwise, create a new torch Tensor for batch_entity_range
+            if cuda:
+                ranking = ranking.scatter_(
+                    1, argsort, torch.arange(model.nentity).to(torch.float).repeat(argsort.shape[0], 1).to(device))  # achieve the ranking of all entities
+            else:
+                ranking = ranking.scatter_(
+                    1, argsort, torch.arange(model.nentity).to(torch.float).repeat(argsort.shape[0], 1))  # achieve the ranking of all entities
+        for idx, (i, query, query_structure) in enumerate(zip(argsort[:, 0], queries_unflatten, query_structures)):
+            num_hard = len(hard_answer)
+            num_easy = len(easy_answer)
+            assert len(hard_answer.intersection(easy_answer)) == 0
+            cur_ranking = ranking[idx, list(
+                easy_answer) + list(hard_answer)]
+            cur_ranking, indices = torch.sort(cur_ranking)
+            masks = indices >= num_easy
+            if args.cuda:
+                answer_list = torch.arange(
+                    num_hard + num_easy).to(torch.float).to(device)
+            else:
+                answer_list = torch.arange(
+                    num_hard + num_easy).to(torch.float)
+            cur_ranking = cur_ranking - answer_list + 1  # filtered setting
+            # only take indices that belong to the hard answers
+            cur_ranking = cur_ranking[masks]
+
+            mrr = torch.mean(1. / cur_ranking).item()
+            h1 = torch.mean((cur_ranking <= 1).to(torch.float)).item()
+            h3 = torch.mean((cur_ranking <= 3).to(torch.float)).item()
+            h10 = torch.mean(
+                (cur_ranking <= 10).to(torch.float)).item()
+            logs[query_structure].append({
+                'MRR': mrr,
+                'HITS1': h1,
+                'HITS3': h3,
+                'HITS10': h10,
+                'num_hard_answer': num_hard,
+            })
 
 
     pass
