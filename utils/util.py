@@ -213,7 +213,7 @@ def load_our_query(data_folder, mode, tasks):
                 answer = parse_ans_set(data['answer_set'][idx])
                 all_data.append([query, answer, beta_name])
             elif mode == 'valid' or 'test':
-                easy_ans = parse_ans_set(data['easy_answer_sey'][idx])
+                easy_ans = parse_ans_set(data['easy_answer_set'][idx])
                 hard_ans = parse_ans_set(data['hard_answer_set'][idx])
                 all_data.append([query, easy_ans, hard_ans, beta_name])
     return all_data
@@ -221,7 +221,7 @@ def load_our_query(data_folder, mode, tasks):
 
 def parse_ans_set(answer_set: str):
     ans_list = answer_set.strip().split(',')
-    if len(ans_list) != 1:
+    if len(ans_list) > 1:
         for i in range(len(ans_list)):
             if i == 0:
                 ans_list[i] = int(ans_list[i][1:])
@@ -229,8 +229,11 @@ def parse_ans_set(answer_set: str):
                 ans_list[i] = int(ans_list[i][:-1])
             else:
                 ans_list[i] = int(ans_list[i])
-    else:
+    elif len(ans_list) == 1 and ans_list[0] != 'set()':
         ans_list[0] = int(ans_list[0][1:-1])
+    else:
+        assert ans_list[0] == 'set()'
+        ans_list = []
 
     return ans_list
 

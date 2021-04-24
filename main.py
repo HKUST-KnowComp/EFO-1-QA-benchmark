@@ -1,6 +1,7 @@
 import argparse
 import yaml
 import os
+import collections
 
 import torch
 import tqdm
@@ -11,20 +12,23 @@ from torch.utils.tensorboard import SummaryWriter
 from fol import TransEEstimator, parse_foq_formula, BetaEstimator
 from utils.util import *
 from utils.dataloader import TestDataset,TrainDataset, SingledirectionalOneShotIterator
+from fol.base import beta_query
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--cfg")
 writer = SummaryWriter('./logs-debug/unused-tb')
 
 
-def training(model, opt, train_iterator, test_iterator, writer, **train_cfg):
+def training(model, opt, train_iterator, valid_iterator, test_iterator, writer, **train_cfg):
     lr = train_cfg['learning_rate']
     with tqdm.trange(train_cfg['steps']) as t:
         for step in t:
             log = train_step(model, opt, train_iterator, writer)
             t.set_postfix({'loss': log['loss']})
             if step % train_cfg['evaluate_every_steps'] and step > 0:
-                test_step(model, test_iterator, writer)
+                test_step(model, valid_iterator, 'valid', writer)
+                test_step(model, test_iterator, 'test', writer)
+
             if step >= train_cfg['warm_up_steps']:
                 lr /= 5
                 # logging
@@ -43,12 +47,20 @@ def train_step(model, opt, iterator, writer):
     batch_flattened_query = next(iterator)  # list of tuple, [0] is query, [1] ans, [2] beta_name
     all_loss = torch.tensor(0, dtype=torch.float)
     opt.zero_grad()  # TODO: parallelize query
+    query_dict = collections.defaultdict(list)  # A dict with key of beta_name, value= list of queries
+    ans_dict = collections.defaultdict(list)
     for idx in range(len(batch_flattened_query[0])):
-        query = batch_flattened_query[0][idx]
-        ans = batch_flattened_query[1][idx]
-        query_instance = parse_foq_formula(query)
+        query, ans, beta_name = batch_flattened_query[0][idx],\
+                                batch_flattened_query[1][idx], batch_flattened_query[2][idx]
+        query_dict[beta_name].append(query)
+        ans_dict[beta_name].append(ans)
+    for beta_name in query_dict:
+        meta_formula = beta_query[beta_name]
+        query_instance = parse_foq_formula(meta_formula)
+        for query in query_dict[beta_name]:
+            query_instance.additive_ground(query)
         pred = query_instance.embedding_estimation(estimator=model)
-        query_loss = model.criterion(pred, [ans])
+        query_loss = model.criterion(pred, ans_dict[beta_name])
         all_loss += query_loss
     loss = all_loss.mean()
     loss.backward()
@@ -59,7 +71,15 @@ def train_step(model, opt, iterator, writer):
     return log
 
 
-def test_step(model, iterator, writer):
+def test_step(model, iterator, mode, writer):
+    batch_flattened_query = next(iterator)
+    for idx in range(len(batch_flattened_query[0])):
+        query = batch_flattened_query[0][idx]
+        easy_ans, hard_ans = batch_flattened_query[1][idx], batch_flattened_query[2][idx]
+        query_instance = parse_foq_formula(query)
+        query_instance.embedding_estimation(estimator=model)
+
+
     pass
 
 
@@ -86,18 +106,25 @@ if __name__ == "__main__":
         lr=configure['train']['learning_rate']
     )
 
-    all_data = load_our_query(configure['data']['data_folder'], 'train', configure['train']['meta_queries'])
+    all_train_data = load_our_query(configure['data']['data_folder'], 'train', configure['train']['meta_queries'])
     Train_Dataloader = SingledirectionalOneShotIterator(
-        DataLoader(dataset=TrainDataset(all_data), batch_size=configure['train']['batch_size'],
+        DataLoader(dataset=TrainDataset(all_train_data), batch_size=configure['train']['batch_size'],
                    num_workers=configure['data']['cpu'], shuffle=True, collate_fn=TrainDataset.collate_fn))
     # note shuffle
 
-    training(model, optimizer, train_iterator=Train_Dataloader, test_iterator=Train_Dataloader,
-             writer=writer, **configure['train'])
+    valid_data = load_our_query(configure['data']['data_folder'], 'valid', configure['evaluate']['tasks'])
+    Valid_Dataloader = DataLoader(TestDataset(valid_data), batch_size=configure['evaluate']['batch_size'],
+                                  num_workers=configure['data']['cpu'], collate_fn=TestDataset.collate_fn)
 
-    mock_dataset = ("[7,8,9]([1,2,2]({1,1,3})&[3,3,4]({6,5,6}))", [[1, 2], [3], [4, 5, 6]])
-    X, Y = mock_dataset
-    foq_instance = parse_foq_formula(X)
+    test_data = load_our_query(configure['data']['data_folder'], 'test', configure['evaluate']['tasks'])
+    Test_Dataloader = DataLoader(TestDataset(test_data), batch_size=configure['evaluate']['batch_size'],
+                                 num_workers=configure['data']['cpu'], collate_fn=TestDataset.collate_fn)
+
+    training(model, optimizer, train_iterator=Train_Dataloader, valid_iterator=Valid_Dataloader,
+             test_iterator=Test_Dataloader, writer=writer, **configure['train'])
+
+
+
 
 
 

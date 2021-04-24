@@ -10,26 +10,29 @@ from utils.util import flatten, list2tuple, tuple2list
 
 
 class TestDataset(Dataset):
-    def __init__(self, queries, answers, nentity, nrelation):
-        # queries is a list of (query, query_structure) pairs
-        self.len = len(queries)
-        self.queries = queries
-        self.nentity = nentity
-        self.nrelation = nrelation
+    def __init__(self, flattened_queries):
+        # flattened_queries is a list of (query, easy_ans_set, hard_ans_set, query_structure) list
+        self.len = len(flattened_queries)
+        self.flattened_queries = flattened_queries
 
     def __len__(self):
         return self.len
 
     def __getitem__(self, idx):
-        query = self.queries[idx][0]
-        query_structure = self.queries[idx][1]
-        negative_sample = torch.LongTensor(range(self.nentity))
-        return negative_sample, flatten(query), query, query_structure
+        return self.flattened_queries[idx]
+
+    @staticmethod
+    def collate_fn(flattened_queries):
+        query = [_[0] for _ in flattened_queries]
+        easy_ans_set = [_[1] for _ in flattened_queries]
+        hard_ans_set = [_[2] for _ in flattened_queries]
+        beta_name = [_[3] for _ in flattened_queries]
+        return query, easy_ans_set, hard_ans_set, beta_name
 
 
 class TrainDataset(Dataset):
     def __init__(self, flattened_queries):
-        # queries is a list of (query, query_structure) pairs
+        # flattened_queries is a list of (query, ans_set, query_structure) list
         self.len = len(flattened_queries)
         self.flattened_queries = flattened_queries
 

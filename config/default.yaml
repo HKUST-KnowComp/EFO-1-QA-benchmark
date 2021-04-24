@@ -22,7 +22,11 @@ evaluate:  # only used when valid/test in action
   batch_size: 1
   log_every_steps: 100
   print: true
-  tasks: 1p.2p.3p.1i.2i
+  tasks:
+    - 1p
+    - 2p
+    - 2i
+    - 3i
 logging:
   checkpoint_every: 50000
   logging_path: default
