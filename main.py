@@ -28,8 +28,8 @@ def training(model, opt, train_iterator, valid_iterator, test_iterator, writer, 
             log = train_step(model, opt, train_iterator, writer)
             t.set_postfix({'loss': log['loss']})
             if step % train_cfg['evaluate_every_steps'] and step > 0:
-                test_step(model, valid_iterator, 'valid', writer)
-                test_step(model, test_iterator, 'test', writer)
+                test_step(model, valid_iterator, 'valid', writer, **train_cfg)
+                test_step(model, test_iterator, 'test', writer, **train_cfg)
 
             if step >= train_cfg['warm_up_steps']:
                 lr /= 5
@@ -73,71 +73,70 @@ def train_step(model, opt, iterator, writer):
     return log
 
 
-def test_step(model, iterator, mode, writer):
-    batch_flattened_query = next(iterator)
-    query_dict = collections.defaultdict(list)  # A dict with key of beta_name, value= list of queries
-    easy_ans_dict = collections.defaultdict(list)
-    hard_ans_dict = collections.defaultdict(list)
-    for idx in range(len(batch_flattened_query[0])):
-        query, easy_ans, hard_ans, beta_name = batch_flattened_query[0][idx],batch_flattened_query[1][idx], \
-                                               batch_flattened_query[2][idx], batch_flattened_query[3][idx]
-        query_dict[beta_name].append(query)
-        easy_ans_dict[beta_name].append(easy_ans)
-        hard_ans_dict[beta_name].append(hard_ans)
-    for beta_name in query_dict:
-        meta_formula = beta_query[beta_name]
-        query_instance = parse_foq_formula(meta_formula)
-        for query in query_dict[beta_name]:
-            query_instance.additive_ground(query)
-        pred = query_instance.embedding_estimation(estimator=model)
-        all_entity_ans = torch.LongTensor(range(model.nentity))
-        all_entity_loss = model.criterion(pred, all_entity_ans)  # TODO: fixes criterion as logit
-        argsort = torch.argsort(all_entity_loss, dim=1, descending=True)
-        # if it is the same shape with test_batch_size, we can reuse batch_entity_range without creating a new one
-        if len(argsort) == test_batch_size:
-            # achieve the ranking of all entities
-            ranking = ranking.scatter_(
-                1, argsort, model.batch_entity_range)
-        else:  # otherwise, create a new torch Tensor for batch_entity_range
-            if cuda:
+def test_step(model, iterator, mode, writer, **cfg):
+    logs = collections.defaultdict(list)
+    with torch.no_grad():
+        for batch_flattened_query in tqdm.tqdm(iterator, disable=True):
+            query_dict = collections.defaultdict(list)  # A dict with key of beta_name, value= list of queries
+            easy_ans_dict = collections.defaultdict(list)
+            hard_ans_dict = collections.defaultdict(list)
+            for idx in range(len(batch_flattened_query[0])):
+                query, easy_answer, hard_answer, beta_name = batch_flattened_query[0][idx], batch_flattened_query[1][idx], \
+                                                       batch_flattened_query[2][idx], batch_flattened_query[3][idx]
+                query_dict[beta_name].append(query)
+                easy_ans_dict[beta_name].append(easy_answer)
+                hard_ans_dict[beta_name].append(hard_answer)
+        for beta_name in query_dict:
+            meta_formula = beta_query[beta_name]
+            query_instance = parse_foq_formula(meta_formula)
+            for query in query_dict[beta_name]:
+                query_instance.additive_ground(query)
+            pred = query_instance.embedding_estimation(estimator=model)
+            all_entity_loss = model.compute_all_entity_logit(pred)  # batch*nentity
+            argsort = torch.argsort(all_entity_loss, dim=1, descending=True)
+            ranking = argsort.clone().to(torch.float)
+            #  create a new torch Tensor for batch_entity_range
+            if device != torch.device('cpu'):
                 ranking = ranking.scatter_(
-                    1, argsort, torch.arange(model.nentity).to(torch.float).repeat(argsort.shape[0], 1).to(device))  # achieve the ranking of all entities
+                    1, argsort, torch.arange(model.nentity).to(torch.float).repeat(argsort.shape[0], 1).to(
+                        device))  # achieve the ranking of all entities
             else:
                 ranking = ranking.scatter_(
-                    1, argsort, torch.arange(model.nentity).to(torch.float).repeat(argsort.shape[0], 1))  # achieve the ranking of all entities
-        for idx, (i, query, query_structure) in enumerate(zip(argsort[:, 0], queries_unflatten, query_structures)):
-            num_hard = len(hard_answer)
-            num_easy = len(easy_answer)
-            assert len(hard_answer.intersection(easy_answer)) == 0
-            cur_ranking = ranking[idx, list(
-                easy_answer) + list(hard_answer)]
-            cur_ranking, indices = torch.sort(cur_ranking)
-            masks = indices >= num_easy
-            if args.cuda:
-                answer_list = torch.arange(
-                    num_hard + num_easy).to(torch.float).to(device)
-            else:
-                answer_list = torch.arange(
-                    num_hard + num_easy).to(torch.float)
-            cur_ranking = cur_ranking - answer_list + 1  # filtered setting
-            # only take indices that belong to the hard answers
-            cur_ranking = cur_ranking[masks]
+                    1, argsort, torch.arange(model.nentity).to(torch.float).repeat(argsort.shape[0],
+                                                                                   1))  # achieve the ranking of all entities
+            for i in range(all_entity_loss.shape[0]):
+                easy_ans = hard_ans_dict[beta_name][i]
+                hard_ans = hard_ans_dict[beta_name][i]
+                num_hard = len(hard_ans)
+                num_easy = len(easy_ans)
+                assert len(hard_ans.intersection(easy_ans)) == 0
+                cur_ranking = ranking[idx, list(easy_ans) + list(hard_ans)]  # only take those answers' rank
+                cur_ranking, indices = torch.sort(cur_ranking)
+                masks = indices >= num_easy
+                if device != torch.device('cpu'):
+                    answer_list = torch.arange(
+                        num_hard + num_easy).to(torch.float).to(device)
+                else:
+                    answer_list = torch.arange(
+                        num_hard + num_easy).to(torch.float)
+                cur_ranking = cur_ranking - answer_list + 1
+                # filtered setting: +1 for start at 0, -answer_list for ignore other answers
 
-            mrr = torch.mean(1. / cur_ranking).item()
-            h1 = torch.mean((cur_ranking <= 1).to(torch.float)).item()
-            h3 = torch.mean((cur_ranking <= 3).to(torch.float)).item()
-            h10 = torch.mean(
-                (cur_ranking <= 10).to(torch.float)).item()
-            logs[query_structure].append({
-                'MRR': mrr,
-                'HITS1': h1,
-                'HITS3': h3,
-                'HITS10': h10,
-                'num_hard_answer': num_hard,
-            })
-
-
-    pass
+                cur_ranking = cur_ranking[masks]
+                # only take indices that belong to the hard answers
+                mrr = torch.mean(1. / cur_ranking).item()
+                h1 = torch.mean((cur_ranking <= 1).to(torch.float)).item()
+                h3 = torch.mean((cur_ranking <= 3).to(torch.float)).item()
+                h10 = torch.mean(
+                    (cur_ranking <= 10).to(torch.float)).item()
+                logs[beta_name].append({
+                    'MRR': mrr,
+                    'HITS1': h1,
+                    'HITS3': h3,
+                    'HITS10': h10,
+                    'num_hard_answer': num_hard,
+                })
+    return logs
 
 
 if __name__ == "__main__":
@@ -151,10 +150,17 @@ if __name__ == "__main__":
     nentity, nrelation = len(entity_dict), len(relation_dict)
     projection_train, reverse_train = load_graph(os.path.join(data_folder, 'train.txt'), entity_dict, relation_dict)
 
+    if configure['cuda'] >= 0 and torch.cuda.is_available():
+        device = torch.device('cuda:{}'.format(configure['cuda']))
+        # logging.info('Device use cuda: %s' % configure['cuda'])
+    else:
+        device = torch.device('cpu')
+
     model_name = configure['estimator']['embedding']
     hyperparameters = configure['estimator'][model_name]
     hyperparameters['nentity'], hyperparameters['nrelation'] = nentity, nrelation
-    hyperparameters['use_cuda'] = configure['cuda']
+    hyperparameters['device'] = device
+    hyperparameters['negative_sample_size'] = configure['train']['negative_sample_size']
     if model_name == 'beta':
         model = BetaEstimator(**hyperparameters)
 
@@ -177,8 +183,11 @@ if __name__ == "__main__":
     Test_Dataloader = DataLoader(TestDataset(test_data), batch_size=configure['evaluate']['batch_size'],
                                  num_workers=configure['data']['cpu'], collate_fn=TestDataset.collate_fn)
 
+    train_hyper = configure['train']
+    train_hyper['device'] = device
+
     training(model, optimizer, train_iterator=Train_Dataloader, valid_iterator=Valid_Dataloader,
-             test_iterator=Test_Dataloader, writer=writer, **configure['train'])
+             test_iterator=Test_Dataloader, writer=writer, **train_hyper)
 
 
 
