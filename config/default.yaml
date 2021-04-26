@@ -45,7 +45,6 @@ estimator:
     offset_activation: None
     center_reg: 0.02
     gamma: 60
-    alpha: 3
   dm:
     entity_dim: 2
     relation_dim: 2

@@ -11,9 +11,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 from fol import TransEEstimator, parse_foq_formula, BetaEstimator, BoxEstimator
 from utils.util import *
-from utils.dataloader import TestDataset,TrainDataset, SingledirectionalOneShotIterator
+from utils.dataloader import TestDataset, TrainDataset, SingledirectionalOneShotIterator
 from fol.base import beta_query
-
 
 
 parser = argparse.ArgumentParser()
@@ -99,17 +98,18 @@ def test_step(model, iterator, mode, writer, **cfg):
             if device != torch.device('cpu'):
                 ranking = ranking.scatter_(
                     1, argsort, torch.arange(model.nentity).to(torch.float).repeat(argsort.shape[0], 1).to(
-                        device))  # achieve the ranking of all entities
+                        device))
             else:
                 ranking = ranking.scatter_(
                     1, argsort, torch.arange(model.nentity).to(torch.float).repeat(argsort.shape[0],
-                                                                                   1))  # achieve the ranking of all entities
+                                                                                   1))
+            # achieve the ranking of all entities
             for i in range(all_entity_loss.shape[0]):
-                easy_ans = hard_ans_dict[beta_name][i]
+                easy_ans = easy_ans_dict[beta_name][i]
                 hard_ans = hard_ans_dict[beta_name][i]
                 num_hard = len(hard_ans)
                 num_easy = len(easy_ans)
-                assert len(hard_ans.intersection(easy_ans)) == 0
+                assert len(set(hard_ans).intersection(set(easy_ans))) == 0
                 cur_ranking = ranking[idx, list(easy_ans) + list(hard_ans)]  # only take those answers' rank
                 cur_ranking, indices = torch.sort(cur_ranking)
                 masks = indices >= num_easy
@@ -163,6 +163,8 @@ if __name__ == "__main__":
     hyperparameters['negative_sample_size'] = configure['train']['negative_sample_size']
     if model_name == 'beta':
         model = BetaEstimator(**hyperparameters)
+    elif model_name == 'Box':
+        model = BoxEstimator(**hyperparameters)
 
     optimizer = torch.optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()),

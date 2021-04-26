@@ -254,13 +254,14 @@ class BetaEstimator(AppFOQEstimator):
         return logit
 
     def compute_all_entity_logit(self, pred_emb: torch.Tensor) -> torch.Tensor:
-        all_entities = torch.IntTensor(self.nentity)
+        all_entities = torch.IntTensor(range(self.nentity))
+        if self.device != torch.device('cpu'):
+            all_entities = all_entities.to(self.device)
         all_embedding = self.get_entity_embedding(all_entities)  # nentity*dim
         all_embedding = all_embedding.unsqueeze(dim=0)  # 1*nentity*dim
         pred_alpha, pred_beta = torch.chunk(pred_emb, 2, dim=-1)  # batch*dim
-        query_dist = torch.distributions.beta.Beta(pred_alpha.unsqueeze(1), pred_beta.unsquueze(1))
+        query_dist = torch.distributions.beta.Beta(pred_alpha.unsqueeze(1), pred_beta.unsqueeze(1))
         return self.compute_logit(all_embedding, query_dist)
-
 
 
 class BoxOffsetIntersection(nn.Module):
@@ -308,16 +309,11 @@ def identity(x):
 
 
 class BoxEstimator(AppFOQEstimator):
-    def __init__(self, nentity, nrelation, hidden_dim, gamma, use_cuda, entity_dim, box_mode, negative_size):
+    def __init__(self, nentity, nrelation, gamma, device, entity_dim, offset_activation, center_reg, negative_size):
         super().__init__()
         self.nentity = nentity
         self.nrelation = nrelation
-        self.hidden_dim = hidden_dim
-        self.use_cuda = use_cuda
-        if use_cuda >= 0 and torch.cuda.is_available():
-            self.device = torch.device('cuda:{}'.format(use_cuda))
-        else:
-            self.device = torch.device('cpu')
+        self.device = device
         self.gamma = gamma
         self.negative_size = negative_size
         self.entity_dim = entity_dim
@@ -329,12 +325,12 @@ class BoxEstimator(AppFOQEstimator):
         self.offset_regularizer = Regularizer(0, 0, 1e9)
         self.center_net = CenterIntersection(self.entity_dim)
         self.offset_net = BoxOffsetIntersection(self.entity_dim)
-        box_activation, self.cen = box_mode  # In box it's \alpha in computing logits
-        if box_activation == 'none':
+        self.cen_reg = center_reg
+        if offset_activation == 'none':
             self.func = identity
-        elif box_activation == 'relu':
+        elif offset_activation == 'relu':
             self.func = F.relu
-        elif box_activation == 'softplus':
+        elif offset_activation == 'softplus':
             self.func = F.softplus
         else:
             assert False, "No valid activation function!"
@@ -373,12 +369,12 @@ class BoxEstimator(AppFOQEstimator):
     def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]) -> torch.Tensor:
         chosen_answer, chosen_false_answer, subsampling_weight = \
             negative_sampling(answer_set, negative_size=self.negative_size, entity_num=self.nentity)
-        chosen_answer = torch.tensor(chosen_answer, dtype=torch.int)
+        chosen_answer = torch.IntTensor(chosen_answer)
         positive_all_embedding = self.get_entity_embedding(chosen_answer)  # b*d
         positive_embedding, _ = torch.chunk(positive_all_embedding, 2, dim=-1)
         negative_embedding_list = []
         for i in range(len(chosen_false_answer)):
-            neg_embedding = self.get_entity_embedding(torch.tensor(chosen_false_answer[i], dtype=torch.int))  # n*dim
+            neg_embedding = self.get_entity_embedding(torch.IntTensor(chosen_false_answer[i]))  # n*dim
             negative_embedding_list.append(neg_embedding)
         all_negative_embedding = torch.stack(negative_embedding_list, dim=0)  # batch*n*dim
         negative_embedding, _ = torch.chunk(all_negative_embedding, 2, dim=-1)
@@ -394,3 +390,10 @@ class BoxEstimator(AppFOQEstimator):
         distance_in = torch.min(delta, query_offset_embedding)
         logit = self.gamma - torch.norm(distance_out, p=1, dim=-1) - self.cen * torch.norm(distance_in, p=1, dim=-1)
         return logit
+
+    def compute_all_entity_logit(self, pred_emb: torch.Tensor) -> torch.Tensor:
+        all_entities = torch.IntTensor(range(self.nentity))
+        if self.device != torch.device('cpu'):
+            all_entities = all_entities.to(self.device)
+        all_entity_embedding = torch.chunk(all_entities, 2, dim=-1)
+        return self.compute_logit(all_entities, pred_emb)
