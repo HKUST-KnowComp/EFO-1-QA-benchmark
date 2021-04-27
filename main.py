@@ -17,7 +17,6 @@ from utils.util import *
 # from torch.utils.tensorboard import SummaryWriter
 
 
-
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", default="config/default.yaml", type=str)
 
@@ -31,8 +30,8 @@ def train_step(model, opt, iterator):
     query_dict = collections.defaultdict(list)
     ans_dict = collections.defaultdict(list)
     for idx in range(len(batch_flattened_query[0])):
-        query, ans, beta_name = batch_flattened_query[0][idx],\
-            batch_flattened_query[1][idx], batch_flattened_query[2][idx]
+        query, ans, beta_name = batch_flattened_query[0][idx], \
+                                batch_flattened_query[1][idx], batch_flattened_query[2][idx]
         query_dict[beta_name].append(query)
         ans_dict[beta_name].append(ans)
     for beta_name in query_dict:
@@ -61,8 +60,10 @@ def eval_step(model, iterator, **cfg):
             easy_ans_dict = collections.defaultdict(list)
             hard_ans_dict = collections.defaultdict(list)
             for idx in range(len(batch_flattened_query[0])):
-                query, easy_answer, hard_answer, beta_name = batch_flattened_query[0][idx], batch_flattened_query[1][idx], \
-                    batch_flattened_query[2][idx], batch_flattened_query[3][idx]
+                query, easy_answer, hard_answer, beta_name = batch_flattened_query[0][idx], batch_flattened_query[1][
+                    idx], \
+                                                             batch_flattened_query[2][idx], batch_flattened_query[3][
+                                                                 idx]
                 query_dict[beta_name].append(query)
                 easy_ans_dict[beta_name].append(easy_answer)
                 hard_ans_dict[beta_name].append(hard_answer)
@@ -181,12 +182,11 @@ if __name__ == "__main__":
     if 'train' in configure['action']:
         all_train_data = load_our_query(
             configure['data']['data_folder'], 'train', train_config['meta_queries'])
-        train_dataloader = SingledirectionalOneShotIterator(
-            DataLoader(dataset=TrainDataset(all_train_data), 
-                       batch_size=train_config['batch_size'],
-                       num_workers=configure['data']['cpu'], 
-                       shuffle=True, 
-                       collate_fn=TrainDataset.collate_fn))
+        train_dataloader = DataLoader(dataset=TrainDataset(all_train_data),
+                                      batch_size=train_config['batch_size'],
+                                      num_workers=configure['data']['cpu'],
+                                      shuffle=True,
+                                      collate_fn=TrainDataset.collate_fn)
     # note shuffle
     else:
         train_dataloader = None
@@ -194,9 +194,9 @@ if __name__ == "__main__":
     if 'valid' in configure['action']:
         valid_data = load_our_query(
             configure['data']['data_folder'], 'valid', eval_config['tasks'])
-        valid_dataloader = DataLoader(TestDataset(valid_data), 
+        valid_dataloader = DataLoader(TestDataset(valid_data),
                                       batch_size=eval_config['batch_size'],
-                                      num_workers=configure['data']['cpu'], 
+                                      num_workers=configure['data']['cpu'],
                                       collate_fn=TestDataset.collate_fn)
     else:
         valid_dataloader = None
@@ -204,9 +204,9 @@ if __name__ == "__main__":
     if 'test' in configure['action']:
         test_data = load_our_query(
             configure['data']['data_folder'], 'test', configure['evaluate']['tasks'])
-        test_dataloader = DataLoader(TestDataset(test_data), 
+        test_dataloader = DataLoader(TestDataset(test_data),
                                      batch_size=eval_config['batch_size'],
-                                     num_workers=configure['data']['cpu'], 
+                                     num_workers=configure['data']['cpu'],
                                      collate_fn=TestDataset.collate_fn)
     else:
         test_dataloader = None
@@ -223,8 +223,8 @@ if __name__ == "__main__":
         model = BoxEstimator(**model_params)
 
     # optimizer = torch.optim.Adam(
-        # filter(lambda p: p.requires_grad, model.parameters()),
-        # lr=configure['train']['learning_rate']
+    # filter(lambda p: p.requires_grad, model.parameters()),
+    # lr=configure['train']['learning_rate']
     # )
 
     # training(model, optimizer, train_iterator=train_dataloader, valid_iterator=valid_dataloader,
@@ -233,7 +233,7 @@ if __name__ == "__main__":
     lr = train_config['learning_rate']
     opt = torch.optim.Adam(model.parameters(), lr=lr)
 
-    with trange(1, train_config['steps']) as t:
+    with trange(1, train_config['steps']+1) as t:
         for step in t:
             # basic training step
             if train_dataloader:
@@ -246,19 +246,26 @@ if __name__ == "__main__":
                     )
                     train_config['warm_up_steps'] *= 1.5
                 _log = train_step(model, opt, train_dataloader)
+                _log['step'] = step
                 if step % train_config['log_every_steps'] == 0:
                     writer.append_trace('train', _log)
 
-            if step % train_config['evaluate_every_steps'] == 0:
+            if step % train_config['evaluate_every_steps'] == 0 or step == train_config['evaluate_every_steps']:
+                if train_dataloader:
+                    _log = eval_step(model, train_dataloader)
+                    _log['step'] = step
+                    writer.append_trace('eval_train', _log)
 
                 if valid_dataloader:
                     _log = eval_step(model, valid_dataloader)
-                    writer.append_trace('valid', _log)
+                    _log['step'] = step
+                    writer.append_trace('eval_valid', _log)
 
                 if test_dataloader:
                     _log = eval_step(model, test_dataloader)
-                    writer.append_trace('test', _log)
+                    _log['step'] = step
+                    writer.append_trace('eval_test', _log)
 
             if step % train_config['evaluate_every_steps'] == 0:
                 writer.save_model(model, step)
-        
+

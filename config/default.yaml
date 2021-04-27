@@ -1,10 +1,10 @@
 action: train  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: -1
+cuda: 7
 data:
   type: beta
   data_folder: data/FB15k-237-betae
-  cpu: 1
+  cpu: 10
 train:
   negative_sample_size: 128  # for each positive sample
   batch_size: 512

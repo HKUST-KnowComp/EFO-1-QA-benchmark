@@ -202,7 +202,7 @@ class BetaEstimator(AppFOQEstimator):
                                              num_layers)
 
     def get_entity_embedding(self, entity_ids: torch.IntTensor):
-        emb = self.entity_embeddings(entity_ids)
+        emb = self.entity_embeddings(entity_ids).to(self.device)
         return self.entity_regularizer(emb)
 
     def get_projection_embedding(self, proj_ids: torch.IntTensor, emb):
