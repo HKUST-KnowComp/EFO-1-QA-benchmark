@@ -178,19 +178,19 @@ class BetaIntersection(nn.Module):
 
 
 class BetaEstimator(AppFOQEstimator):
-    def __init__(self, nentity, nrelation, hidden_dim, gamma, device,
+    def __init__(self, n_entity, n_relation, hidden_dim, gamma, device,
                  entity_dim, relation_dim, num_layers, negative_sample_size, evaluate_union):
         super().__init__()
-        self.nentity = nentity
-        self.nrelation = nrelation
+        self.n_entity = n_entity
+        self.n_relation = n_relation
         self.hidden_dim = hidden_dim
         self.device = device
         self.gamma = gamma
         self.negative_size = negative_sample_size
         self.entity_dim, self.relation_dim = entity_dim, relation_dim
-        self.entity_embeddings = nn.Embedding(num_embeddings=nentity,
+        self.entity_embeddings = nn.Embedding(num_embeddings=n_entity,
                                               embedding_dim=self.entity_dim * 2)
-        self.relation_embeddings = nn.Embedding(num_embeddings=nrelation,
+        self.relation_embeddings = nn.Embedding(num_embeddings=n_relation,
                                                 embedding_dim=self.relation_dim)
         self.entity_regularizer = Regularizer(0, 0.05, 1e9)
         self.projection_regularizer = Regularizer(0, 0.05, 1e9)
@@ -234,7 +234,7 @@ class BetaEstimator(AppFOQEstimator):
         alpha_embedding, beta_embedding = torch.chunk(pred_emb, 2, dim=-1)
         query_dist = torch.distributions.beta.Beta(alpha_embedding, beta_embedding)
         chosen_ans, chosen_false_ans, subsampling_weight = \
-            negative_sampling(answer_set, negative_size=self.negative_size, entity_num=self.nentity)
+            negative_sampling(answer_set, negative_size=self.negative_size, entity_num=self.n_entity)
         answer_embedding = self.get_entity_embedding(torch.IntTensor(chosen_ans))  # todo : fix this when cuda>=0
         positive_logit = self.compute_logit(answer_embedding, query_dist)
         negative_embedding_list = []
@@ -254,7 +254,7 @@ class BetaEstimator(AppFOQEstimator):
         return logit
 
     def compute_all_entity_logit(self, pred_emb: torch.Tensor) -> torch.Tensor:
-        all_entities = torch.IntTensor(range(self.nentity))
+        all_entities = torch.IntTensor(range(self.n_entity))
         if self.device != torch.device('cpu'):
             all_entities = all_entities.to(self.device)
         all_embedding = self.get_entity_embedding(all_entities)  # nentity*dim
@@ -309,19 +309,19 @@ def identity(x):
 
 
 class BoxEstimator(AppFOQEstimator):
-    def __init__(self, nentity, nrelation, gamma, device, entity_dim, offset_activation, center_reg, negative_size):
+    def __init__(self, n_entity, n_relation, gamma, device, entity_dim, offset_activation, center_reg, negative_size):
         super().__init__()
-        self.nentity = nentity
-        self.nrelation = nrelation
+        self.n_entity = n_entity
+        self.n_relation = n_relation
         self.device = device
         self.gamma = gamma
         self.negative_size = negative_size
         self.entity_dim = entity_dim
-        self.entity_embeddings = nn.Embedding(num_embeddings=nentity,
+        self.entity_embeddings = nn.Embedding(num_embeddings=n_entity,
                                               embedding_dim=self.entity_dim)
-        self.relation_embeddings = nn.Embedding(num_embeddings=nrelation,
+        self.relation_embeddings = nn.Embedding(num_embeddings=n_relation,
                                                 embedding_dim=self.entity_dim)
-        self.offset_embeddings = nn.Embedding(num_embeddings=nrelation, embedding_dim=self.entity_dim)
+        self.offset_embeddings = nn.Embedding(num_embeddings=n_relation, embedding_dim=self.entity_dim)
         self.offset_regularizer = Regularizer(0, 0, 1e9)
         self.center_net = CenterIntersection(self.entity_dim)
         self.offset_net = BoxOffsetIntersection(self.entity_dim)
@@ -368,7 +368,7 @@ class BoxEstimator(AppFOQEstimator):
 
     def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]) -> torch.Tensor:
         chosen_answer, chosen_false_answer, subsampling_weight = \
-            negative_sampling(answer_set, negative_size=self.negative_size, entity_num=self.nentity)
+            negative_sampling(answer_set, negative_size=self.negative_size, entity_num=self.n_entity)
         chosen_answer = torch.IntTensor(chosen_answer)
         positive_all_embedding = self.get_entity_embedding(chosen_answer)  # b*d
         positive_embedding, _ = torch.chunk(positive_all_embedding, 2, dim=-1)
@@ -392,7 +392,7 @@ class BoxEstimator(AppFOQEstimator):
         return logit
 
     def compute_all_entity_logit(self, pred_emb: torch.Tensor) -> torch.Tensor:
-        all_entities = torch.IntTensor(range(self.nentity))
+        all_entities = torch.IntTensor(range(self.n_entity))
         if self.device != torch.device('cpu'):
             all_entities = all_entities.to(self.device)
         all_entity_embedding = torch.chunk(all_entities, 2, dim=-1)

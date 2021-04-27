@@ -13,23 +13,20 @@ train:
   log_every_steps: 100
   warm_up_steps: 1000
   evaluate_every_steps: 30000
-  save_every_steps: 1000
+  # save_every_steps: 1000
+  checkpoint_every: 50000
   meta_queries: 
     - 1p
     - 2p
     - 2i
 evaluate:  # only used when valid/test in action
-  batch_size: 1
-  log_every_steps: 100
+  batch_size: 100
   print: true
   tasks:
     - 1p
     - 2p
     - 2i
     - 3i
-logging:
-  checkpoint_every: 50000
-  logging_path: default
 estimator:
   embedding: beta # one of [Transe, box, beta, dm]
   beta:

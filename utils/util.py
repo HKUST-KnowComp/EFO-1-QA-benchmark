@@ -75,11 +75,11 @@ class Writer:
 
     _log_path = join(dir_path, 'log')
 
-    def __init__(self, case_name, meta, log_path=None, postfix=True):
-        if isinstance(meta, dict):
-            self.meta = meta
+    def __init__(self, case_name, config, log_path=None, postfix=True, tb_writer=None):
+        if isinstance(config, dict):
+            self.meta = config
         else:
-            self.meta = vars(meta)
+            self.meta = vars(config)
         self.time = time.time()
         self.meta['time'] = self.time
         self.idstr = case_name
@@ -119,10 +119,10 @@ class Writer:
         with open(join(self.case_dir, name), 'wt') as f:
             json.dump(obj, f)
 
-    def save_model(self, model: torch.nn.Module, e):
-        print("saving model : ", e)
+    def save_model(self, model: torch.nn.Module, step):
+        print("saving model : ", step)
         device = model.device
-        torch.save(model.cpu().state_dict(), self.modelf(e))
+        torch.save(model.cpu().state_dict(), self.modelf(step))
         model.to(device)
 
     def save_plot(self, fig, name):
