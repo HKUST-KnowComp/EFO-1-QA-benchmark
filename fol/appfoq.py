@@ -201,13 +201,13 @@ class BetaEstimator(AppFOQEstimator):
                                              self.projection_regularizer,
                                              num_layers)
 
-    def get_entity_embedding(self, entity_ids: torch.IntTensor):
-        emb = self.entity_embeddings(entity_ids).to(self.device)
+    def get_entity_embedding(self, entity_ids: torch.LongTensor):
+        emb = self.entity_embeddings(entity_ids.to(self.device))
         return self.entity_regularizer(emb)
 
-    def get_projection_embedding(self, proj_ids: torch.IntTensor, emb):
+    def get_projection_embedding(self, proj_ids: torch.LongTensor, emb):
         assert emb.shape[0] == len(proj_ids)
-        rel_emb = self.entity_regularizer(self.relation_embeddings(proj_ids))
+        rel_emb = self.entity_regularizer(self.relation_embeddings(proj_ids.to(self.device)))
         pro_emb = self.projection_net(emb, rel_emb)
         return pro_emb
 
@@ -235,16 +235,16 @@ class BetaEstimator(AppFOQEstimator):
         query_dist = torch.distributions.beta.Beta(alpha_embedding, beta_embedding)
         chosen_ans, chosen_false_ans, subsampling_weight = \
             negative_sampling(answer_set, negative_size=self.negative_size, entity_num=self.n_entity)
-        answer_embedding = self.get_entity_embedding(torch.IntTensor(chosen_ans))  # todo : fix this when cuda>=0
+        answer_embedding = self.get_entity_embedding(torch.LongTensor(chosen_ans))  # todo : fix this when cuda>=0
         positive_logit = self.compute_logit(answer_embedding, query_dist)
         negative_embedding_list = []
         for i in range(len(chosen_false_ans)):  # todo: is there a way to parallelize
-            neg_embedding = self.get_entity_embedding(torch.IntTensor(chosen_false_ans[i]))  # n*dim
+            neg_embedding = self.get_entity_embedding(torch.LongTensor(chosen_false_ans[i]))  # n*dim
             negative_embedding_list.append(neg_embedding)
         all_negative_embedding = torch.stack(negative_embedding_list, dim=0)  # batch*negative*dim
         query_dist_unsqueezed = torch.distributions.beta.Beta(alpha_embedding.unsqueeze(1), beta_embedding.unsqueeze(1))
         negative_logit = self.compute_logit(all_negative_embedding, query_dist_unsqueezed)  # b*negative
-        loss = compute_final_loss(positive_logit, negative_logit, subsampling_weight)
+        loss = compute_final_loss(positive_logit, negative_logit, subsampling_weight.to(self.device))
         return loss
 
     def compute_logit(self, entity_emb, query_dist):
@@ -335,17 +335,18 @@ class BoxEstimator(AppFOQEstimator):
         else:
             assert False, "No valid activation function!"
 
-    def get_entity_embedding(self, entity_ids: torch.IntTensor):
-        center_emb = self.entity_embeddings(entity_ids)
+    def get_entity_embedding(self, entity_ids: torch.LongTensor):
+        center_emb = self.entity_embeddings(entity_ids.to(self.device))
         if self.use_cuda >= 0:
             offset_emb = torch.zeros_like(center_emb).to(self.device)
         else:
             offset_emb = torch.zeros_like(center_emb)
         return torch.cat((center_emb, offset_emb), dim=-1)
 
-    def get_projection_embedding(self, proj_ids: torch.IntTensor, emb):
+    def get_projection_embedding(self, proj_ids: torch.LongTensor, emb):
         assert emb.shape[0] == len(proj_ids)
-        rel_emb, r_offset_emb = self.relation_embeddings(proj_ids), self.offset_embeddings(proj_ids)
+        rel_emb, r_offset_emb = self.relation_embeddings(proj_ids.to(self.device)),\
+                                self.offset_embeddings(proj_ids.to(self.device))
         r_offset_emb = self.offset_regularizer(r_offset_emb)
         q_emb, q_off_emb = torch.chunk(emb, 2, dim=-1)
         q_emb = torch.add(q_emb, rel_emb)
@@ -369,18 +370,18 @@ class BoxEstimator(AppFOQEstimator):
     def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]) -> torch.Tensor:
         chosen_answer, chosen_false_answer, subsampling_weight = \
             negative_sampling(answer_set, negative_size=self.negative_size, entity_num=self.n_entity)
-        chosen_answer = torch.IntTensor(chosen_answer)
-        positive_all_embedding = self.get_entity_embedding(chosen_answer)  # b*d
+        chosen_answer = torch.LongTensor(chosen_answer)
+        positive_all_embedding = self.get_entity_embedding(chosen_answer.to(self.device))  # b*d
         positive_embedding, _ = torch.chunk(positive_all_embedding, 2, dim=-1)
         negative_embedding_list = []
         for i in range(len(chosen_false_answer)):
-            neg_embedding = self.get_entity_embedding(torch.IntTensor(chosen_false_answer[i]))  # n*dim
+            neg_embedding = self.get_entity_embedding(torch.LongTensor(chosen_false_answer[i]).to(self.device))  # n*dim
             negative_embedding_list.append(neg_embedding)
         all_negative_embedding = torch.stack(negative_embedding_list, dim=0)  # batch*n*dim
         negative_embedding, _ = torch.chunk(all_negative_embedding, 2, dim=-1)
         positive_logit = self.compute_logit(positive_embedding, pred_emb)
         negative_logit = self.compute_logit(negative_embedding, pred_emb)
-        loss = compute_final_loss(positive_logit, negative_logit, subsampling_weight)
+        loss = compute_final_loss(positive_logit, negative_logit, subsampling_weight.to(self.device))
         return loss
 
     def compute_logit(self, entity_emb, query_emb):
@@ -392,7 +393,7 @@ class BoxEstimator(AppFOQEstimator):
         return logit
 
     def compute_all_entity_logit(self, pred_emb: torch.Tensor) -> torch.Tensor:
-        all_entities = torch.IntTensor(range(self.n_entity))
+        all_entities = torch.LongTensor(range(self.n_entity))
         if self.device != torch.device('cpu'):
             all_entities = all_entities.to(self.device)
         all_entity_embedding = torch.chunk(all_entities, 2, dim=-1)

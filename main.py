@@ -6,7 +6,7 @@ import torch
 import tqdm
 from torch import optim
 from torch.utils.data import DataLoader, Dataset
-from tqdm.std import trange
+from tqdm import trange
 
 from fol import BetaEstimator, BoxEstimator, TransEEstimator, parse_foq_formula
 from fol.base import beta_query
@@ -23,8 +23,9 @@ parser.add_argument("--config", default="config/default.yaml", type=str)
 
 def train_step(model, opt, iterator):
     # list of tuple, [0] is query, [1] ans, [2] beta_name
+    iterator = iter(iterator)
     batch_flattened_query = next(iterator)
-    all_loss = torch.tensor(0, dtype=torch.float)
+    all_loss = torch.tensor(0, dtype=torch.float).to(model.device)
     opt.zero_grad()  # TODO: parallelize query
     # A dict with key of beta_name, value= list of queries
     query_dict = collections.defaultdict(list)
@@ -94,7 +95,7 @@ def eval_step(model, iterator, **cfg):
                 num_easy = len(easy_ans)
                 assert len(set(hard_ans).intersection(set(easy_ans))) == 0
                 # only take those answers' rank
-                cur_ranking = ranking[idx, list(easy_ans) + list(hard_ans)]
+                cur_ranking =  [idx, list(easy_ans) + list(hard_ans)]
                 cur_ranking, indices = torch.sort(cur_ranking)
                 masks = indices >= num_easy
                 if device != torch.device('cpu'):
@@ -120,6 +121,7 @@ def eval_step(model, iterator, **cfg):
                     'HITS10': h10,
                     'num_hard_answer': num_hard,
                 })
+
     return logs
 
 
@@ -160,7 +162,6 @@ if __name__ == "__main__":
         # logging.info('Device use cuda: %s' % configure['cuda'])
     else:
         device = torch.device('cpu')
-
     # prepare the procedure configs
     train_config = configure['train']
     train_config['device'] = device
@@ -221,7 +222,10 @@ if __name__ == "__main__":
         model = BetaEstimator(**model_params)
     elif model_name == 'Box':
         model = BoxEstimator(**model_params)
+    else:
+        assert False, 'Not valid mmodel name!'
 
+    model = model.to(device)
     # optimizer = torch.optim.Adam(
     # filter(lambda p: p.requires_grad, model.parameters()),
     # lr=configure['train']['learning_rate']
