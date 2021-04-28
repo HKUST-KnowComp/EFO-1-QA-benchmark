@@ -5,6 +5,7 @@ data/
 *.sh
 .DS_Store
 .ipynb_checkpoints
+tmp
 
 *.csv
 *.svg

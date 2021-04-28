@@ -178,13 +178,12 @@ class BetaIntersection(nn.Module):
 
 
 class BetaEstimator(AppFOQEstimator):
-    def __init__(self, n_entity, n_relation, hidden_dim, gamma, device,
+    def __init__(self, n_entity, n_relation, hidden_dim, gamma,
                  entity_dim, relation_dim, num_layers, negative_sample_size, evaluate_union):
         super().__init__()
         self.n_entity = n_entity
         self.n_relation = n_relation
         self.hidden_dim = hidden_dim
-        self.device = device
         self.gamma = gamma
         self.negative_size = negative_sample_size
         self.entity_dim, self.relation_dim = entity_dim, relation_dim
@@ -309,11 +308,10 @@ def identity(x):
 
 
 class BoxEstimator(AppFOQEstimator):
-    def __init__(self, n_entity, n_relation, gamma, device, entity_dim, offset_activation, center_reg, negative_size):
+    def __init__(self, n_entity, n_relation, gamma, entity_dim, offset_activation, center_reg, negative_size):
         super().__init__()
         self.n_entity = n_entity
         self.n_relation = n_relation
-        self.device = device
         self.gamma = gamma
         self.negative_size = negative_size
         self.entity_dim = entity_dim

@@ -24,7 +24,7 @@ class Task:
         self._load()
 
     def _load(self):
-        dense = self.filename.replace('csv', 'pickle')
+        dense = self.filename.replace('data', 'tmp').replace('csv', 'pickle')
         if os.path.exists(dense):
             print("load from existed files")
             with open(dense, 'rb') as f:
@@ -43,25 +43,28 @@ class Task:
             data['easy_answer_set'] = self.easy_answer_set
             data['hard_answer_set'] = self.hard_answer_set
             try:
+                os.makedirs(os.path.dirname(dense), exist_ok=True)
+                print(f"save to {dense}")
                 with open(dense, 'wb') as f:
                     pickle.dump(data, f)
             except:
-                print("no right to save here")
+                print(f"can't save to {dense}")
 
     def __len__(self):
         return self.length
 
     def setup_iteration(self):
-        self.i = 0
         self.idxlist = np.random.permutation(len(self))
 
     def batch_estimation(self, estimator, batch_size):
-        batch_indices = self.idxlist[self.i, self.i+batch_size]
-        self.i += batch_size
-        batch_embedding = self.query_instance.embedding_estimation(
-            estimator=estimator, 
-            batch_indices=batch_indices)
-        return batch_embedding, batch_indices
+        i = 0
+        while i < len(self):
+            batch_indices = self.idxlist[i: i + batch_size]
+            i += batch_size
+            batch_embedding = self.query_instance.embedding_estimation(
+                estimator=estimator, 
+                batch_indices=batch_indices)
+            yield batch_embedding, batch_indices
 
     def _parse(self, df):
         for q in tqdm(df['query']):

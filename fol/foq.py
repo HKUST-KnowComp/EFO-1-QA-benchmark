@@ -193,7 +193,8 @@ class VariableQ(FirstOrderQuery):
 
     def to(self, device):
         if self.tentities is None: self.tentities = torch.tensor(self.entities)
-        self.tentities.to(device)
+        print(f'move variable object in {id(self)} to device {device}')
+        self.tentities = self.tentities.to(device)
 
 
 class ProjectionQ(FirstOrderQuery):
@@ -332,7 +333,8 @@ class ProjectionQ(FirstOrderQuery):
 
     def to(self, device):
         if self.trelations is None: self.trelations = torch.tensor(self.relations)
-        self.trelations.to(device)
+        print(f'move projection object in {id(self)} to device {device}')
+        self.trelations = self.trelations.to(device)
         self.operand_q.to(device)
 
 
