@@ -11,13 +11,16 @@ import collections
 import pandas as pd
 
 import numpy as np
+from pandas.core.frame import DataFrame
 import torch
 import yaml
+
+from data_helper import Task
 
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
-
+ 
 def list2tuple(l):
     return tuple(list2tuple(x) if type(x) == list else x for x in l)
 
@@ -200,23 +203,27 @@ def read_indexing(data_path):
     return ent2id, rel2id, id2ent, id2rel
 
 
-def load_our_query(data_folder, mode, tasks):
+def load_task_manager(data_folder, mode, task_names=[]):
     all_data = []
-    for task in tasks:
-        datapath = os.path.join(data_folder, f'{mode}_{task}.csv')
-        data = pd.read_csv(datapath)
-        data_dict = data.to_dict()  # A dict of dict ,first key is ['query', 'answer_set'], second is idx.
-        for idx in data_dict['query']:
-            query = data_dict['query'][idx]
-            beta_name = task
-            if mode == 'train':
-                answer = parse_ans_set(data['answer_set'][idx])
-                all_data.append([query, answer, beta_name])
-            elif mode == 'valid' or 'test':
-                easy_ans = parse_ans_set(data['easy_answer_set'][idx])
-                hard_ans = parse_ans_set(data['hard_answer_set'][idx])
-                all_data.append([query, easy_ans, hard_ans, beta_name])
-    return all_data
+    tasks = []
+    filenames = []
+    if task_names:
+        for task_name in task_names:
+            filename = os.path.join(data_folder, f'{mode}_{task_name}.csv')
+            filenames.append(filename)
+    else:
+        for r, ds, fs in os.walk(data_folder):
+            for f in fs:
+                if mode in f:
+                    filename = os.path.join(r, f)
+            filenames.append(filename)
+
+    for filename in filenames:
+        print(f'[data] load query from file {filename}')
+        task = Task(filename)
+        tasks.append(task)
+
+    return tasks
 
 
 def parse_ans_set(answer_set: str):

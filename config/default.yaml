@@ -22,7 +22,7 @@ train:
 evaluate:  # only used when valid/test in action
   batch_size: 100
   print: true
-  tasks:
+  meta_queries:
     - 1p
     - 2p
     - 2i

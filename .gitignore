@@ -1,9 +1,10 @@
-logs/
+log/
 *__pycache__*
 data/
 *.zip
 *.sh
 .DS_Store
+.ipynb_checkpoints
 
 *.csv
 *.svg

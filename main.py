@@ -1,6 +1,7 @@
 import argparse
 import collections
 import os
+from pprint import pprint
 
 import torch
 import tqdm
@@ -8,20 +9,23 @@ from torch import optim
 from torch.utils.data import DataLoader, Dataset
 from tqdm.std import trange
 
+from data_helper import (SingledirectionalOneShotIterator, TestDataset,
+                         TrainDataset)
 from fol import BetaEstimator, BoxEstimator, TransEEstimator, parse_foq_formula
 from fol.base import beta_query
-from utils.dataloader import (SingledirectionalOneShotIterator, TestDataset,
-                              TrainDataset)
-from utils.util import *
+from util import (Writer, load_graph, load_query, read_from_yaml, read_indexing,
+                  set_global_seed)
 
 # from torch.utils.tensorboard import SummaryWriter
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", default="config/default.yaml", type=str)
+parser.add_argument("--case_pfx", default="debug", type=str)
 
 
-def train_step(model, opt, iterator):
+def train_step(model, opt, dataloader, device):
+    iterator = iter(dataloader)
     # list of tuple, [0] is query, [1] ans, [2] beta_name
     batch_flattened_query = next(iterator)
     all_loss = torch.tensor(0, dtype=torch.float)
@@ -31,7 +35,8 @@ def train_step(model, opt, iterator):
     ans_dict = collections.defaultdict(list)
     for idx in range(len(batch_flattened_query[0])):
         query, ans, beta_name = batch_flattened_query[0][idx], \
-                                batch_flattened_query[1][idx], batch_flattened_query[2][idx]
+                                batch_flattened_query[1][idx], \
+                                    batch_flattened_query[2][idx]
         query_dict[beta_name].append(query)
         ans_dict[beta_name].append(ans)
     for beta_name in query_dict:
@@ -39,7 +44,7 @@ def train_step(model, opt, iterator):
         query_instance = parse_foq_formula(meta_formula)
         for query in query_dict[beta_name]:
             query_instance.additive_ground(query)
-        pred = query_instance.embedding_estimation(estimator=model)
+        pred = query_instance.embedding_estimation(estimator=model, device=device)
         query_loss = model.criterion(pred, ans_dict[beta_name])
         all_loss += query_loss
     loss = all_loss.mean()
@@ -51,10 +56,10 @@ def train_step(model, opt, iterator):
     return log
 
 
-def eval_step(model, iterator, **cfg):
+def eval_step(model, dataloader, device):
     logs = collections.defaultdict(list)
     with torch.no_grad():
-        for batch_flattened_query in tqdm.tqdm(iterator, disable=True):
+        for batch_flattened_query in tqdm.tqdm(dataloader, disable=True):
             # A dict with key of beta_name, value= list of queries
             query_dict = collections.defaultdict(list)
             easy_ans_dict = collections.defaultdict(list)
@@ -72,7 +77,7 @@ def eval_step(model, iterator, **cfg):
             query_instance = parse_foq_formula(meta_formula)
             for query in query_dict[beta_name]:
                 query_instance.additive_ground(query)
-            pred = query_instance.embedding_estimation(estimator=model)
+            pred = query_instance.embedding_estimation(estimator=model, device=device)
             all_entity_loss = model.compute_all_entity_logit(
                 pred)  # batch*nentity
             argsort = torch.argsort(all_entity_loss, dim=1, descending=True)
@@ -151,10 +156,16 @@ if __name__ == "__main__":
     # parse args and load config
     args = parser.parse_args()
     configure = read_from_yaml(args.config)
+    print("[main] config loaded")
+    pprint(configure)
+
+    # initialize my log writer
+    case_name = args.case_pfx +'/'+ args.config.split('/')[-1].split('.')[0]
+    writer = Writer(case_name=case_name, config=configure, log_path='log')
+    # writer = SummaryWriter('./logs-debug/unused-tb')
 
     # initialize environments
     set_global_seed(configure.get('seed', 0))
-    start_time = parse_time()
     if configure.get('cuda', -1) >= 0 and torch.cuda.is_available():
         device = torch.device('cuda:{}'.format(configure['cuda']))
         # logging.info('Device use cuda: %s' % configure['cuda'])
@@ -167,12 +178,8 @@ if __name__ == "__main__":
     eval_config = configure['evaluate']
     eval_config['device'] = device
 
-    # initialize my log writer
-    case_name = args.config.split('/')[-1].split('.')[0]
-    writer = Writer(case_name=case_name, config=configure, log_path='log')
-    # writer = SummaryWriter('./logs-debug/unused-tb')
-
     # load the data
+    print("[main] loading the data")
     data_folder = configure['data']['data_folder']
     entity_dict, relation_dict, id2ent, id2rel = read_indexing(data_folder)
     n_entity, n_relation = len(entity_dict), len(relation_dict)
@@ -180,7 +187,8 @@ if __name__ == "__main__":
         os.path.join(data_folder, 'train.txt'), entity_dict, relation_dict)
 
     if 'train' in configure['action']:
-        all_train_data = load_our_query(
+        print("[main] load training data")
+        all_train_data = load_query(
             configure['data']['data_folder'], 'train', train_config['meta_queries'])
         train_dataloader = DataLoader(dataset=TrainDataset(all_train_data),
                                       batch_size=train_config['batch_size'],
@@ -192,8 +200,8 @@ if __name__ == "__main__":
         train_dataloader = None
 
     if 'valid' in configure['action']:
-        valid_data = load_our_query(
-            configure['data']['data_folder'], 'valid', eval_config['tasks'])
+        valid_data = load_query(
+            configure['data']['data_folder'], 'valid', eval_config['meta_queries'])
         valid_dataloader = DataLoader(TestDataset(valid_data),
                                       batch_size=eval_config['batch_size'],
                                       num_workers=configure['data']['cpu'],
@@ -202,14 +210,16 @@ if __name__ == "__main__":
         valid_dataloader = None
 
     if 'test' in configure['action']:
-        test_data = load_our_query(
-            configure['data']['data_folder'], 'test', configure['evaluate']['tasks'])
+        test_data = load_query(
+            configure['data']['data_folder'], 'test', eval_config['meta_queries'])
         test_dataloader = DataLoader(TestDataset(test_data),
                                      batch_size=eval_config['batch_size'],
                                      num_workers=configure['data']['cpu'],
                                      collate_fn=TestDataset.collate_fn)
     else:
         test_dataloader = None
+    
+    exit()
 
     # get model
     model_name = configure['estimator']['embedding']
@@ -221,6 +231,7 @@ if __name__ == "__main__":
         model = BetaEstimator(**model_params)
     elif model_name == 'Box':
         model = BoxEstimator(**model_params)
+    model.to(device)
 
     # optimizer = torch.optim.Adam(
     # filter(lambda p: p.requires_grad, model.parameters()),
@@ -245,24 +256,24 @@ if __name__ == "__main__":
                         lr=lr
                     )
                     train_config['warm_up_steps'] *= 1.5
-                _log = train_step(model, opt, train_dataloader)
+                _log = train_step(model, opt, train_dataloader, device)
                 _log['step'] = step
                 if step % train_config['log_every_steps'] == 0:
                     writer.append_trace('train', _log)
 
             if step % train_config['evaluate_every_steps'] == 0 or step == train_config['evaluate_every_steps']:
                 if train_dataloader:
-                    _log = eval_step(model, train_dataloader)
+                    _log = eval_step(model, train_dataloader, device)
                     _log['step'] = step
                     writer.append_trace('eval_train', _log)
 
                 if valid_dataloader:
-                    _log = eval_step(model, valid_dataloader)
+                    _log = eval_step(model, valid_dataloader, device)
                     _log['step'] = step
                     writer.append_trace('eval_valid', _log)
 
                 if test_dataloader:
-                    _log = eval_step(model, test_dataloader)
+                    _log = eval_step(model, test_dataloader, device)
                     _log['step'] = step
                     writer.append_trace('eval_test', _log)
 

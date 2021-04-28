@@ -201,13 +201,13 @@ class BetaEstimator(AppFOQEstimator):
                                              self.projection_regularizer,
                                              num_layers)
 
-    def get_entity_embedding(self, entity_ids: torch.IntTensor):
-        emb = self.entity_embeddings(entity_ids).to(self.device)
+    def get_entity_embedding(self, entity_ids: torch.Tensor):
+        emb = self.entity_embeddings(entity_ids.to(self.device))
         return self.entity_regularizer(emb)
 
     def get_projection_embedding(self, proj_ids: torch.IntTensor, emb):
         assert emb.shape[0] == len(proj_ids)
-        rel_emb = self.entity_regularizer(self.relation_embeddings(proj_ids))
+        rel_emb = self.entity_regularizer(self.relation_embeddings(proj_ids).to(self.device))
         pro_emb = self.projection_net(emb, rel_emb)
         return pro_emb
 
@@ -235,11 +235,11 @@ class BetaEstimator(AppFOQEstimator):
         query_dist = torch.distributions.beta.Beta(alpha_embedding, beta_embedding)
         chosen_ans, chosen_false_ans, subsampling_weight = \
             negative_sampling(answer_set, negative_size=self.negative_size, entity_num=self.n_entity)
-        answer_embedding = self.get_entity_embedding(torch.IntTensor(chosen_ans))  # todo : fix this when cuda>=0
+        answer_embedding = self.get_entity_embedding(torch.tensor(chosen_ans))  # todo : fix this when cuda>=0
         positive_logit = self.compute_logit(answer_embedding, query_dist)
         negative_embedding_list = []
         for i in range(len(chosen_false_ans)):  # todo: is there a way to parallelize
-            neg_embedding = self.get_entity_embedding(torch.IntTensor(chosen_false_ans[i]))  # n*dim
+            neg_embedding = self.get_entity_embedding(torch.tensor(chosen_false_ans[i]))  # n*dim
             negative_embedding_list.append(neg_embedding)
         all_negative_embedding = torch.stack(negative_embedding_list, dim=0)  # batch*negative*dim
         query_dist_unsqueezed = torch.distributions.beta.Beta(alpha_embedding.unsqueeze(1), beta_embedding.unsqueeze(1))

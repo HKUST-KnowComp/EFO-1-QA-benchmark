@@ -44,6 +44,7 @@ class FirstOrderQuery(ABC):
         # self.answer_set = {} # this is the answer set for answering deterministic
         pass
 
+
     @property
     @abstractmethod
     def ground_formula(self) -> str:
@@ -101,6 +102,10 @@ class FirstOrderQuery(ABC):
 
     def __len__(self):
         return self.check_ground()
+
+    @abstractmethod
+    def to(self, device):
+        pass
 
 
 class VariableQ(FirstOrderQuery):
@@ -185,6 +190,10 @@ class VariableQ(FirstOrderQuery):
 
     def check_ground(self):
         return len(self.entities)
+
+    def to(self, device):
+        if self.tentities is None: self.tentities = torch.tensor(self.entities)
+        self.tentities.to(device)
 
 
 class ProjectionQ(FirstOrderQuery):
@@ -321,6 +330,11 @@ class ProjectionQ(FirstOrderQuery):
         assert len(self.relations) == n_inst
         return n_inst
 
+    def to(self, device):
+        if self.trelations is None: self.trelations = torch.tensor(self.relations)
+        self.trelations.to(device)
+        self.operand_q.to(device)
+
 
 class BinaryOps(FirstOrderQuery):
     def __init__(self, lq: FirstOrderQuery, rq: FirstOrderQuery):
@@ -366,6 +380,10 @@ class BinaryOps(FirstOrderQuery):
         r_n_inst = self.roperand_q.check_ground()
         assert l_n_inst == r_n_inst
         return l_n_inst
+    
+    def to(self, device):
+        self.loperand_q.to(device)
+        self.roperand_q.to(device)
 
 
 class ConjunctionQ(BinaryOps):
