@@ -70,7 +70,6 @@ class Task:
         while i < len(self):
             batch_indices = self.idxlist[i: i + batch_size].tolist()
             i += batch_size
-            print(i, len(self))
             batch_embedding = self.query_instance.embedding_estimation(
                 estimator=estimator,
                 batch_indices=batch_indices)
