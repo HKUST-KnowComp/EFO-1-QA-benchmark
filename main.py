@@ -7,29 +7,21 @@ import torch
 import tqdm
 from torch import optim
 from torch.utils.data import DataLoader, Dataset
-from tqdm import trange
+from tqdm.std import trange
 
-from data_helper import (SingledirectionalOneShotIterator, TestDataset,
-                         TrainDataset)
+from data_helper import TaskManager
 from fol import BetaEstimator, BoxEstimator, TransEEstimator, parse_foq_formula
 from fol.base import beta_query
-from util import (Writer, load_graph, load_query, read_from_yaml, read_indexing,
-                  set_global_seed)
+from util import (Writer, load_graph, load_task_manager, read_from_yaml,
+                  read_indexing, set_global_seed)
+
 
 # from torch.utils.tensorboard import SummaryWriter
-
-
-parser = argparse.ArgumentParser()
-parser.add_argument("--config", default="config/default.yaml", type=str)
-parser.add_argument("--case_pfx", default="debug", type=str)
-
-
 def train_step(model, opt, dataloader, device):
     iterator = iter(dataloader)
     # list of tuple, [0] is query, [1] ans, [2] beta_name
-    iterator = iter(iterator)
     batch_flattened_query = next(iterator)
-    all_loss = torch.tensor(0, dtype=torch.float).to(model.device)
+    all_loss = torch.tensor(0, dtype=torch.float)
     opt.zero_grad()  # TODO: parallelize query
     # A dict with key of beta_name, value= list of queries
     query_dict = collections.defaultdict(list)
@@ -56,6 +48,17 @@ def train_step(model, opt, dataloader, device):
     }
     return log
 
+def train_step(model, opt, iterator):
+    # list of tuple, [0] is query, [1] ans, [2] beta_name
+    opt.zero_grad()  # TODO: parallelize query
+    pred, ans = next(iterator)
+    loss = model.criterion(pred, ans)
+    loss.backward()
+    opt.step()
+    log = {
+        'loss': loss.item()
+    }
+    return log
 
 def eval_step(model, dataloader, device):
     logs = collections.defaultdict(list)
@@ -100,7 +103,7 @@ def eval_step(model, dataloader, device):
                 num_easy = len(easy_ans)
                 assert len(set(hard_ans).intersection(set(easy_ans))) == 0
                 # only take those answers' rank
-                cur_ranking =  [idx, list(easy_ans) + list(hard_ans)]
+                cur_ranking = ranking[idx, list(easy_ans) + list(hard_ans)]
                 cur_ranking, indices = torch.sort(cur_ranking)
                 masks = indices >= num_easy
                 if device != torch.device('cpu'):
@@ -126,7 +129,6 @@ def eval_step(model, dataloader, device):
                     'HITS10': h10,
                     'num_hard_answer': num_hard,
                 })
-
     return logs
 
 
@@ -153,16 +155,15 @@ def eval_step(model, dataloader, device):
 #             if step % train_cfg['log_every_steps']:
 #                 pass
 
-
 if __name__ == "__main__":
+
     # parse args and load config
-    args = parser.parse_args()
-    configure = read_from_yaml(args.config)
+    configure = read_from_yaml('config/default.yaml')
     print("[main] config loaded")
     pprint(configure)
 
     # initialize my log writer
-    case_name = args.case_pfx +'/'+ args.config.split('/')[-1].split('.')[0]
+    case_name = 'dev/default'
     writer = Writer(case_name=case_name, config=configure, log_path='log')
     # writer = SummaryWriter('./logs-debug/unused-tb')
 
@@ -173,6 +174,7 @@ if __name__ == "__main__":
         # logging.info('Device use cuda: %s' % configure['cuda'])
     else:
         device = torch.device('cpu')
+
     # prepare the procedure configs
     train_config = configure['train']
     train_config['device'] = device
@@ -187,70 +189,38 @@ if __name__ == "__main__":
     projection_train, reverse_train = load_graph(
         os.path.join(data_folder, 'train.txt'), entity_dict, relation_dict)
 
-    if 'train' in configure['action']:
-        print("[main] load training data")
-        all_train_data = load_query(
-            configure['data']['data_folder'], 'train', train_config['meta_queries'])
-        train_dataloader = DataLoader(dataset=TrainDataset(all_train_data),
-                                      batch_size=train_config['batch_size'],
-                                      num_workers=configure['data']['cpu'],
-                                      shuffle=True,
-                                      collate_fn=TrainDataset.collate_fn)
-    # note shuffle
-    else:
-        train_dataloader = None
-
-    if 'valid' in configure['action']:
-        valid_data = load_query(
-            configure['data']['data_folder'], 'valid', eval_config['meta_queries'])
-        valid_dataloader = DataLoader(TestDataset(valid_data),
-                                      batch_size=eval_config['batch_size'],
-                                      num_workers=configure['data']['cpu'],
-                                      collate_fn=TestDataset.collate_fn)
-    else:
-        valid_dataloader = None
-
-    if 'test' in configure['action']:
-        test_data = load_query(
-            configure['data']['data_folder'], 'test', eval_config['meta_queries'])
-        test_dataloader = DataLoader(TestDataset(test_data),
-                                     batch_size=eval_config['batch_size'],
-                                     num_workers=configure['data']['cpu'],
-                                     collate_fn=TestDataset.collate_fn)
-    else:
-        test_dataloader = None
-
-    exit()
-
     # get model
     model_name = configure['estimator']['embedding']
     model_params = configure['estimator'][model_name]
     model_params['n_entity'], model_params['n_relation'] = n_entity, n_relation
-    model_params['device'] = device
     model_params['negative_sample_size'] = train_config['negative_sample_size']
+    model_params['device'] = device
     if model_name == 'beta':
         model = BetaEstimator(**model_params)
     elif model_name == 'Box':
         model = BoxEstimator(**model_params)
-    else:
-        assert False, 'Not valid mmodel name!'
-
     model.to(device)
-    # optimizer = torch.optim.Adam(
-    # filter(lambda p: p.requires_grad, model.parameters()),
-    # lr=configure['train']['learning_rate']
-    # )
 
-    # training(model, optimizer, train_iterator=train_dataloader, valid_iterator=valid_dataloader,
-    #  test_iterator=test_dataloader, writer=writer, **train_config)
-    # the main iteration
+    if 'train' in configure['action']:
+        print("[main] load training data")
+        tasks = load_task_manager(
+            configure['data']['data_folder'], 'train', train_config['meta_queries'])
+        train_tm = TaskManager('train', tasks, device)
+        train_iterator = train_tm.build_iterators(model, batch_size=train_config['batch_size'])
+    else:
+        train_iterator = None
+
+    valid_iterator = None
+    test_iterator = None
+
     lr = train_config['learning_rate']
     opt = torch.optim.Adam(model.parameters(), lr=lr)
+    # exit()
 
     with trange(1, train_config['steps']+1) as t:
         for step in t:
             # basic training step
-            if train_dataloader:
+            if train_iterator:
                 if step >= train_config['warm_up_steps']:
                     lr /= 5
                     # logging
@@ -259,27 +229,26 @@ if __name__ == "__main__":
                         lr=lr
                     )
                     train_config['warm_up_steps'] *= 1.5
-                _log = train_step(model, opt, train_dataloader, device)
+                _log = train_step(model, opt, train_iterator)
                 _log['step'] = step
                 if step % train_config['log_every_steps'] == 0:
                     writer.append_trace('train', _log)
 
             if step % train_config['evaluate_every_steps'] == 0 or step == train_config['evaluate_every_steps']:
-                if train_dataloader:
-                    _log = eval_step(model, train_dataloader, device)
-                    _log['step'] = step
-                    writer.append_trace('eval_train', _log)
+                # if train_iterator:
+                #     _log = eval_step(model, train_iterator)
+                #     _log['step'] = step
+                #     writer.append_trace('eval_train', _log)
 
-                if valid_dataloader:
-                    _log = eval_step(model, valid_dataloader, device)
+                if valid_iterator:
+                    _log = eval_step(model, valid_iterator)
                     _log['step'] = step
                     writer.append_trace('eval_valid', _log)
 
-                if test_dataloader:
-                    _log = eval_step(model, test_dataloader, device)
+                if test_iterator:
+                    _log = eval_step(model, test_iterator)
                     _log['step'] = step
                     writer.append_trace('eval_test', _log)
 
             if step % train_config['evaluate_every_steps'] == 0:
                 writer.save_model(model, step)
-

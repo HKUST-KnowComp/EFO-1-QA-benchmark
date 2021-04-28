@@ -1,6 +1,6 @@
 action: train  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: 7
+cuda: 3
 data:
   type: beta
   data_folder: data/FB15k-237-betae
@@ -15,7 +15,7 @@ train:
   evaluate_every_steps: 30000
   # save_every_steps: 1000
   checkpoint_every: 50000
-  meta_queries: 
+  meta_queries:
     - 1p
     - 2p
     - 2i

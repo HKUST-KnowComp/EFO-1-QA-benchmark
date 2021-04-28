@@ -178,9 +178,11 @@ class BetaIntersection(nn.Module):
 
 
 class BetaEstimator(AppFOQEstimator):
-    def __init__(self, n_entity, n_relation, hidden_dim, gamma,
-                 entity_dim, relation_dim, num_layers, negative_sample_size, evaluate_union):
+    def __init__(self, n_entity, n_relation, hidden_dim,
+                       gamma, entity_dim, relation_dim, num_layers,
+                       negative_sample_size, evaluate_union,device):
         super().__init__()
+        self.device=device
         self.n_entity = n_entity
         self.n_relation = n_relation
         self.hidden_dim = hidden_dim
@@ -201,7 +203,7 @@ class BetaEstimator(AppFOQEstimator):
                                              num_layers)
 
     def get_entity_embedding(self, entity_ids: torch.LongTensor):
-        emb = self.entity_embeddings(entity_ids.to(self.device))
+        emb = self.entity_embeddings(entity_ids)
         return self.entity_regularizer(emb)
 
     def get_projection_embedding(self, proj_ids: torch.LongTensor, emb):
@@ -234,11 +236,11 @@ class BetaEstimator(AppFOQEstimator):
         query_dist = torch.distributions.beta.Beta(alpha_embedding, beta_embedding)
         chosen_ans, chosen_false_ans, subsampling_weight = \
             negative_sampling(answer_set, negative_size=self.negative_size, entity_num=self.n_entity)
-        answer_embedding = self.get_entity_embedding(torch.LongTensor(chosen_ans))  # todo : fix this when cuda>=0
+        answer_embedding = self.get_entity_embedding(torch.tensor(chosen_ans, device=self.device))  # todo : fix this when cuda>=0
         positive_logit = self.compute_logit(answer_embedding, query_dist)
         negative_embedding_list = []
         for i in range(len(chosen_false_ans)):  # todo: is there a way to parallelize
-            neg_embedding = self.get_entity_embedding(torch.LongTensor(chosen_false_ans[i]))  # n*dim
+            neg_embedding = self.get_entity_embedding(torch.tensor(chosen_false_ans[i], device=self.device))  # n*dim
             negative_embedding_list.append(neg_embedding)
         all_negative_embedding = torch.stack(negative_embedding_list, dim=0)  # batch*negative*dim
         query_dist_unsqueezed = torch.distributions.beta.Beta(alpha_embedding.unsqueeze(1), beta_embedding.unsqueeze(1))
