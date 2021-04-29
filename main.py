@@ -65,30 +65,14 @@ def train_step(model, opt, iterator):
     }
     return log
 
-def eval_step(model, dataloader, device):
-    logs = collections.defaultdict(list)
+
+def eval_step(model, eval_iterator, device):
+    logs = collections.defaultdict(lambda: collections.defaultdict(float))
     with torch.no_grad():
-        for batch_flattened_query in tqdm.tqdm(dataloader, disable=True):
-            # A dict with key of beta_name, value= list of queries
-            query_dict = collections.defaultdict(list)
-            easy_ans_dict = collections.defaultdict(list)
-            hard_ans_dict = collections.defaultdict(list)
-            for idx in range(len(batch_flattened_query[0])):
-                query, easy_answer, hard_answer, beta_name = batch_flattened_query[0][idx], batch_flattened_query[1][
-                    idx], \
-                                                             batch_flattened_query[2][idx], batch_flattened_query[3][
-                                                                 idx]
-                query_dict[beta_name].append(query)
-                easy_ans_dict[beta_name].append(easy_answer)
-                hard_ans_dict[beta_name].append(hard_answer)
-        for beta_name in query_dict:
-            meta_formula = beta_query[beta_name]
-            query_instance = parse_foq_formula(meta_formula)
-            for query in query_dict[beta_name]:
-                query_instance.additive_ground(query)
-            pred = query_instance.embedding_estimation(estimator=model, device=device)
-            all_entity_loss = model.compute_all_entity_logit(
-                pred)  # batch*nentity
+        data = next(eval_iterator)
+        for key in data:
+            pred = data[key]['emb']
+            all_entity_loss = model.compute_all_entity_logit(pred)  # batch*nentity
             argsort = torch.argsort(all_entity_loss, dim=1, descending=True)
             ranking = argsort.clone().to(torch.float)
             #  create a new torch Tensor for batch_entity_range
@@ -98,17 +82,16 @@ def eval_step(model, dataloader, device):
                         device))
             else:
                 ranking = ranking.scatter_(
-                    1, argsort, torch.arange(model.nentity).to(torch.float).repeat(argsort.shape[0],
-                                                                                   1))
+                    1, argsort, torch.arange(model.nentity).to(torch.float).repeat(argsort.shape[0], 1))
             # achieve the ranking of all entities
             for i in range(all_entity_loss.shape[0]):
-                easy_ans = easy_ans_dict[beta_name][i]
-                hard_ans = hard_ans_dict[beta_name][i]
+                easy_ans = data[key]['easy_answer_set'][i]
+                hard_ans = data[key]['hard_answer_set'][i]
                 num_hard = len(hard_ans)
                 num_easy = len(easy_ans)
                 assert len(set(hard_ans).intersection(set(easy_ans))) == 0
                 # only take those answers' rank
-                cur_ranking = ranking[idx, list(easy_ans) + list(hard_ans)]
+                cur_ranking = ranking[i, list(easy_ans) + list(hard_ans)]
                 cur_ranking, indices = torch.sort(cur_ranking)
                 masks = indices >= num_easy
                 if device != torch.device('cpu'):
@@ -127,13 +110,16 @@ def eval_step(model, dataloader, device):
                 h3 = torch.mean((cur_ranking <= 3).to(torch.float)).item()
                 h10 = torch.mean(
                     (cur_ranking <= 10).to(torch.float)).item()
-                logs[beta_name].append({
-                    'MRR': mrr,
-                    'HITS1': h1,
-                    'HITS3': h3,
-                    'HITS10': h10,
-                    'num_hard_answer': num_hard,
-                })
+                logs[key]['MRR'] += mrr
+                logs[key]['HITS1'] += h1
+                logs[key]['HITS3'] += h3
+                logs[key]['HITS10'] += h10
+
+            num_query = all_entity_loss.shape[0]
+            for metric in logs[key].keys():
+                logs[key][metric] /= num_query
+            logs[key]['num_queries'] = num_query
+
     return logs
 
 
