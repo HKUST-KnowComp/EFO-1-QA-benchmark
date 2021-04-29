@@ -206,7 +206,7 @@ if __name__ == "__main__":
     if 'train' in configure['action']:
         print("[main] load training data")
         tasks = load_task_manager(
-            configure['data']['data_folder'], 'train', train_config['meta_queries'])
+            configure['data']['data_folder'], 'train')
         train_tm = TaskManager('train', tasks, device)
         train_iterator = train_tm.build_iterators(model, batch_size=train_config['batch_size'])
     else:

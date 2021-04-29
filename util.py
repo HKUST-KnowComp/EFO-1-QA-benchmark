@@ -214,9 +214,9 @@ def load_task_manager(data_folder, mode, task_names=[]):
     else:
         for r, ds, fs in os.walk(data_folder):
             for f in fs:
-                if mode in f:
+                if mode in f and f.endswith('csv'):
                     filename = os.path.join(r, f)
-            filenames.append(filename)
+                    filenames.append(filename)
 
     for filename in filenames:
         print(f'[data] load query from file {filename}')

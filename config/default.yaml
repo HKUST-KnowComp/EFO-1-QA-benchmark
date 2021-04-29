@@ -16,9 +16,9 @@ train:
   # save_every_steps: 1000
   checkpoint_every: 50000
   meta_queries:
-    - 1p
-    - 2p
-    - 2i
+    # - 1p
+    # - 2p
+    # - 2i
 evaluate:  # only used when valid/test in action
   batch_size: 100
   print: true
