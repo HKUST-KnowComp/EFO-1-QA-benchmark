@@ -17,42 +17,44 @@ from util import (Writer, load_graph, load_task_manager, read_from_yaml,
 
 
 # from torch.utils.tensorboard import SummaryWriter
-def train_step(model, opt, dataloader, device):
-    iterator = iter(dataloader)
-    # list of tuple, [0] is query, [1] ans, [2] beta_name
-    batch_flattened_query = next(iterator)
-    all_loss = torch.tensor(0, dtype=torch.float)
-    opt.zero_grad()  # TODO: parallelize query
-    # A dict with key of beta_name, value= list of queries
-    query_dict = collections.defaultdict(list)
-    ans_dict = collections.defaultdict(list)
-    for idx in range(len(batch_flattened_query[0])):
-        query, ans, beta_name = batch_flattened_query[0][idx], \
-                                batch_flattened_query[1][idx], \
-                                    batch_flattened_query[2][idx]
-        query_dict[beta_name].append(query)
-        ans_dict[beta_name].append(ans)
-    for beta_name in query_dict:
-        meta_formula = beta_query[beta_name]
-        query_instance = parse_foq_formula(meta_formula)
-        for query in query_dict[beta_name]:
-            query_instance.additive_ground(query)
-        pred = query_instance.embedding_estimation(estimator=model, device=device)
-        query_loss = model.criterion(pred, ans_dict[beta_name])
-        all_loss += query_loss
-    loss = all_loss.mean()
-    loss.backward()
-    opt.step()
-    log = {
-        'loss': loss.item()
-    }
-    return log
+# def train_step(model, opt, dataloader, device):
+#     iterator = iter(dataloader)
+#     # list of tuple, [0] is query, [1] ans, [2] beta_name
+#     batch_flattened_query = next(iterator)
+#     all_loss = torch.tensor(0, dtype=torch.float)
+#     opt.zero_grad()  # TODO: parallelize query
+#     # A dict with key of beta_name, value= list of queries
+#     query_dict = collections.defaultdict(list)
+#     ans_dict = collections.defaultdict(list)
+#     for idx in range(len(batch_flattened_query[0])):
+#         query, ans, beta_name = batch_flattened_query[0][idx], \
+#                                 batch_flattened_query[1][idx], \
+#                                     batch_flattened_query[2][idx]
+#         query_dict[beta_name].append(query)
+#         ans_dict[beta_name].append(ans)
+#     for beta_name in query_dict:
+#         meta_formula = beta_query[beta_name]
+#         query_instance = parse_foq_formula(meta_formula)
+#         for query in query_dict[beta_name]:
+#             query_instance.additive_ground(query)
+#         pred = query_instance.embedding_estimation(estimator=model, device=device)
+#         query_loss = model.criterion(pred, ans_dict[beta_name])
+#         all_loss += query_loss
+#     loss = all_loss.mean()
+#     loss.backward()
+#     opt.step()
+#     log = {
+#         'loss': loss.item()
+#     }
+#     return log
 
 def train_step(model, opt, iterator):
     # list of tuple, [0] is query, [1] ans, [2] beta_name
     opt.zero_grad()  # TODO: parallelize query
-    pred, ans = next(iterator)
-    loss = model.criterion(pred, ans)
+    data = next(iterator)
+    loss = 0
+    for key in data:
+        loss += model.criterion(data[key]['emb'], data[key]['answer_set'])
     loss.backward()
     opt.step()
     log = {
@@ -229,7 +231,9 @@ if __name__ == "__main__":
                         lr=lr
                     )
                     train_config['warm_up_steps'] *= 1.5
+
                 _log = train_step(model, opt, train_iterator)
+                t.set_postfix(_log)
                 _log['step'] = step
                 if step % train_config['log_every_steps'] == 0:
                     writer.append_trace('train', _log)

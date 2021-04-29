@@ -100,51 +100,49 @@ class Task:
 
 class TaskManager:
     def __init__(self, mode, tasks: List[Task], device):
-        self.tasks = tasks
-        self.task_iterators = []
+        self.tasks = {t.query_instance.meta_formula: t for t in tasks}
+        self.task_iterators = {}
         self.mode = mode
         partition = []
         for t in self.tasks:
-            t.to(device)
-            partition.append(len(t))
+            self.tasks[t].to(device)
+            partition.append(len(self.tasks[t]))
         p = np.asarray(partition)
         self.partition = p / p.sum()
 
     def build_iterators(self, estimator, batch_size):
-        self.task_iterators = []
-        for i, t in enumerate(self.tasks):
-            t.setup_iteration()
-            self.task_iterators.append(
-                t.batch_estimation_iterator(estimator,
-                                            int(batch_size*self.partition[i]))
-            )
+        self.task_iterators = {}
+        for i, tmf in enumerate(self.tasks):
+            self.tasks[tmf].setup_iteration()
+            self.task_iterators[tmf] = \
+                self.tasks[tmf].batch_estimation_iterator(
+                    estimator,
+                    int(batch_size*self.partition[i]))
 
         while True:
             finish = 0
-            data = defaultdict(list)
-            for i, it in enumerate(self.task_iterators):
+            data = defaultdict(dict)
+            for tmf in self.task_iterators:
                 try:
-                    emb, batch_id = next(it)
-                    data['emb'].append(emb)
+                    emb, batch_id = next(self.task_iterators[tmf])
+                    data[tmf]['emb'] = emb
                     if self.mode == 'train':
-                        ans_sets = [list(self.tasks[i].answer_set[j]) for j in batch_id]
-                        data['answer_set'].extend(ans_sets)
+                        ans_sets = [list(self.tasks[tmf].answer_set[j]) for j in batch_id]
+                        data[tmf]['answer_set'] = ans_sets
                     else:
-                        easy_ans_sets = [list(self.tasks[i].easy_answer_set[j]) for j in batch_id]
-                        data['easy_answer_set'].extend(easy_ans_sets)
-                        hard_ans_sets = [list(self.tasks[i].hard_answer_set[j]) for j in batch_id]
-                        data['hard_answer_set'].extend(hard_ans_sets)
+                        easy_ans_sets = [list(self.tasks[tmf].easy_answer_set[j]) for j in batch_id]
+                        data[tmf]['easy_answer_set'] = easy_ans_sets
+                        hard_ans_sets = [list(self.tasks[tmf].hard_answer_set[j]) for j in batch_id]
+                        data[tmf]['hard_answer_set'] = hard_ans_sets
 
                 except StopIteration:
                     finish += 1
 
-            total_emb = torch.cat(data['emb'])
-            if self.mode == 'train':
-                yield total_emb, data['answer_set']
-            else:
-                yield total_emb, data['easy_answer_set'], data['hard_answer_set']
+            if finish == len(self.tasks): 
+                break
 
-            if finish == len(self.tasks): break
+            yield data
+
 
 
 class TestDataset(Dataset):
