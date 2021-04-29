@@ -15,6 +15,9 @@ from fol.base import beta_query
 from util import (Writer, load_graph, load_task_manager, read_from_yaml,
                   read_indexing, set_global_seed)
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--config', default='config/default.yaml', type=str)
+parser.add_argument('--prefix', default='dev', type=str)
 
 # from torch.utils.tensorboard import SummaryWriter
 # def train_step(model, opt, dataloader, device):
@@ -159,13 +162,16 @@ def eval_step(model, dataloader, device):
 
 if __name__ == "__main__":
 
+    args = parser.parse_args()
     # parse args and load config
-    configure = read_from_yaml('config/default.yaml')
+    # configure = read_from_yaml('config/default.yaml')
+    configure = read_from_yaml(args.config)
     print("[main] config loaded")
     pprint(configure)
 
     # initialize my log writer
-    case_name = 'dev/default'
+    case_name = f'{args.prefix}/{ args.config.split("/")[-1].split(".")[0]}'
+    # case_name = 'dev/default'
     writer = Writer(case_name=case_name, config=configure, log_path='log')
     # writer = SummaryWriter('./logs-debug/unused-tb')
 
