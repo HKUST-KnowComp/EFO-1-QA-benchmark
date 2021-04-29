@@ -1,6 +1,6 @@
 action: ['train','valid','test']  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: 3
+cuda: 1
 data:
   type: beta
   data_folder: data/FB15k-237-betae
@@ -8,7 +8,7 @@ data:
 train:
   negative_sample_size: 128  # for each positive sample
   batch_size: 512
-  learning_rate: 0.0005
+  learning_rate: 0.0001
   steps: 100000
   log_every_steps: 10
   warm_up_steps: 1000
