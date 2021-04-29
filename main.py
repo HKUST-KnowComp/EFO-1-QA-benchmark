@@ -231,8 +231,12 @@ if __name__ == "__main__":
                         lr=lr
                     )
                     train_config['warm_up_steps'] *= 1.5
-
-                _log = train_step(model, opt, train_iterator)
+                try:
+                    _log = train_step(model, opt, train_iterator)
+                except StopIteration:
+                    print("new epoch")
+                    train_iterator = train_tm.build_iterators(model, batch_size=train_config['batch_size'])
+                    _log = train_step(model, opt, train_iterator)
                 t.set_postfix(_log)
                 _log['step'] = step
                 if step % train_config['log_every_steps'] == 0:

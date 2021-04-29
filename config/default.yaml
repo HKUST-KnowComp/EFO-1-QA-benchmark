@@ -7,7 +7,7 @@ data:
   cpu: 10
 train:
   negative_sample_size: 128  # for each positive sample
-  batch_size: 512
+  batch_size: 1024
   learning_rate: 0.0005
   steps: 100000
   log_every_steps: 100
