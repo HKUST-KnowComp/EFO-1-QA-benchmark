@@ -7,10 +7,10 @@ data:
   cpu: 10
 train:
   negative_sample_size: 128  # for each positive sample
-  batch_size: 1024
+  batch_size: 512
   learning_rate: 0.0005
   steps: 100000
-  log_every_steps: 100
+  log_every_steps: 10
   warm_up_steps: 1000
   evaluate_every_steps: 30000
   # save_every_steps: 1000

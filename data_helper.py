@@ -83,17 +83,17 @@ class Task:
                 self.query_instance.additive_ground(q)
 
         if 'answer_set' in df.columns:
-            self.answer_set = df.answer_set.map(lambda x: eval(x)).tolist()
+            self.answer_set = df.answer_set.map(lambda x: list(eval(x))).tolist()
             assert len(self.query_instance) == len(self.answer_set)
 
         if 'easy_answer_set' in df.columns:
             self.easy_answer_set = df.easy_answer_set.map(
-                lambda x: eval(x)).tolist()
+                lambda x: list(eval(x))).tolist()
             assert len(self.query_instance) == len(self.easy_answer_set)
 
         if 'hard_answer_set' in df.columns:
             self.hard_answer_set = df.hard_answer_set.map(
-                lambda x: eval(x)).tolist()
+                lambda x: list(eval(x))).tolist()
             assert len(self.query_instance) == len(self.hard_answer_set)
 
         self.length = len(self.query_instance)
@@ -127,12 +127,12 @@ class TaskManager:
                     emb, batch_id = next(self.task_iterators[tmf])
                     data[tmf]['emb'] = emb
                     if self.mode == 'train':
-                        ans_sets = [list(self.tasks[tmf].answer_set[j]) for j in batch_id]
+                        ans_sets = [self.tasks[tmf].answer_set[j] for j in batch_id]
                         data[tmf]['answer_set'] = ans_sets
                     else:
-                        easy_ans_sets = [list(self.tasks[tmf].easy_answer_set[j]) for j in batch_id]
+                        easy_ans_sets = [self.tasks[tmf].easy_answer_set[j] for j in batch_id]
                         data[tmf]['easy_answer_set'] = easy_ans_sets
-                        hard_ans_sets = [list(self.tasks[tmf].hard_answer_set[j]) for j in batch_id]
+                        hard_ans_sets = [self.tasks[tmf].hard_answer_set[j] for j in batch_id]
                         data[tmf]['hard_answer_set'] = hard_ans_sets
 
                 except StopIteration:
