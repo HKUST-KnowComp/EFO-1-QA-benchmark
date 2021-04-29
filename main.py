@@ -66,56 +66,56 @@ def train_step(model, opt, iterator):
 def eval_step(model, eval_iterator, device):
     logs = collections.defaultdict(lambda: collections.defaultdict(float))
     with torch.no_grad():
-        data = next(eval_iterator)
-        for key in data:
-            pred = data[key]['emb']
-            all_entity_loss = model.compute_all_entity_logit(pred)  # batch*nentity
-            argsort = torch.argsort(all_entity_loss, dim=1, descending=True)
-            ranking = argsort.clone().to(torch.float)
-            #  create a new torch Tensor for batch_entity_range
-            if device != torch.device('cpu'):
-                ranking = ranking.scatter_(
-                    1, argsort, torch.arange(model.nentity).to(torch.float).repeat(argsort.shape[0], 1).to(
-                        device))
-            else:
-                ranking = ranking.scatter_(
-                    1, argsort, torch.arange(model.nentity).to(torch.float).repeat(argsort.shape[0], 1))
-            # achieve the ranking of all entities
-            for i in range(all_entity_loss.shape[0]):
-                easy_ans = data[key]['easy_answer_set'][i]
-                hard_ans = data[key]['hard_answer_set'][i]
-                num_hard = len(hard_ans)
-                num_easy = len(easy_ans)
-                assert len(set(hard_ans).intersection(set(easy_ans))) == 0
-                # only take those answers' rank
-                cur_ranking = ranking[i, list(easy_ans) + list(hard_ans)]
-                cur_ranking, indices = torch.sort(cur_ranking)
-                masks = indices >= num_easy
+        for data in eval_iterator:
+            for key in data:
+                pred = data[key]['emb']
+                all_entity_loss = model.compute_all_entity_logit(pred)  # batch*nentity
+                argsort = torch.argsort(all_entity_loss, dim=1, descending=True)
+                ranking = argsort.clone().to(torch.float)
+                #  create a new torch Tensor for batch_entity_range
                 if device != torch.device('cpu'):
-                    answer_list = torch.arange(
-                        num_hard + num_easy).to(torch.float).to(device)
+                    ranking = ranking.scatter_(
+                        1, argsort, torch.arange(model.n_entity).to(torch.float).repeat(argsort.shape[0], 1).to(
+                            device))
                 else:
-                    answer_list = torch.arange(
-                        num_hard + num_easy).to(torch.float)
-                cur_ranking = cur_ranking - answer_list + 1
-                # filtered setting: +1 for start at 0, -answer_list for ignore other answers
+                    ranking = ranking.scatter_(
+                        1, argsort, torch.arange(model.n_entity).to(torch.float).repeat(argsort.shape[0], 1))
+                # achieve the ranking of all entities
+                for i in range(all_entity_loss.shape[0]):
+                    easy_ans = data[key]['easy_answer_set'][i]
+                    hard_ans = data[key]['hard_answer_set'][i]
+                    num_hard = len(hard_ans)
+                    num_easy = len(easy_ans)
+                    assert len(set(hard_ans).intersection(set(easy_ans))) == 0
+                    # only take those answers' rank
+                    cur_ranking = ranking[i, list(easy_ans) + list(hard_ans)]
+                    cur_ranking, indices = torch.sort(cur_ranking)
+                    masks = indices >= num_easy
+                    if device != torch.device('cpu'):
+                        answer_list = torch.arange(
+                            num_hard + num_easy).to(torch.float).to(device)
+                    else:
+                        answer_list = torch.arange(
+                            num_hard + num_easy).to(torch.float)
+                    cur_ranking = cur_ranking - answer_list + 1
+                    # filtered setting: +1 for start at 0, -answer_list for ignore other answers
 
-                cur_ranking = cur_ranking[masks]
-                # only take indices that belong to the hard answers
-                mrr = torch.mean(1. / cur_ranking).item()
-                h1 = torch.mean((cur_ranking <= 1).to(torch.float)).item()
-                h3 = torch.mean((cur_ranking <= 3).to(torch.float)).item()
-                h10 = torch.mean(
-                    (cur_ranking <= 10).to(torch.float)).item()
-                logs[key]['MRR'] += mrr
-                logs[key]['HITS1'] += h1
-                logs[key]['HITS3'] += h3
-                logs[key]['HITS10'] += h10
+                    cur_ranking = cur_ranking[masks]
+                    # only take indices that belong to the hard answers
+                    mrr = torch.mean(1. / cur_ranking).item()
+                    h1 = torch.mean((cur_ranking <= 1).to(torch.float)).item()
+                    h3 = torch.mean((cur_ranking <= 3).to(torch.float)).item()
+                    h10 = torch.mean(
+                        (cur_ranking <= 10).to(torch.float)).item()
+                    logs[key]['MRR'] += mrr
+                    logs[key]['HITS1'] += h1
+                    logs[key]['HITS3'] += h3
+                    logs[key]['HITS10'] += h10
 
-            num_query = all_entity_loss.shape[0]
-            for metric in logs[key].keys():
-                logs[key][metric] /= num_query
-            logs[key]['num_queries'] = num_query
+                num_query = all_entity_loss.shape[0]
+                for metric in logs[key].keys():
+                    logs[key][metric] /= num_query
+                logs[key]['num_queries'] = num_query
 
     return logs
 
@@ -192,14 +192,29 @@ if __name__ == "__main__":
     if 'train' in configure['action']:
         print("[main] load training data")
         tasks = load_task_manager(
-            configure['data']['data_folder'], 'train')
+            configure['data']['data_folder'], 'train', task_names=train_config['meta_queries'])
         train_tm = TaskManager('train', tasks, device)
         train_iterator = train_tm.build_iterators(model, batch_size=train_config['batch_size'])
     else:
         train_iterator = None
 
-    valid_iterator = None
-    test_iterator = None
+    if 'valid' in configure['action']:
+        print("[main] load valid data")
+        tasks = load_task_manager(configure['data']['data_folder'], 'valid',
+                                  task_names=configure['evaluate']['meta_queries'])
+        valid_tm = TaskManager('valid', tasks, device)
+        valid_iterator = valid_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
+    else:
+        valid_iterator = None
+
+    if 'test' in configure['action']:
+        print("[main] load test data")
+        tasks = load_task_manager(configure['data']['data_folder'], 'test',
+                                  task_names=configure['evaluate']['meta_queries'])
+        test_tm = TaskManager('test', tasks, device)
+        test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
+    else:
+        test_iterator = None
 
     lr = train_config['learning_rate']
     opt = torch.optim.Adam(model.parameters(), lr=lr)
@@ -235,12 +250,12 @@ if __name__ == "__main__":
                 #     writer.append_trace('eval_train', _log)
 
                 if valid_iterator:
-                    _log = eval_step(model, valid_iterator)
+                    _log = eval_step(model, valid_iterator, device)
                     _log['step'] = step
                     writer.append_trace('eval_valid', _log)
 
                 if test_iterator:
-                    _log = eval_step(model, test_iterator)
+                    _log = eval_step(model, test_iterator, device)
                     _log['step'] = step
                     writer.append_trace('eval_test', _log)
 
