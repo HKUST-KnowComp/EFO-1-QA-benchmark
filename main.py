@@ -114,11 +114,11 @@ def eval_step(model, eval_iterator, device):
                     logs[key]['HITS1'] += h1
                     logs[key]['HITS3'] += h3
                     logs[key]['HITS10'] += h10
+                    num_query = all_entity_loss.shape[0]
+                    logs[key]['num_queries'] += num_query
 
-                num_query = all_entity_loss.shape[0]
-                for metric in logs[key].keys():
-                    logs[key][metric] /= num_query
-                logs[key]['num_queries'] = num_query
+        for metric in logs[key].keys():
+            logs[key][metric] /= logs[key]['num_queries']
 
     return logs
 
@@ -145,6 +145,13 @@ def eval_step(model, eval_iterator, device):
 #                 pass
 #             if step % train_cfg['log_every_steps']:
 #                 pass
+
+def save_eval(log, mode, step, writer):
+    for t in log:
+        logt = log[t]
+        logt['step'] = step
+        writer.append_trace(f'eval_{mode}_{t}', logt) 
+
 
 if __name__ == "__main__":
 
@@ -250,20 +257,17 @@ if __name__ == "__main__":
                     writer.append_trace('train', _log)
 
             if step % train_config['evaluate_every_steps'] == 0 or step == train_config['evaluate_every_steps']:
-                # if train_iterator:
-                #     _log = eval_step(model, train_iterator)
-                #     _log['step'] = step
-                #     writer.append_trace('eval_train', _log)
+                if train_iterator:
+                    _log = eval_step(model, train_iterator, device)
+                    save_eval(_log, 'train', step, writer)
 
                 if valid_iterator:
                     _log = eval_step(model, valid_iterator, device)
-                    _log['step'] = step
-                    writer.append_trace('eval_valid', _log)
+                    save_eval(_log, 'valid', step, writer)
 
                 if test_iterator:
                     _log = eval_step(model, test_iterator, device)
-                    _log['step'] = step
-                    writer.append_trace('eval_test', _log)
+                    save_eval(_log, 'test', step, writer)
 
             if step % train_config['evaluate_every_steps'] == 0:
                 writer.save_model(model, step)
