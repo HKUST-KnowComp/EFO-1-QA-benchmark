@@ -4,10 +4,10 @@ import os
 from pprint import pprint
 
 import torch
-import tqdm
 from torch import optim
 from torch.utils.data import DataLoader, Dataset
-from tqdm.std import trange
+from tqdm.std import trange, tqdm
+
 
 from data_helper import TaskManager
 from fol import BetaEstimator, BoxEstimator, TransEEstimator, parse_foq_formula
@@ -66,10 +66,10 @@ def train_step(model, opt, iterator):
     return log
 
 
-def eval_step(model, eval_iterator, device):
+def eval_step(model, eval_iterator, device, mode):
     logs = collections.defaultdict(lambda: collections.defaultdict(float))
     with torch.no_grad():
-        for data in eval_iterator:
+        for data in tqdm(eval_iterator):
             for key in data:
                 pred = data[key]['emb']
                 all_entity_loss = model.compute_all_entity_logit(pred)  # batch*nentity
@@ -85,8 +85,13 @@ def eval_step(model, eval_iterator, device):
                         1, argsort, torch.arange(model.n_entity).to(torch.float).repeat(argsort.shape[0], 1))
                 # achieve the ranking of all entities
                 for i in range(all_entity_loss.shape[0]):
-                    easy_ans = data[key]['easy_answer_set'][i]
-                    hard_ans = data[key]['hard_answer_set'][i]
+                    if mode == 'train':
+                        easy_ans = []
+                        hard_ans = data[key]['answer_set'][i]
+                    else:
+                        easy_ans = data[key]['easy_answer_set'][i]
+                        hard_ans = data[key]['hard_answer_set'][i]
+
                     num_hard = len(hard_ans)
                     num_easy = len(easy_ans)
                     assert len(set(hard_ans).intersection(set(easy_ans))) == 0
@@ -118,8 +123,9 @@ def eval_step(model, eval_iterator, device):
                     logs[key]['num_queries'] += num_query
 
         for metric in logs[key].keys():
-            logs[key][metric] /= logs[key]['num_queries']
-
+            if metric != 'num_queries':
+                logs[key][metric] /= logs[key]['num_queries']
+        print(logs)
     return logs
 
 
@@ -258,15 +264,15 @@ if __name__ == "__main__":
 
             if step % train_config['evaluate_every_steps'] == 0 or step == train_config['evaluate_every_steps']:
                 if train_iterator:
-                    _log = eval_step(model, train_iterator, device)
+                    _log = eval_step(model, train_iterator, device, mode='train')
                     save_eval(_log, 'train', step, writer)
 
                 if valid_iterator:
-                    _log = eval_step(model, valid_iterator, device)
+                    _log = eval_step(model, valid_iterator, device, mode='valid')
                     save_eval(_log, 'valid', step, writer)
 
                 if test_iterator:
-                    _log = eval_step(model, test_iterator, device)
+                    _log = eval_step(model, test_iterator, device, mode='test')
                     save_eval(_log, 'test', step, writer)
 
             if step % train_config['evaluate_every_steps'] == 0:

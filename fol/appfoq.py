@@ -10,6 +10,19 @@ import random
 IntList = List[int]
 
 
+def find_optimal_batch(answer_set: torch.tensor, query_dist: torch.tensor, compute_logit):
+    batch_num = 1
+    batch_size = int(answer_set.shape[0] / batch_num)
+    while True:
+        try:
+            batch_size = int(answer_set.shape[0] / batch_num)
+            batch_answer_set = answer_set[0:batch_size]
+            logit = compute_logit(batch_answer_set.unsqueeze(0), query_dist)
+            return batch_num
+        except RuntimeError:
+            batch_num *= 2
+
+
 def negative_sampling(answer_set: List[IntList], negative_size: int, entity_num: int, k=1):
     all_chosen_ans = []
     all_chosen_false_ans = []
@@ -258,10 +271,17 @@ class BetaEstimator(AppFOQEstimator):
     def compute_all_entity_logit(self, pred_emb: torch.Tensor) -> torch.Tensor:
         all_entities = torch.LongTensor(range(self.n_entity)).to(self.device)
         all_embedding = self.get_entity_embedding(all_entities)  # nentity*dim
-        all_embedding = all_embedding.unsqueeze(dim=0)  # 1*nentity*dim
+
         pred_alpha, pred_beta = torch.chunk(pred_emb, 2, dim=-1)  # batch*dim
         query_dist = torch.distributions.beta.Beta(pred_alpha.unsqueeze(1), pred_beta.unsqueeze(1))
-        return self.compute_logit(all_embedding, query_dist)
+        batch_num = find_optimal_batch(all_embedding, query_dist=query_dist, compute_logit=self.compute_logit)
+        chunk_of_answer = torch.chunk(all_embedding, batch_num, dim=0)
+        logit_list = []
+        for answer_part in chunk_of_answer:
+            logit_part = self.compute_logit(answer_part.unsqueeze(dim=0), query_dist)  # batch*answer_part*dim
+            logit_list.append(logit_part)
+        all_logit = torch.cat(logit_list, dim=1)
+        return all_logit
 
 
 class BoxOffsetIntersection(nn.Module):
@@ -392,8 +412,6 @@ class BoxEstimator(AppFOQEstimator):
         return logit
 
     def compute_all_entity_logit(self, pred_emb: torch.Tensor) -> torch.Tensor:
-        all_entities = torch.LongTensor(range(self.n_entity))
-        if self.device != torch.device('cpu'):
-            all_entities = all_entities.to(self.device)
+        all_entities = torch.LongTensor(range(self.n_entity)).to(self.device)
         all_entity_embedding = torch.chunk(all_entities, 2, dim=-1)
         return self.compute_logit(all_entities, pred_emb)
