@@ -20,7 +20,7 @@ train:
      - 2p
      - 2i
 evaluate:  # only used when valid/test in action
-  batch_size: 100
+  batch_size: 1
   print: true
   meta_queries:
     - 1p
