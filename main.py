@@ -59,14 +59,12 @@ def train_step(model, opt, iterator):
     positive_logit_list, negative_logit_list, subsampling_weight_list = [], [], []
     for key in data:
         positive_logit, negative_logit, subsampling_weight = model.criterion(data[key]['emb'], data[key]['answer_set'])
-        print(positive_logit.shape)
         positive_logit_list.append(positive_logit)
         negative_logit_list.append(negative_logit)
         subsampling_weight_list.append(subsampling_weight)
     all_positive_logit = torch.cat(positive_logit_list, dim=0)
     all_negative_logit = torch.cat(negative_logit_list, dim=0)
     all_subsampling_weight = torch.cat(subsampling_weight_list, dim=0)
-    print(all_positive_logit.shape, all_negative_logit.shape, all_subsampling_weight.shape)
     positive_loss, negative_loss = compute_final_loss(all_positive_logit, all_negative_logit, all_subsampling_weight)
     loss = (positive_loss + negative_loss)/2
     loss.backward()
