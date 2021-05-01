@@ -45,11 +45,8 @@ class Task:
         else:
             df = pd.read_csv(self.filename)
             self._parse(df)
-            data = {}
-            data['query_instance'] = self.query_instance
-            data['answer_set'] = self.answer_set
-            data['easy_answer_set'] = self.easy_answer_set
-            data['hard_answer_set'] = self.hard_answer_set
+            data = {'query_instance': self.query_instance, 'answer_set': self.answer_set,
+                    'easy_answer_set': self.easy_answer_set, 'hard_answer_set': self.hard_answer_set}
             try:
                 os.makedirs(os.path.dirname(dense), exist_ok=True)
                 print(f"save to {dense}")
@@ -98,6 +95,7 @@ class Task:
 
         self.length = len(self.query_instance)
 
+
 class TaskManager:
     def __init__(self, mode, tasks: List[Task], device):
         self.tasks = {t.query_instance.meta_formula: t for t in tasks}
@@ -117,7 +115,7 @@ class TaskManager:
             self.task_iterators[tmf] = \
                 self.tasks[tmf].batch_estimation_iterator(
                     estimator,
-                    int(batch_size*self.partition[i]))
+                    int(batch_size * self.partition[i]))
 
         while True:
             finish = 0
@@ -138,11 +136,10 @@ class TaskManager:
                 except StopIteration:
                     finish += 1
 
-            if finish == len(self.tasks): 
+            if finish == len(self.tasks):
                 break
 
             yield data
-
 
 
 class TestDataset(Dataset):

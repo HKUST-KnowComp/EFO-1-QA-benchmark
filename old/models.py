@@ -285,7 +285,7 @@ class KGReasoning(nn.Module):
 
         nn.init.uniform_(
             tensor=self.entity_embedding,
-            a=-self.embedding_low_bound,
+            a=self.embedding_low_bound,
             b=self.embedding_up_bound
         )
         self.relation_embedding = nn.Parameter(

@@ -4,11 +4,11 @@ import os
 from pprint import pprint
 
 import torch
-import tqdm
 from torch import optim
 from torch.utils.data import DataLoader, Dataset
-from tqdm.std import trange
+from tqdm.std import trange, tqdm
 
+from fol.appfoq import compute_final_loss
 from data_helper import TaskManager
 from fol import BetaEstimator, BoxEstimator, TransEEstimator, parse_foq_formula
 from fol.base import beta_query
@@ -51,75 +51,92 @@ parser.add_argument('--prefix', default='dev', type=str)
 #     }
 #     return log
 
+
 def train_step(model, opt, iterator):
     # list of tuple, [0] is query, [1] ans, [2] beta_name
-    opt.zero_grad()  # TODO: parallelize query
+    opt.zero_grad()
     data = next(iterator)
-    loss = 0
+    positive_logit_list, negative_logit_list, subsampling_weight_list = [], [], []
     for key in data:
-        loss += model.criterion(data[key]['emb'], data[key]['answer_set'])
+        positive_logit, negative_logit, subsampling_weight = model.criterion(data[key]['emb'], data[key]['answer_set'])
+        positive_logit_list.append(positive_logit)
+        negative_logit_list.append(negative_logit)
+        subsampling_weight_list.append(subsampling_weight)
+    all_positive_logit = torch.cat(positive_logit_list, dim=0)
+    all_negative_logit = torch.cat(negative_logit_list, dim=0)
+    all_subsampling_weight = torch.cat(subsampling_weight_list, dim=0)
+    positive_loss, negative_loss = compute_final_loss(all_positive_logit, all_negative_logit, all_subsampling_weight)
+    loss = (positive_loss + negative_loss)/2
     loss.backward()
     opt.step()
     log = {
+        'p_loss': positive_loss.item(),
+        'n_loss': negative_loss.item(),
         'loss': loss.item()
     }
     return log
 
 
-def eval_step(model, eval_iterator, device):
+def eval_step(model, eval_iterator, device, mode):
     logs = collections.defaultdict(lambda: collections.defaultdict(float))
     with torch.no_grad():
-        data = next(eval_iterator)
-        for key in data:
-            pred = data[key]['emb']
-            all_entity_loss = model.compute_all_entity_logit(pred)  # batch*nentity
-            argsort = torch.argsort(all_entity_loss, dim=1, descending=True)
-            ranking = argsort.clone().to(torch.float)
-            #  create a new torch Tensor for batch_entity_range
-            if device != torch.device('cpu'):
-                ranking = ranking.scatter_(
-                    1, argsort, torch.arange(model.nentity).to(torch.float).repeat(argsort.shape[0], 1).to(
-                        device))
-            else:
-                ranking = ranking.scatter_(
-                    1, argsort, torch.arange(model.nentity).to(torch.float).repeat(argsort.shape[0], 1))
-            # achieve the ranking of all entities
-            for i in range(all_entity_loss.shape[0]):
-                easy_ans = data[key]['easy_answer_set'][i]
-                hard_ans = data[key]['hard_answer_set'][i]
-                num_hard = len(hard_ans)
-                num_easy = len(easy_ans)
-                assert len(set(hard_ans).intersection(set(easy_ans))) == 0
-                # only take those answers' rank
-                cur_ranking = ranking[i, list(easy_ans) + list(hard_ans)]
-                cur_ranking, indices = torch.sort(cur_ranking)
-                masks = indices >= num_easy
+        for data in tqdm(eval_iterator):
+            for key in data:
+                pred = data[key]['emb']
+                all_entity_loss = model.compute_all_entity_logit(pred)  # batch*nentity
+                argsort = torch.argsort(all_entity_loss, dim=1, descending=True)
+                ranking = argsort.clone().to(torch.float)
+                #  create a new torch Tensor for batch_entity_range
                 if device != torch.device('cpu'):
-                    answer_list = torch.arange(
-                        num_hard + num_easy).to(torch.float).to(device)
+                    ranking = ranking.scatter_(
+                        1, argsort, torch.arange(model.n_entity).to(torch.float).repeat(argsort.shape[0], 1).to(
+                            device))
                 else:
-                    answer_list = torch.arange(
-                        num_hard + num_easy).to(torch.float)
-                cur_ranking = cur_ranking - answer_list + 1
-                # filtered setting: +1 for start at 0, -answer_list for ignore other answers
+                    ranking = ranking.scatter_(
+                        1, argsort, torch.arange(model.n_entity).to(torch.float).repeat(argsort.shape[0], 1))
+                # achieve the ranking of all entities
+                for i in range(all_entity_loss.shape[0]):
+                    if mode == 'train':
+                        easy_ans = []
+                        hard_ans = data[key]['answer_set'][i]
+                    else:
+                        easy_ans = data[key]['easy_answer_set'][i]
+                        hard_ans = data[key]['hard_answer_set'][i]
 
-                cur_ranking = cur_ranking[masks]
-                # only take indices that belong to the hard answers
-                mrr = torch.mean(1. / cur_ranking).item()
-                h1 = torch.mean((cur_ranking <= 1).to(torch.float)).item()
-                h3 = torch.mean((cur_ranking <= 3).to(torch.float)).item()
-                h10 = torch.mean(
-                    (cur_ranking <= 10).to(torch.float)).item()
-                logs[key]['MRR'] += mrr
-                logs[key]['HITS1'] += h1
-                logs[key]['HITS3'] += h3
-                logs[key]['HITS10'] += h10
+                    num_hard = len(hard_ans)
+                    num_easy = len(easy_ans)
+                    assert len(set(hard_ans).intersection(set(easy_ans))) == 0
+                    # only take those answers' rank
+                    cur_ranking = ranking[i, list(easy_ans) + list(hard_ans)]
+                    cur_ranking, indices = torch.sort(cur_ranking)
+                    masks = indices >= num_easy
+                    if device != torch.device('cpu'):
+                        answer_list = torch.arange(
+                            num_hard + num_easy).to(torch.float).to(device)
+                    else:
+                        answer_list = torch.arange(
+                            num_hard + num_easy).to(torch.float)
+                    cur_ranking = cur_ranking - answer_list + 1
+                    # filtered setting: +1 for start at 0, -answer_list for ignore other answers
 
-            num_query = all_entity_loss.shape[0]
+                    cur_ranking = cur_ranking[masks]
+                    # only take indices that belong to the hard answers
+                    mrr = torch.mean(1. / cur_ranking).item()
+                    h1 = torch.mean((cur_ranking <= 1).to(torch.float)).item()
+                    h3 = torch.mean((cur_ranking <= 3).to(torch.float)).item()
+                    h10 = torch.mean(
+                        (cur_ranking <= 10).to(torch.float)).item()
+                    logs[key]['MRR'] += mrr
+                    logs[key]['HITS1'] += h1
+                    logs[key]['HITS3'] += h3
+                    logs[key]['HITS10'] += h10
+                    num_query = all_entity_loss.shape[0]
+                    logs[key]['num_queries'] += num_query
+        for key in logs.keys():
             for metric in logs[key].keys():
-                logs[key][metric] /= num_query
-            logs[key]['num_queries'] = num_query
-
+                if metric != 'num_queries':
+                    logs[key][metric] /= logs[key]['num_queries']
+        print(logs)
     return logs
 
 
@@ -145,6 +162,13 @@ def eval_step(model, eval_iterator, device):
 #                 pass
 #             if step % train_cfg['log_every_steps']:
 #                 pass
+
+def save_eval(log, mode, step, writer):
+    for t in log:
+        logt = log[t]
+        logt['step'] = step
+        writer.append_trace(f'eval_{mode}_{t}', logt) 
+
 
 if __name__ == "__main__":
 
@@ -198,14 +222,29 @@ if __name__ == "__main__":
     if 'train' in configure['action']:
         print("[main] load training data")
         tasks = load_task_manager(
-            configure['data']['data_folder'], 'train')
+            configure['data']['data_folder'], 'train', task_names=train_config['meta_queries'])
         train_tm = TaskManager('train', tasks, device)
         train_iterator = train_tm.build_iterators(model, batch_size=train_config['batch_size'])
     else:
         train_iterator = None
 
-    valid_iterator = None
-    test_iterator = None
+    if 'valid' in configure['action']:
+        print("[main] load valid data")
+        tasks = load_task_manager(configure['data']['data_folder'], 'valid',
+                                  task_names=configure['evaluate']['meta_queries'])
+        valid_tm = TaskManager('valid', tasks, device)
+        valid_iterator = valid_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
+    else:
+        valid_iterator = None
+
+    if 'test' in configure['action']:
+        print("[main] load test data")
+        tasks = load_task_manager(configure['data']['data_folder'], 'test',
+                                  task_names=configure['evaluate']['meta_queries'])
+        test_tm = TaskManager('test', tasks, device)
+        test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
+    else:
+        test_iterator = None
 
     lr = train_config['learning_rate']
     opt = torch.optim.Adam(model.parameters(), lr=lr)
@@ -235,20 +274,17 @@ if __name__ == "__main__":
                     writer.append_trace('train', _log)
 
             if step % train_config['evaluate_every_steps'] == 0 or step == train_config['evaluate_every_steps']:
-                # if train_iterator:
-                #     _log = eval_step(model, train_iterator)
-                #     _log['step'] = step
-                #     writer.append_trace('eval_train', _log)
+                if train_iterator:
+                    _log = eval_step(model, train_iterator, device, mode='train')
+                    save_eval(_log, 'train', step, writer)
 
                 if valid_iterator:
-                    _log = eval_step(model, valid_iterator)
-                    _log['step'] = step
-                    writer.append_trace('eval_valid', _log)
+                    _log = eval_step(model, valid_iterator, device, mode='valid')
+                    save_eval(_log, 'valid', step, writer)
 
                 if test_iterator:
-                    _log = eval_step(model, test_iterator)
-                    _log['step'] = step
-                    writer.append_trace('eval_test', _log)
+                    _log = eval_step(model, test_iterator, device, mode='test')
+                    save_eval(_log, 'test', step, writer)
 
             if step % train_config['evaluate_every_steps'] == 0:
                 writer.save_model(model, step)
