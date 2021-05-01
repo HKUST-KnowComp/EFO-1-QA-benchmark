@@ -10,11 +10,11 @@ train:
   batch_size: 512
   learning_rate: 0.0001
   steps: 100000
-  log_every_steps: 10
+  log_every_steps: 100
   warm_up_steps: 1000
   evaluate_every_steps: 30000
   # save_every_steps: 1000
-  checkpoint_every: 50000
+  checkpoint_every: 10000
   meta_queries:
     # - 1p
     # - 2p
