@@ -23,13 +23,13 @@ def find_optimal_batch(answer_set: torch.tensor, query_dist: torch.tensor, compu
             batch_num *= 2
 
 
-def negative_sampling(answer_set: List[IntList], negative_size: int, entity_num: int, k=1):
+def negative_sampling(answer_set: List[IntList], negative_size: int, entity_num: int, k=1, base_num=4):
     all_chosen_ans = []
     all_chosen_false_ans = []
     subsampling_weight = torch.zeros(len(answer_set))
     for i in range(len(answer_set)):
         all_chosen_ans.append(random.choices(answer_set[i], k=k))
-        subsampling_weight[i] = len(answer_set[i])
+        subsampling_weight[i] = len(answer_set[i]) + base_num
         now_false_ans_size = 0
         negative_sample_list = []
         while now_false_ans_size < negative_size:
@@ -55,12 +55,11 @@ def compute_final_loss(positive_logit, negative_logit, subsampling_weight):
     positive_score = F.logsigmoid(positive_logit)
     negative_score = F.logsigmoid(-negative_logit)
     negative_score = torch.mean(negative_score, dim=1)
-    positive_loss = -(positive_score * subsampling_weight)
-    negative_loss = -(negative_score * subsampling_weight)
-    loss = (positive_loss + negative_loss) / 2
-    loss /= subsampling_weight.sum()
-    loss = loss.sum()
-    return loss
+    positive_loss = -(positive_score * subsampling_weight).sum()
+    negative_loss = -(negative_score * subsampling_weight).sum()
+    positive_loss /= subsampling_weight.sum()
+    negative_loss /= subsampling_weight.sum()
+    return positive_loss, negative_loss
 
 
 class AppFOQEstimator(ABC, nn.Module):
@@ -200,14 +199,18 @@ class BetaEstimator(AppFOQEstimator):
         self.n_relation = n_relation
         self.hidden_dim = hidden_dim
         self.gamma = gamma
+        self.epsilon = 2.0
         self.negative_size = negative_sample_size
         self.entity_dim, self.relation_dim = entity_dim, relation_dim
         self.entity_embeddings = nn.Embedding(num_embeddings=n_entity,
                                               embedding_dim=self.entity_dim * 2)
         self.relation_embeddings = nn.Embedding(num_embeddings=n_relation,
                                                 embedding_dim=self.relation_dim)
-        self.entity_regularizer = Regularizer(0, 0.05, 1e9)
-        self.projection_regularizer = Regularizer(0, 0.05, 1e9)
+        embedding_range = torch.tensor([(self.gamma + self.epsilon) / hidden_dim]).to(self.device)
+        nn.init.uniform_(tensor=self.entity_embeddings.weight, a=-embedding_range.item(), b=embedding_range.item())
+        nn.init.uniform_(tensor=self.relation_embeddings.weight, a=-embedding_range.item(), b=embedding_range.item())
+        self.entity_regularizer = Regularizer(1, 0.05, 1e9)  # todo: why add 1
+        self.projection_regularizer = Regularizer(1, 0.05, 1e9)
         self.intersection_net = BetaIntersection(self.entity_dim)
         self.projection_net = BetaProjection(self.entity_dim * 2,
                                              self.relation_dim,
@@ -244,13 +247,15 @@ class BetaEstimator(AppFOQEstimator):
         r_neg_emb = 1. / remb
         return self.get_disjunction_embedding(lemb, r_neg_emb)
 
-    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]) -> torch.Tensor:
+    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]):
+        assert pred_emb.shape[0] == len(answer_set)
         alpha_embedding, beta_embedding = torch.chunk(pred_emb, 2, dim=-1)
         query_dist = torch.distributions.beta.Beta(alpha_embedding, beta_embedding)
         chosen_ans, chosen_false_ans, subsampling_weight = \
             negative_sampling(answer_set, negative_size=self.negative_size, entity_num=self.n_entity)
         answer_embedding = self.get_entity_embedding(
-            torch.tensor(chosen_ans, device=self.device))  # todo : fix this when cuda>=0
+            torch.tensor(chosen_ans, device=self.device)).squeeze()
+        print('answer emb', answer_embedding.shape)
         positive_logit = self.compute_logit(answer_embedding, query_dist)
         negative_embedding_list = []
         for i in range(len(chosen_false_ans)):  # todo: is there a way to parallelize
@@ -259,8 +264,7 @@ class BetaEstimator(AppFOQEstimator):
         all_negative_embedding = torch.stack(negative_embedding_list, dim=0)  # batch*negative*dim
         query_dist_unsqueezed = torch.distributions.beta.Beta(alpha_embedding.unsqueeze(1), beta_embedding.unsqueeze(1))
         negative_logit = self.compute_logit(all_negative_embedding, query_dist_unsqueezed)  # b*negative
-        loss = compute_final_loss(positive_logit, negative_logit, subsampling_weight.to(self.device))
-        return loss
+        return positive_logit, negative_logit, subsampling_weight.to(self.device)
 
     def compute_logit(self, entity_emb, query_dist):
         entity_alpha, entity_beta = torch.chunk(entity_emb, 2, dim=-1)

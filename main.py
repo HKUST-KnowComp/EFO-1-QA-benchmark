@@ -8,7 +8,7 @@ from torch import optim
 from torch.utils.data import DataLoader, Dataset
 from tqdm.std import trange, tqdm
 
-
+from fol.appfoq import compute_final_loss
 from data_helper import TaskManager
 from fol import BetaEstimator, BoxEstimator, TransEEstimator, parse_foq_formula
 from fol.base import beta_query
@@ -51,16 +51,29 @@ parser.add_argument('--prefix', default='dev', type=str)
 #     }
 #     return log
 
+
 def train_step(model, opt, iterator):
     # list of tuple, [0] is query, [1] ans, [2] beta_name
-    opt.zero_grad()  # TODO: parallelize query
+    opt.zero_grad()
     data = next(iterator)
-    loss = 0
+    positive_logit_list, negative_logit_list, subsampling_weight_list = [], [], []
     for key in data:
-        loss += model.criterion(data[key]['emb'], data[key]['answer_set'])
+        positive_logit, negative_logit, subsampling_weight = model.criterion(data[key]['emb'], data[key]['answer_set'])
+        print(positive_logit.shape)
+        positive_logit_list.append(positive_logit)
+        negative_logit_list.append(negative_logit)
+        subsampling_weight_list.append(subsampling_weight)
+    all_positive_logit = torch.cat(positive_logit_list, dim=0)
+    all_negative_logit = torch.cat(negative_logit_list, dim=0)
+    all_subsampling_weight = torch.cat(subsampling_weight_list, dim=0)
+    print(all_positive_logit.shape, all_negative_logit.shape, all_subsampling_weight.shape)
+    positive_loss, negative_loss = compute_final_loss(all_positive_logit, all_negative_logit, all_subsampling_weight)
+    loss = (positive_loss + negative_loss)/2
     loss.backward()
     opt.step()
     log = {
+        'p_loss': positive_loss.item(),
+        'n_loss': negative_loss.item(),
         'loss': loss.item()
     }
     return log
@@ -121,10 +134,10 @@ def eval_step(model, eval_iterator, device, mode):
                     logs[key]['HITS10'] += h10
                     num_query = all_entity_loss.shape[0]
                     logs[key]['num_queries'] += num_query
-
-        for metric in logs[key].keys():
-            if metric != 'num_queries':
-                logs[key][metric] /= logs[key]['num_queries']
+        for key in logs.keys():
+            for metric in logs[key].keys():
+                if metric != 'num_queries':
+                    logs[key][metric] /= logs[key]['num_queries']
         print(logs)
     return logs
 
