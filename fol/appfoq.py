@@ -255,7 +255,6 @@ class BetaEstimator(AppFOQEstimator):
             negative_sampling(answer_set, negative_size=self.negative_size, entity_num=self.n_entity)
         answer_embedding = self.get_entity_embedding(
             torch.tensor(chosen_ans, device=self.device)).squeeze()
-        print('answer emb', answer_embedding.shape)
         positive_logit = self.compute_logit(answer_embedding, query_dist)
         negative_embedding_list = []
         for i in range(len(chosen_false_ans)):  # todo: is there a way to parallelize
