@@ -70,8 +70,8 @@ def train_step(model, opt, iterator):
     loss.backward()
     opt.step()
     log = {
-        'p_loss': positive_loss.item(),
-        'n_loss': negative_loss.item(),
+        'po': positive_loss.item(),
+        'ne': negative_loss.item(),
         'loss': loss.item()
     }
     return log
@@ -121,10 +121,10 @@ def eval_step(model, eval_iterator, device, mode):
 
                     cur_ranking = cur_ranking[masks]
                     # only take indices that belong to the hard answers
-                    mrr = torch.mean(1. / cur_ranking).item()
-                    h1 = torch.mean((cur_ranking <= 1).to(torch.float)).item()
-                    h3 = torch.mean((cur_ranking <= 3).to(torch.float)).item()
-                    h10 = torch.mean(
+                    mrr = torch.sum(1. / cur_ranking).item()
+                    h1 = torch.sum((cur_ranking <= 1).to(torch.float)).item()
+                    h3 = torch.sum((cur_ranking <= 3).to(torch.float)).item()
+                    h10 = torch.sum(
                         (cur_ranking <= 10).to(torch.float)).item()
                     logs[key]['MRR'] += mrr
                     logs[key]['HITS1'] += h1
@@ -221,11 +221,28 @@ if __name__ == "__main__":
 
     if 'train' in configure['action']:
         print("[main] load training data")
-        tasks = load_task_manager(
+        beta_path_tasks, beta_other_tasks = [], []
+        for task in train_config['meta_queries']:
+            if task in ['1p', '2p', '3p']:
+                beta_path_tasks.append(task)
+            else:
+                beta_other_tasks.append(task)
+
+        path_tasks = load_task_manager(
+            configure['data']['data_folder'], 'train', task_names=beta_path_tasks)
+        other_tasks = load_task_manager(
+            configure['data']['data_folder'], 'train', task_names=beta_other_tasks)
+        train_path_tm = TaskManager('train', path_tasks, device)
+        train_other_tm = TaskManager('train', other_tasks, device)
+        train_path_iterator = train_path_tm.build_iterators(model, batch_size=train_config['batch_size'])
+        train_other_iterator = train_other_tm.build_iterators(model, batch_size=train_config['batch_size'])
+        all_tasks = load_task_manager(
             configure['data']['data_folder'], 'train', task_names=train_config['meta_queries'])
-        train_tm = TaskManager('train', tasks, device)
+        train_tm = TaskManager('train', all_tasks, device)
         train_iterator = train_tm.build_iterators(model, batch_size=train_config['batch_size'])
     else:
+        train_path_iterator = None
+        train_other_iterator = None
         train_iterator = None
 
     if 'valid' in configure['action']:
@@ -253,7 +270,7 @@ if __name__ == "__main__":
     with trange(1, train_config['steps']+1) as t:
         for step in t:
             # basic training step
-            if train_iterator:
+            if train_path_iterator:
                 if step >= train_config['warm_up_steps']:
                     lr /= 5
                     # logging
@@ -263,11 +280,35 @@ if __name__ == "__main__":
                     )
                     train_config['warm_up_steps'] *= 1.5
                 try:
-                    _log = train_step(model, opt, train_iterator)
+                    _log = train_step(model, opt, train_path_iterator)
                 except StopIteration:
-                    print("new epoch")
-                    train_iterator = train_tm.build_iterators(model, batch_size=train_config['batch_size'])
-                    _log = train_step(model, opt, train_iterator)
+                    print("new epoch for path meta-query")
+                    train_path_iterator = train_path_tm.build_iterators(model, batch_size=train_config['batch_size'])
+                    _log = train_step(model, opt, train_path_iterator)
+                if train_other_iterator:
+                    try:
+                        _log_other = train_step(model, opt, train_other_iterator)
+                        try:
+                            _log_second = train_step(model, opt, train_path_iterator)
+                        except StopIteration:
+                            print("new epoch for path meta-query")
+                            train_path_iterator = train_path_tm.build_iterators(model,
+                                                                                batch_size=train_config['batch_size'])
+                            _log_second = train_step(model, opt, train_path_iterator)
+                    except StopIteration:
+                        print("new epoch for other meta-query")
+                        train_other_iterator =\
+                            train_other_tm.build_iterators(model, batch_size=train_config['batch_size'])
+                        _log_other = train_step(model, opt, train_other_iterator)
+                        try:
+                            _log_second = train_step(model, opt, train_path_iterator)
+                        except StopIteration:
+                            print("new epoch for path meta-query")
+                            train_path_iterator = train_path_tm.build_iterators(model,
+                                                                                batch_size=train_config['batch_size'])
+                            _log_second = train_step(model, opt, train_path_iterator)
+                for key in _log:
+                    _log[key] = (_log[key] + _log_other[key] + _log_second[key]) / 3
                 t.set_postfix(_log)
                 _log['step'] = step
                 if step % train_config['log_every_steps'] == 0:
