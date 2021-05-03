@@ -121,17 +121,17 @@ def eval_step(model, eval_iterator, device, mode):
 
                     cur_ranking = cur_ranking[masks]
                     # only take indices that belong to the hard answers
-                    mrr = torch.sum(1. / cur_ranking).item()
-                    h1 = torch.sum((cur_ranking <= 1).to(torch.float)).item()
-                    h3 = torch.sum((cur_ranking <= 3).to(torch.float)).item()
-                    h10 = torch.sum(
+                    mrr = torch.mean(1. / cur_ranking).item()
+                    h1 = torch.mean((cur_ranking <= 1).to(torch.float)).item()
+                    h3 = torch.mean((cur_ranking <= 3).to(torch.float)).item()
+                    h10 = torch.mean(
                         (cur_ranking <= 10).to(torch.float)).item()
                     logs[key]['MRR'] += mrr
                     logs[key]['HITS1'] += h1
                     logs[key]['HITS3'] += h3
                     logs[key]['HITS10'] += h10
-                    num_query = all_entity_loss.shape[0]
-                    logs[key]['num_queries'] += num_query
+                num_query = all_entity_loss.shape[0]
+                logs[key]['num_queries'] += num_query
         for key in logs.keys():
             for metric in logs[key].keys():
                 if metric != 'num_queries':
@@ -239,11 +239,12 @@ if __name__ == "__main__":
         all_tasks = load_task_manager(
             configure['data']['data_folder'], 'train', task_names=train_config['meta_queries'])
         train_tm = TaskManager('train', all_tasks, device)
-        train_iterator = train_tm.build_iterators(model, batch_size=train_config['batch_size'])
+        train_iterator = train_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
     else:
         train_path_iterator = None
         train_other_iterator = None
         train_iterator = None
+        train_tm = None
 
     if 'valid' in configure['action']:
         print("[main] load valid data")
@@ -253,6 +254,7 @@ if __name__ == "__main__":
         valid_iterator = valid_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
     else:
         valid_iterator = None
+        valid_tm = None
 
     if 'test' in configure['action']:
         print("[main] load test data")
@@ -262,6 +264,7 @@ if __name__ == "__main__":
         test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
     else:
         test_iterator = None
+        test_tm = None
 
     lr = train_config['learning_rate']
     opt = torch.optim.Adam(model.parameters(), lr=lr)
@@ -315,15 +318,18 @@ if __name__ == "__main__":
                     writer.append_trace('train', _log)
 
             if step % train_config['evaluate_every_steps'] == 0 or step == train_config['evaluate_every_steps']:
-                if train_iterator:
+                '''if train_iterator:
+                    train_iterator = train_tm.build_iterators(model, batch_size=configureconfigure['evaluate']['batch_size'])
                     _log = eval_step(model, train_iterator, device, mode='train')
-                    save_eval(_log, 'train', step, writer)
+                    save_eval(_log, 'train', step, writer)'''
 
                 if valid_iterator:
+                    valid_iterator = valid_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
                     _log = eval_step(model, valid_iterator, device, mode='valid')
                     save_eval(_log, 'valid', step, writer)
 
                 if test_iterator:
+                    test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
                     _log = eval_step(model, test_iterator, device, mode='test')
                     save_eval(_log, 'test', step, writer)
 
