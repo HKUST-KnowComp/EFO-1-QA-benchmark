@@ -322,10 +322,10 @@ if __name__ == "__main__":
                     writer.append_trace('train', _log)
 
             if step % train_config['evaluate_every_steps'] == 0 or step == train_config['evaluate_every_steps']:
-                '''if train_iterator:
-                    train_iterator = train_tm.build_iterators(model, batch_size=configureconfigure['evaluate']['batch_size'])
+                if train_iterator:
+                    train_iterator = train_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
                     _log = eval_step(model, train_iterator, device, mode='train')
-                    save_eval(_log, 'train', step, writer)'''
+                    save_eval(_log, 'train', step, writer)
 
                 if valid_iterator:
                     valid_iterator = valid_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
