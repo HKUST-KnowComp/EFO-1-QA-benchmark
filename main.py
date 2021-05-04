@@ -269,7 +269,7 @@ if __name__ == "__main__":
     lr = train_config['learning_rate']
     opt = torch.optim.Adam(model.parameters(), lr=lr)
     # exit()
-
+    training_logs = []
     with trange(1, train_config['steps']+1) as t:
         for step in t:
             # basic training step
@@ -312,9 +312,13 @@ if __name__ == "__main__":
                             _log_second = train_step(model, opt, train_path_iterator)
                 for key in _log:
                     _log[key] = (_log[key] + _log_other[key] + _log_second[key]) / 3
-                t.set_postfix(_log)
+                t.set_postfix(_log_second)
+                training_logs.append(_log_second)
                 _log['step'] = step
                 if step % train_config['log_every_steps'] == 0:
+                    for metric in training_logs[0].keys():
+                        _log[metric] = sum(log[metric] for log in training_logs) / len(training_logs)
+                    training_logs = []
                     writer.append_trace('train', _log)
 
             if step % train_config['evaluate_every_steps'] == 0 or step == train_config['evaluate_every_steps']:
