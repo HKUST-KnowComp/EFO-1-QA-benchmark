@@ -18,6 +18,8 @@ from util import (Writer, load_graph, load_task_manager, read_from_yaml,
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', default='config/default.yaml', type=str)
 parser.add_argument('--prefix', default='dev', type=str)
+parser.add_argument('--checkpoint_path', default=None, type=str)
+parser.add_argument('--load_step', default=0, type=int)
 
 # from torch.utils.tensorboard import SummaryWriter
 # def train_step(model, opt, dataloader, device):
@@ -170,6 +172,16 @@ def save_eval(log, mode, step, writer):
         writer.append_trace(f'eval_{mode}_{t}', logt) 
 
 
+def load_model(step, checkpoint_path):
+    print('Loading checkpoint %s...' % checkpoint_path)
+    checkpoint = torch.load(os.path.join(
+        args.checkpoint_path, f'{step}.ckpt'))
+    model.load_state_dict(checkpoint['model_parameter'])
+    opt.load_state_dict(checkpoint['optimizer_parameter'])
+    learning_rate = checkpoint['learning_rate']
+    warm_up_steps = checkpoint['warm_up_steps']
+
+
 if __name__ == "__main__":
 
     args = parser.parse_args()
@@ -178,7 +190,6 @@ if __name__ == "__main__":
     configure = read_from_yaml(args.config)
     print("[main] config loaded")
     pprint(configure)
-
     # initialize my log writer
     case_name = f'{args.prefix}/{ args.config.split("/")[-1].split(".")[0]}'
     # case_name = 'dev/default'
@@ -217,6 +228,8 @@ if __name__ == "__main__":
         model = BetaEstimator(**model_params)
     elif model_name == 'Box':
         model = BoxEstimator(**model_params)
+    else:
+        assert False, 'Not valid model name!'
     model.to(device)
 
     if 'train' in configure['action']:
@@ -244,7 +257,7 @@ if __name__ == "__main__":
         train_path_iterator = None
         train_other_iterator = None
         train_iterator = None
-        train_tm = None
+        train_tm, train_path_tm, train_other_tm = None, None, None
 
     if 'valid' in configure['action']:
         print("[main] load valid data")
@@ -268,9 +281,15 @@ if __name__ == "__main__":
 
     lr = train_config['learning_rate']
     opt = torch.optim.Adam(model.parameters(), lr=lr)
+    init_step = 1
     # exit()
+
+    if args.checkpoint_path is not None:
+        load_model(args.load_step, args.checkpoint_path)
+        init_step = args.load_step
+
     training_logs = []
-    with trange(1, train_config['steps']+1) as t:
+    with trange(init_step, train_config['steps']+1) as t:
         for step in t:
             # basic training step
             if train_path_iterator:
@@ -337,5 +356,5 @@ if __name__ == "__main__":
                     _log = eval_step(model, test_iterator, device, mode='test')
                     save_eval(_log, 'test', step, writer)
 
-            if step % train_config['evaluate_every_steps'] == 0:
-                writer.save_model(model, step)
+            if step % train_config['save_every_steps'] == 0:
+                writer.save_model(model, opt, step, train_config['warm_up_steps'], lr)

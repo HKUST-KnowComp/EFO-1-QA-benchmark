@@ -12,13 +12,12 @@ IntList = List[int]
 
 def find_optimal_batch(answer_set: torch.tensor, query_dist: torch.tensor, compute_logit):
     batch_num = 1
-    batch_size = int(answer_set.shape[0] / batch_num)
     while True:
         try:
             batch_size = int(answer_set.shape[0] / batch_num)
             batch_answer_set = answer_set[0:batch_size]
             logit = compute_logit(batch_answer_set.unsqueeze(0), query_dist)
-            return batch_num
+            return batch_num * 2
         except RuntimeError:
             batch_num *= 2
 
