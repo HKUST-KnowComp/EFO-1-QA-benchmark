@@ -70,7 +70,7 @@ beta_query = {
     'inp': 'p(p(e)-p(e))',
     'pni': 'p(p(e))-p(e)',
     'ip': 'p(p(e)&p(e))',
-    'pi': 'p(e)&p(p(e))',
+    'pi': 'p(p(e))&p(e)',
     '2u': 'p(e)|p(e)',
     'up': 'p(p(e)|p(e))'
 }
