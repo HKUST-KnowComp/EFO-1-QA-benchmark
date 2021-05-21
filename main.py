@@ -10,7 +10,8 @@ from tqdm.std import trange, tqdm
 
 from fol.appfoq import compute_final_loss
 from data_helper import TaskManager
-from fol import BetaEstimator, BoxEstimator, TransEEstimator, parse_foq_formula
+from fol import BetaEstimator, BoxEstimator, TransEEstimator, LogicEstimator, parse_foq_formula
+from fol.appfoq import order_bounds
 from fol.base import beta_query
 from util import (Writer, load_graph, load_task_manager, read_from_yaml,
                   read_indexing, set_global_seed)
@@ -76,6 +77,12 @@ def train_step(model, opt, iterator):
         'ne': negative_loss.item(),
         'loss': loss.item()
     }
+    if model.name == 'logic':
+        entity_embedding = model._parameters['entity_embeddings'].data
+        if model.bounded:
+            model._parameters['entity_embeddings'].data = order_bounds(entity_embedding)
+        else:
+            model._parameters['entity_embeddings'].data = torch.clamp(entity_embedding, 0, 1)
     return log
 
 
@@ -226,8 +233,12 @@ if __name__ == "__main__":
     model_params['device'] = device
     if model_name == 'beta':
         model = BetaEstimator(**model_params)
-    elif model_name == 'Box':
+    elif model_name == 'box':
         model = BoxEstimator(**model_params)
+    elif model_name == 'logic':
+        model = LogicEstimator(**model_params)
+    elif model_name == 'CQD':
+        pass
     else:
         assert False, 'Not valid model name!'
     model.to(device)
