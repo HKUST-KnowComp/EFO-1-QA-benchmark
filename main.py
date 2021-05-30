@@ -167,7 +167,7 @@ def save_eval(log, mode, step, writer):
     for t in log:
         logt = log[t]
         logt['step'] = step
-        writer.append_trace(f'eval_{mode}_{t}', logt) 
+        writer.append_trace(f'eval_{mode}_{t}', logt)
 
 
 if __name__ == "__main__":
