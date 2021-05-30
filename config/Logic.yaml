@@ -1,6 +1,6 @@
 action: ['train','valid','test']  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: 1
+cuda: 3
 data:
   type: beta
   data_folder: data/FB15k-237-betae
@@ -45,7 +45,7 @@ evaluate:  # only used when valid/test in action
      - 2u-DM
      - up-DM
 estimator:
-  embedding: beta # one of [Transe, box, beta, dm]
+  embedding: logic # one of [Transe, box, beta, dm, logic]
   beta:
     entity_dim: 400
     relation_dim: 400
@@ -64,3 +64,15 @@ estimator:
     relation_dim: 2
     hidden_dim: 1600
     num_layers: 2
+  logic:
+    entity_dim: 400
+    relation_dim: 400
+    hidden_dim: 1600
+    num_layers: 2
+    evaluate_union: DM
+    gamma: 0.375
+    t_norm: luk
+    bounded: 1
+    use_att: 1
+    use_gtrans: 0
+

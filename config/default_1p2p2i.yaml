@@ -1,6 +1,6 @@
 action: ['train','valid','test']  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: 1
+cuda: 2
 data:
   type: beta
   data_folder: data/FB15k-237-betae
@@ -18,14 +18,7 @@ train:
   meta_queries:
      - 1p
      - 2p
-     - 3p
      - 2i
-     - 3i
-     - 2in
-     - 3in
-     - inp
-     - pin
-     - pni
 evaluate:  # only used when valid/test in action
   batch_size: 1000
   print: true
@@ -35,15 +28,6 @@ evaluate:  # only used when valid/test in action
      - 3p
      - 2i
      - 3i
-     - 2in
-     - 3in
-     - inp
-     - pin
-     - pni
-     - ip
-     - pi
-     - 2u-DM
-     - up-DM
 estimator:
   embedding: beta # one of [Transe, box, beta, dm]
   beta:

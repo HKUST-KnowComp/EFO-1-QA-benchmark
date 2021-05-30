@@ -10,7 +10,8 @@ from tqdm.std import trange, tqdm
 
 from fol.appfoq import compute_final_loss
 from data_helper import TaskManager
-from fol import BetaEstimator, BoxEstimator, TransEEstimator, parse_foq_formula
+from fol import BetaEstimator, BoxEstimator, TransEEstimator, LogicEstimator, parse_foq_formula
+from fol.appfoq import order_bounds
 from fol.base import beta_query
 from util import (Writer, load_graph, load_task_manager, read_from_yaml,
                   read_indexing, set_global_seed)
@@ -18,6 +19,8 @@ from util import (Writer, load_graph, load_task_manager, read_from_yaml,
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', default='config/default.yaml', type=str)
 parser.add_argument('--prefix', default='dev', type=str)
+parser.add_argument('--checkpoint_path', default=None, type=str)
+parser.add_argument('--load_step', default=0, type=int)
 
 # from torch.utils.tensorboard import SummaryWriter
 # def train_step(model, opt, dataloader, device):
@@ -70,10 +73,16 @@ def train_step(model, opt, iterator):
     loss.backward()
     opt.step()
     log = {
-        'p_loss': positive_loss.item(),
-        'n_loss': negative_loss.item(),
+        'po': positive_loss.item(),
+        'ne': negative_loss.item(),
         'loss': loss.item()
     }
+    if model.name == 'logic':
+        entity_embedding = model._parameters['entity_embeddings'].data
+        if model.bounded:
+            model._parameters['entity_embeddings'].data = order_bounds(entity_embedding)
+        else:
+            model._parameters['entity_embeddings'].data = torch.clamp(entity_embedding, 0, 1)
     return log
 
 
@@ -130,8 +139,8 @@ def eval_step(model, eval_iterator, device, mode):
                     logs[key]['HITS1'] += h1
                     logs[key]['HITS3'] += h3
                     logs[key]['HITS10'] += h10
-                    num_query = all_entity_loss.shape[0]
-                    logs[key]['num_queries'] += num_query
+                num_query = all_entity_loss.shape[0]
+                logs[key]['num_queries'] += num_query
         for key in logs.keys():
             for metric in logs[key].keys():
                 if metric != 'num_queries':
@@ -170,6 +179,16 @@ def save_eval(log, mode, step, writer):
         writer.append_trace(f'eval_{mode}_{t}', logt)
 
 
+def load_model(step, checkpoint_path):
+    print('Loading checkpoint %s...' % checkpoint_path)
+    checkpoint = torch.load(os.path.join(
+        args.checkpoint_path, f'{step}.ckpt'))
+    model.load_state_dict(checkpoint['model_parameter'])
+    opt.load_state_dict(checkpoint['optimizer_parameter'])
+    learning_rate = checkpoint['learning_rate']
+    warm_up_steps = checkpoint['warm_up_steps']
+
+
 if __name__ == "__main__":
 
     args = parser.parse_args()
@@ -178,7 +197,6 @@ if __name__ == "__main__":
     configure = read_from_yaml(args.config)
     print("[main] config loaded")
     pprint(configure)
-
     # initialize my log writer
     case_name = f'{args.prefix}/{ args.config.split("/")[-1].split(".")[0]}'
     # case_name = 'dev/default'
@@ -215,18 +233,42 @@ if __name__ == "__main__":
     model_params['device'] = device
     if model_name == 'beta':
         model = BetaEstimator(**model_params)
-    elif model_name == 'Box':
+    elif model_name == 'box':
         model = BoxEstimator(**model_params)
+    elif model_name == 'logic':
+        model = LogicEstimator(**model_params)
+    elif model_name == 'CQD':
+        pass
+    else:
+        assert False, 'Not valid model name!'
     model.to(device)
 
     if 'train' in configure['action']:
         print("[main] load training data")
-        tasks = load_task_manager(
+        beta_path_tasks, beta_other_tasks = [], []
+        for task in train_config['meta_queries']:
+            if task in ['1p', '2p', '3p']:
+                beta_path_tasks.append(task)
+            else:
+                beta_other_tasks.append(task)
+
+        path_tasks = load_task_manager(
+            configure['data']['data_folder'], 'train', task_names=beta_path_tasks)
+        other_tasks = load_task_manager(
+            configure['data']['data_folder'], 'train', task_names=beta_other_tasks)
+        train_path_tm = TaskManager('train', path_tasks, device)
+        train_other_tm = TaskManager('train', other_tasks, device)
+        train_path_iterator = train_path_tm.build_iterators(model, batch_size=train_config['batch_size'])
+        train_other_iterator = train_other_tm.build_iterators(model, batch_size=train_config['batch_size'])
+        all_tasks = load_task_manager(
             configure['data']['data_folder'], 'train', task_names=train_config['meta_queries'])
-        train_tm = TaskManager('train', tasks, device)
-        train_iterator = train_tm.build_iterators(model, batch_size=train_config['batch_size'])
+        train_tm = TaskManager('train', all_tasks, device)
+        train_iterator = train_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
     else:
+        train_path_iterator = None
+        train_other_iterator = None
         train_iterator = None
+        train_tm, train_path_tm, train_other_tm = None, None, None
 
     if 'valid' in configure['action']:
         print("[main] load valid data")
@@ -236,6 +278,7 @@ if __name__ == "__main__":
         valid_iterator = valid_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
     else:
         valid_iterator = None
+        valid_tm = None
 
     if 'test' in configure['action']:
         print("[main] load test data")
@@ -245,15 +288,22 @@ if __name__ == "__main__":
         test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
     else:
         test_iterator = None
+        test_tm = None
 
     lr = train_config['learning_rate']
     opt = torch.optim.Adam(model.parameters(), lr=lr)
+    init_step = 1
     # exit()
 
-    with trange(1, train_config['steps']+1) as t:
+    if args.checkpoint_path is not None:
+        load_model(args.load_step, args.checkpoint_path)
+        init_step = args.load_step
+
+    training_logs = []
+    with trange(init_step, train_config['steps']+1) as t:
         for step in t:
             # basic training step
-            if train_iterator:
+            if train_path_iterator:
                 if step >= train_config['warm_up_steps']:
                     lr /= 5
                     # logging
@@ -263,28 +313,59 @@ if __name__ == "__main__":
                     )
                     train_config['warm_up_steps'] *= 1.5
                 try:
-                    _log = train_step(model, opt, train_iterator)
+                    _log = train_step(model, opt, train_path_iterator)
                 except StopIteration:
-                    print("new epoch")
-                    train_iterator = train_tm.build_iterators(model, batch_size=train_config['batch_size'])
-                    _log = train_step(model, opt, train_iterator)
-                t.set_postfix(_log)
+                    print("new epoch for path meta-query")
+                    train_path_iterator = train_path_tm.build_iterators(model, batch_size=train_config['batch_size'])
+                    _log = train_step(model, opt, train_path_iterator)
+                if train_other_iterator:
+                    try:
+                        _log_other = train_step(model, opt, train_other_iterator)
+                        try:
+                            _log_second = train_step(model, opt, train_path_iterator)
+                        except StopIteration:
+                            print("new epoch for path meta-query")
+                            train_path_iterator = train_path_tm.build_iterators(model,
+                                                                                batch_size=train_config['batch_size'])
+                            _log_second = train_step(model, opt, train_path_iterator)
+                    except StopIteration:
+                        print("new epoch for other meta-query")
+                        train_other_iterator =\
+                            train_other_tm.build_iterators(model, batch_size=train_config['batch_size'])
+                        _log_other = train_step(model, opt, train_other_iterator)
+                        try:
+                            _log_second = train_step(model, opt, train_path_iterator)
+                        except StopIteration:
+                            print("new epoch for path meta-query")
+                            train_path_iterator = train_path_tm.build_iterators(model,
+                                                                                batch_size=train_config['batch_size'])
+                            _log_second = train_step(model, opt, train_path_iterator)
+                for key in _log:
+                    _log[key] = (_log[key] + _log_other[key] + _log_second[key]) / 3
+                t.set_postfix(_log_second)
+                training_logs.append(_log_second)
                 _log['step'] = step
                 if step % train_config['log_every_steps'] == 0:
+                    for metric in training_logs[0].keys():
+                        _log[metric] = sum(log[metric] for log in training_logs) / len(training_logs)
+                    training_logs = []
                     writer.append_trace('train', _log)
 
             if step % train_config['evaluate_every_steps'] == 0 or step == train_config['evaluate_every_steps']:
                 if train_iterator:
+                    train_iterator = train_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
                     _log = eval_step(model, train_iterator, device, mode='train')
                     save_eval(_log, 'train', step, writer)
 
                 if valid_iterator:
+                    valid_iterator = valid_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
                     _log = eval_step(model, valid_iterator, device, mode='valid')
                     save_eval(_log, 'valid', step, writer)
 
                 if test_iterator:
+                    test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
                     _log = eval_step(model, test_iterator, device, mode='test')
                     save_eval(_log, 'test', step, writer)
 
-            if step % train_config['evaluate_every_steps'] == 0:
-                writer.save_model(model, step)
+            if step % train_config['save_every_steps'] == 0:
+                writer.save_model(model, opt, step, train_config['warm_up_steps'], lr)

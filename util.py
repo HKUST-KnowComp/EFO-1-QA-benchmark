@@ -122,10 +122,12 @@ class Writer:
         with open(join(self.case_dir, name), 'wt') as f:
             json.dump(obj, f)
 
-    def save_model(self, model: torch.nn.Module, step):
+    def save_model(self, model: torch.nn.Module, opt, step, warm_up_step, lr):
         print("saving model : ", step)
         device = model.device
-        torch.save(model.cpu().state_dict(), self.modelf(step))
+        save_data = {'model_parameter': model.cpu().state_dict(), 'optimizer_parameter': opt.state_dict(),
+                     'warm_up_steps': warm_up_step, 'learning_rate': lr}
+        torch.save(save_data, self.modelf(step))
         model.to(device)
 
     def save_plot(self, fig, name):

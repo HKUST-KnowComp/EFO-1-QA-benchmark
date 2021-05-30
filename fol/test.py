@@ -1,39 +1,33 @@
 import torch
-
+import torch.nn as nn
+import numpy as np
+import random
 batch = 2
 nega = 4
 dim = 2
 
+seed = 0
+torch.manual_seed(seed)
+torch.cuda.manual_seed(seed)
+np.random.seed(seed)
+random.seed(seed)
+
+
+torch.backends.cudnn.deterministic = True
 easy_ans = [[0], []]
 hard_ans = [[2, 3], [1]]
 
-a = torch.randn(batch, nega)
-sorted_a,  argsort = torch.sort(a, dim=1, descending=True)
-ranking = argsort.clone().to(torch.float)
-ranking = ranking.scatter_(
-                        1, argsort, torch.arange(nega).to(torch.float).repeat(argsort.shape[0], 1))
+a = nn.Parameter(torch.zeros(batch, dim))
+b = nn.Embedding(num_embeddings=batch, embedding_dim=dim)
+idx = torch.tensor(0)
+embed_range = 62/500
+nn.init.uniform_(tensor=a, a=-embed_range, b=embed_range)
+nn.init.uniform_(tensor=b.weight, a=-embed_range, b=embed_range)
 
-print(a)
-print(sorted_a, argsort)
-print(ranking)
 
-for i in range(ranking.shape[0]):
-    cur_ranking = ranking[i][easy_ans[i]+hard_ans[i]]
-    print(cur_ranking)
-    cur_ranking, indices = torch.sort(cur_ranking)
-    print(cur_ranking)
-    num_easy, num_hard = len(easy_ans[i]), len(hard_ans[i])
-    masks = indices >= num_easy
-    answer_list = torch.arange(
-        num_hard + num_easy).to(torch.float)
-    cur_ranking = cur_ranking - answer_list + 1  # filtered setting
-    print(cur_ranking)
-    # only take indices that belong to the hard answers
-    cur_ranking = cur_ranking[masks]
-    print(cur_ranking)
-    mrr = torch.mean(1. / cur_ranking).item()
-    h1 = torch.mean((cur_ranking <= 1).to(torch.float)).item()
-    h3 = torch.mean((cur_ranking <= 3).to(torch.float)).item()
-    h10 = torch.mean(
-        (cur_ranking <= 10).to(torch.float)).item()
+
+
+print(a[0])
+
+print(b(idx))
 
