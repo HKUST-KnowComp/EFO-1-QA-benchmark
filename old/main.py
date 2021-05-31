@@ -110,9 +110,9 @@ def parse_args(args=None):
                         type=int, help="how many entities we train")
     parser.add_argument('--number_of_queries', default=-1,
                         type=int, help="how many queries we use")
-    parser.add_argument('--test_tasks', default='3p.3i',
+    parser.add_argument('--test_tasks', default='1p.2p.3p.2i.3i.2in.3in.ip.pi.inp.pin.pni.2u.up',
                         type=str, help="tasks to be tested")
-    parser.add_argument('--train_tasks', default='1p.2i', type=str,
+    parser.add_argument('--train_tasks', default='1p.2p.2i', type=str,
                         help="tasks connected by dot, refer to the BetaE paper for detailed meaning and structure of each task")
     parser.add_argument('--seed', default=0, type=int, help="random seed")
     parser.add_argument('-betam', '--beta_mode', default="(1600,2)", type=str,
@@ -371,7 +371,6 @@ def main(args):
     else:
         writer = SummaryWriter(args.save_path)
     set_logger(args)
-
     with open('%s/stats.txt' % args.data_path) as f:
         entrel = f.readlines()
         nentity = int(entrel[0].split(' ')[-1])

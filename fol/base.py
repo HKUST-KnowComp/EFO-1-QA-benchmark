@@ -65,15 +65,17 @@ beta_query = {
     '3p': 'p(p(p(e)))',
     '2i': 'p(e)&p(e)',
     '3i': 'p(e)&p(e)&p(e)',
+    'ip': 'p(p(e)&p(e))',
+    'pi': 'p(p(e))&p(e)',
     '2in': 'p(e)-p(e)',
     '3in': 'p(e)&p(e)-p(e)',
     'inp': 'p(p(e)-p(e))',
-    'pni': 'p(e)-p(p(e))',
     'pin': 'p(p(e))-p(e)',
-    'ip': 'p(p(e)&p(e))',
-    'pi': 'p(p(e))&p(e)',
+    'pni': 'p(e)-p(p(e))',
     '2u': 'p(e)|p(e)',
-    'up': 'p(p(e)|p(e))'
+    'up': 'p(p(e)|p(e))',
+    '2u-DNF': 'p(e)|p(e)',
+    'up-DNF': 'p(p(e)|p(e))'
 }
 
 

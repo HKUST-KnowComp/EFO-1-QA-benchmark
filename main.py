@@ -145,7 +145,7 @@ def eval_step(model, eval_iterator, device, mode):
             for metric in logs[key].keys():
                 if metric != 'num_queries':
                     logs[key][metric] /= logs[key]['num_queries']
-        print(logs)
+    torch.cuda.empty_cache()
     return logs
 
 
@@ -179,14 +179,15 @@ def save_eval(log, mode, step, writer):
         writer.append_trace(f'eval_{mode}_{t}', logt) 
 
 
-def load_model(step, checkpoint_path):
+def load_model(step, checkpoint_path, model):
     print('Loading checkpoint %s...' % checkpoint_path)
     checkpoint = torch.load(os.path.join(
-        args.checkpoint_path, f'{step}.ckpt'))
+        checkpoint_path, f'{step}.ckpt'))
     model.load_state_dict(checkpoint['model_parameter'])
     opt.load_state_dict(checkpoint['optimizer_parameter'])
     learning_rate = checkpoint['learning_rate']
     warm_up_steps = checkpoint['warm_up_steps']
+    return learning_rate, warm_up_steps
 
 
 if __name__ == "__main__":
@@ -296,7 +297,7 @@ if __name__ == "__main__":
     # exit()
 
     if args.checkpoint_path is not None:
-        load_model(args.load_step, args.checkpoint_path)
+        lr, train_config['warm_up_steps'] = load_model(args.load_step, args.checkpoint_path, model)
         init_step = args.load_step
 
     training_logs = []
@@ -351,7 +352,7 @@ if __name__ == "__main__":
                     training_logs = []
                     writer.append_trace('train', _log)
 
-            if step % train_config['evaluate_every_steps'] == 0 or step == train_config['evaluate_every_steps']:
+            if step % train_config['evaluate_every_steps'] == 0 or step == train_config['steps']:
                 if train_iterator:
                     train_iterator = train_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
                     _log = eval_step(model, train_iterator, device, mode='train')
