@@ -148,10 +148,10 @@ def comparison(path, all_meta_formula):
 
 
 # print_loss(graph_path)
-#test_path = "../log/dev/default210519.21:59:524ac656b0/"
-#log_all_metrics(test_path, 450000, 'test')
+test_path = "../log/dev/default_1p2p2i210530.15:04:157b1c74b7/"
+log_all_metrics(test_path, 450000, 'test')
 # train_all, valid_all, test_all = read_beta_log('../download_log/full/')
-train_part, valid_part, test_part = read_beta_log('../download_log/1p.2p.2i/new/')
+#train_part, valid_part, test_part = read_beta_log('../download_log/1p.2p.2i/new/')
 
 
 #comparison('../download_log/1p.2p.2i/', ['1p', '2p', '2i'])

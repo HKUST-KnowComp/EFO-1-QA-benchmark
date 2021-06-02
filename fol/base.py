@@ -75,7 +75,9 @@ beta_query = {
     '2u': 'p(e)|p(e)',
     'up': 'p(p(e)|p(e))',
     '2u-DNF': 'p(e)|p(e)',
-    'up-DNF': 'p(p(e)|p(e))'
+    'up-DNF': 'p(p(e)|p(e))',
+    '2u-DM': 'p(e)|p(e)',
+    'up-DM': 'p(p(e)|p(e))'
 }
 
 
