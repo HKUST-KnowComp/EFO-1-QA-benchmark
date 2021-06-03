@@ -25,7 +25,8 @@ class Task:
         self.i = 0
         self.length = 0
         self._load()
-        self.idxlist = np.random.permutation(len(self))
+        # self.idxlist = np.random.permutation(len(self))
+        self.idxlist = np.arange(len(self))
 
     def to(self, device):
         self.query_instance.to(device)
@@ -59,7 +60,8 @@ class Task:
         return self.length
 
     def setup_iteration(self):
-        self.idxlist = np.random.permutation(len(self))
+        # self.idxlist = np.random.permutation(len(self))
+        self.idxlist = np.arange(len(self))
 
     def batch_estimation_iterator(self, estimator, batch_size):
         assert self.device == estimator.device

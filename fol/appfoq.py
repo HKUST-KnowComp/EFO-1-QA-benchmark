@@ -190,6 +190,8 @@ class BetaIntersection(nn.Module):
 
 
 class BetaEstimator(AppFOQEstimator):
+    name = "beta"
+
     def __init__(self, n_entity, n_relation, hidden_dim,
                  gamma, entity_dim, relation_dim, num_layers,
                  negative_sample_size, evaluate_union, device):
@@ -198,7 +200,10 @@ class BetaEstimator(AppFOQEstimator):
         self.n_entity = n_entity
         self.n_relation = n_relation
         self.hidden_dim = hidden_dim
-        self.gamma = gamma
+        self.gamma = nn.Parameter(
+            torch.Tensor([gamma]),
+            requires_grad=False
+        )
         self.epsilon = 2.0
         self.negative_size = negative_sample_size
         self.entity_dim, self.relation_dim = entity_dim, relation_dim
@@ -206,9 +211,12 @@ class BetaEstimator(AppFOQEstimator):
                                               embedding_dim=self.entity_dim * 2)
         self.relation_embeddings = nn.Embedding(num_embeddings=n_relation,
                                                 embedding_dim=self.relation_dim)
-        embedding_range = torch.tensor([(self.gamma + self.epsilon) / hidden_dim]).to(self.device)
-        nn.init.uniform_(tensor=self.entity_embeddings.weight, a=-embedding_range.item(), b=embedding_range.item())
-        nn.init.uniform_(tensor=self.relation_embeddings.weight, a=-embedding_range.item(), b=embedding_range.item())
+        self.embedding_range = nn.Parameter(
+            torch.Tensor([(self.gamma.item() + self.epsilon) / entity_dim]),
+            requires_grad=False
+        )
+        nn.init.uniform_(tensor=self.entity_embeddings.weight, a=-self.embedding_range.item(), b=self.embedding_range.item())
+        nn.init.uniform_(tensor=self.relation_embeddings.weight, a=-self.embedding_range.item(), b=self.embedding_range.item())
         self.entity_regularizer = Regularizer(1, 0.05, 1e9)  # todo: why add 1
         self.projection_regularizer = Regularizer(1, 0.05, 1e9)
         self.intersection_net = BetaIntersection(self.entity_dim)

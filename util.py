@@ -20,7 +20,7 @@ from data_helper import Task
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
- 
+
 def list2tuple(l):
     return tuple(list2tuple(x) if type(x) == list else x for x in l)
 
@@ -213,12 +213,6 @@ def load_task_manager(data_folder, mode, task_names=[]):
         for task_name in task_names:
             filename = os.path.join(data_folder, f'{mode}_{task_name}.csv')
             filenames.append(filename)
-    else:
-        for r, ds, fs in os.walk(data_folder):
-            for f in fs:
-                if mode in f and f.endswith('csv'):
-                    filename = os.path.join(r, f)
-                    filenames.append(filename)
 
     for filename in filenames:
         print(f'[data] load query from file {filename}')
