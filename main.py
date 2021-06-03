@@ -179,7 +179,19 @@ def save_eval(log, mode, step, writer):
         writer.append_trace(f'eval_{mode}_{t}', logt) 
 
 
-def load_model(step, checkpoint_path, model):
+def load_beta_model(checkpoint_path, model, optimizer):
+    print('Loading checkpoint %s...' % checkpoint_path)
+    checkpoint = torch.load(os.path.join(
+        args.checkpoint_path, 'checkpoint'))
+    init_step = checkpoint['step']
+    model.load_state_dict(checkpoint['model_state_dict'])
+    current_learning_rate = checkpoint['current_learning_rate']
+    warm_up_steps = checkpoint['warm_up_steps']
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    return current_learning_rate, warm_up_steps, init_step
+
+
+def load_model(step, checkpoint_path, model, opt):
     print('Loading checkpoint %s...' % checkpoint_path)
     checkpoint = torch.load(os.path.join(
         checkpoint_path, f'{step}.ckpt'))
@@ -297,8 +309,7 @@ if __name__ == "__main__":
     # exit()
 
     if args.checkpoint_path is not None:
-        lr, train_config['warm_up_steps'] = load_model(args.load_step, args.checkpoint_path, model)
-        init_step = args.load_step
+        lr, train_config['warm_up_steps'], init_step = load_beta_model(args.checkpoint_path, model, opt)
 
     training_logs = []
     with trange(init_step, train_config['steps']+1) as t:
