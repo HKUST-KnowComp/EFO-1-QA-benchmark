@@ -14,6 +14,7 @@ beta_valid_step = [15000*i for i in range(1, 21)] + [360000, 420000]
 step_dict = {i: beta_step[i] for i in range(len(beta_step))}
 inverse_step_dict = {beta_step[i]: i for i in range(len(beta_step))}
 
+
 def print_loss(path):
     data_file = os.path.join(path, 'train.csv')
     df = pd.read_csv(data_file)
@@ -29,7 +30,7 @@ def print_loss(path):
 def log_all_metrics(path, step, mode):
     log = collections.defaultdict(lambda: collections.defaultdict(float))
     for meta_formula in beta_query.values():
-        #if meta_formula != 'p(e)|p(e)' and meta_formula != 'p(p(e)|p(e))':
+        # if meta_formula != 'p(e)|p(e)' and meta_formula != 'p(p(e)|p(e))':
         foq_instance = parse_foq_formula(meta_formula)
         foq_formula = foq_instance.meta_formula
         data_file = os.path.join(path, f'eval_{mode}_{foq_formula}.csv')
@@ -94,7 +95,7 @@ def read_beta_log(path):
     return train_log, beta_valid, beta_test
 
 
-def plot_comparison(beta_log, my_log, all_formula, mode):
+def plot_comparison(beta_log, my_log, all_formula):
     # metric in ['MRR', 'HITS1', 'HITS3', 'HITS10']:
     for metric in ['MRR']:
         for meta_formula in all_formula:
@@ -102,36 +103,33 @@ def plot_comparison(beta_log, my_log, all_formula, mode):
             foq_formula = foq_instance.meta_formula
             beta_score = np.asarray(beta_log[foq_formula][metric])
             my_score = np.asarray(my_log[foq_formula][metric])
-            if mode == 'valid':
-                plt.plot(np.asarray(beta_valid_step), beta_score, color='red', label=f'{meta_formula}_beta')
-                plt.plot(np.asarray(beta_valid_step), my_score, linestyle=':', color='blue',
-                         label=f'{meta_formula}_ours')
-            else:
-                plt.plot(np.asarray(beta_step), beta_score, color='red', label=f'{meta_formula}_beta')
-                plt.plot(np.asarray(beta_step), my_score, linestyle=':', color='blue', label=f'{meta_formula}_ours')
+            n = len(my_score)
+            beta_plot_step = np.asarray(beta_step)[:n]
+            plt.plot(beta_plot_step, beta_score[:n], color='red', label=f'{meta_formula}_beta')
+            plt.plot(beta_plot_step, my_score, linestyle=':', color='blue', label=f'{meta_formula}_ours')
         plt.title(all_formula)
         plt.legend()
         plt.show()
 
 
-def comparison(path):
+def comparison(path, all_meta_formula):
     our_train = pd.read_csv(os.path.join(path, 'train.csv'))
     my_valid = collections.defaultdict(lambda: collections.defaultdict(list))
     my_test = collections.defaultdict(lambda: collections.defaultdict(list))
     beta_train, beta_valid, beta_test = read_beta_log(path)
     for mode in ['valid', 'test']:
-        for meta_formula in beta_query.values():
-            foq_instance = parse_foq_formula(meta_formula)
+        for meta_formula in all_meta_formula:
+            foq_instance = parse_foq_formula(beta_query[meta_formula])
             foq_formula = foq_instance.meta_formula
             df = pd.read_csv(os.path.join(path, f'eval_{mode}_{foq_formula}.csv'))
             for metric in df.columns:
                 if metric != 'step' and metric != 'num_queries':
-                    for i in range(len(beta_step)):
-                        if mode == 'test' or i != 22:
-                            eval(f'my_{mode}')[foq_formula][metric].append(df[metric][i])
-        plot_comparison(eval(f'beta_{mode}'), eval(f'my_{mode}'), ['1p', '2p', '3p'], mode)
-        plot_comparison(eval(f'beta_{mode}'), eval(f'my_{mode}'), ['2i', '3i'], mode)
-
+                    for i in range(len(df[metric])):
+                        eval(f'my_{mode}')[foq_formula][metric].append(df[metric][i])
+        # plot_comparison(eval(f'beta_{mode}'), eval(f'my_{mode}'), ['1p', '2p', '3p'], mode)
+        # plot_comparison(eval(f'beta_{mode}'), eval(f'my_{mode}'), ['2i', '3i'], mode)
+        plot_comparison(eval(f'beta_{mode}'), eval(f'my_{mode}'), ['1p', '2p', '2i'])
+        plot_comparison(eval(f'beta_{mode}'), eval(f'my_{mode}'), ['3p', '3i'])
 
 
 
@@ -150,8 +148,11 @@ def comparison(path):
 
 
 # print_loss(graph_path)
-test_path = 'log/dev/copy'
-# log_all_metrics(test_path, 120000, 'test')
-read_beta_log('../download_log/full/')
-comparison('../download_log/full/')
+test_path = "../log/dev/default_1p2p2i210530.15:04:157b1c74b7/"
+log_all_metrics(test_path, 450000, 'test')
+# train_all, valid_all, test_all = read_beta_log('../download_log/full/')
+#train_part, valid_part, test_part = read_beta_log('../download_log/1p.2p.2i/new/')
+
+
+#comparison('../download_log/1p.2p.2i/', ['1p', '2p', '2i'])
 

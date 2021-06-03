@@ -196,6 +196,7 @@ class BetaEstimator(AppFOQEstimator):
                  gamma, entity_dim, relation_dim, num_layers,
                  negative_sample_size, evaluate_union, device):
         super().__init__()
+        self.name = 'beta'
         self.device = device
         self.n_entity = n_entity
         self.n_relation = n_relation
@@ -342,6 +343,7 @@ def identity(x):
 class BoxEstimator(AppFOQEstimator):
     def __init__(self, n_entity, n_relation, gamma, entity_dim, offset_activation, center_reg, negative_size):
         super().__init__()
+        self.name = 'box'
         self.n_entity = n_entity
         self.n_relation = n_relation
         self.gamma = gamma
