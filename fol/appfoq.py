@@ -207,7 +207,7 @@ class BetaEstimator(AppFOQEstimator):
                                               embedding_dim=self.entity_dim * 2)
         self.relation_embeddings = nn.Embedding(num_embeddings=n_relation,
                                                 embedding_dim=self.relation_dim)
-        embedding_range = torch.tensor([(self.gamma + self.epsilon) / hidden_dim]).to(self.device)
+        embedding_range = torch.tensor([(self.gamma + self.epsilon) / entity_dim]).to(self.device)
         nn.init.uniform_(tensor=self.entity_embeddings.weight, a=-embedding_range.item(), b=embedding_range.item())
         nn.init.uniform_(tensor=self.relation_embeddings.weight, a=-embedding_range.item(), b=embedding_range.item())
         self.entity_regularizer = Regularizer(1, 0.05, 1e9)  # todo: why add 1
@@ -246,7 +246,7 @@ class BetaEstimator(AppFOQEstimator):
 
     def get_difference_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):  # a-b = a and(-b)
         r_neg_emb = 1. / remb
-        return self.get_disjunction_embedding(lemb, r_neg_emb)
+        return self.get_conjunction_embedding(lemb, r_neg_emb)
 
     def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]):
         assert pred_emb.shape[0] == len(answer_set)

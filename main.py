@@ -17,9 +17,9 @@ from util import (Writer, load_graph, load_task_manager, read_from_yaml,
                   read_indexing, set_global_seed)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', default='config/default.yaml', type=str)
+parser.add_argument('--config', default='config/default-tiny.yaml', type=str)
 parser.add_argument('--prefix', default='dev', type=str)
-parser.add_argument('--checkpoint_path', default=None, type=str)
+parser.add_argument('--checkpoint_path', default='load/', type=str)
 parser.add_argument('--load_step', default=0, type=int)
 
 # from torch.utils.tensorboard import SummaryWriter
@@ -56,18 +56,14 @@ parser.add_argument('--load_step', default=0, type=int)
 
 
 def train_step(model, opt, iterator):
-    # list of tuple, [0] is query, [1] ans, [2] beta_name
     opt.zero_grad()
     data = next(iterator)
-    positive_logit_list, negative_logit_list, subsampling_weight_list = [], [], []
+    emb_list, answer_list = [], []
     for key in data:
-        positive_logit, negative_logit, subsampling_weight = model.criterion(data[key]['emb'], data[key]['answer_set'])
-        positive_logit_list.append(positive_logit)
-        negative_logit_list.append(negative_logit)
-        subsampling_weight_list.append(subsampling_weight)
-    all_positive_logit = torch.cat(positive_logit_list, dim=0)
-    all_negative_logit = torch.cat(negative_logit_list, dim=0)
-    all_subsampling_weight = torch.cat(subsampling_weight_list, dim=0)
+        emb_list.append(data[key]['emd'])
+        answer_list.extend(data[key]['answer_set'])
+    all_embedding = torch.cat(emb_list, dim=0)
+    all_positive_logit, all_negative_logit , all_subsampling_weight = model.criterion(all_embedding, answer_list)
     positive_loss, negative_loss = compute_final_loss(all_positive_logit, all_negative_logit, all_subsampling_weight)
     loss = (positive_loss + negative_loss)/2
     loss.backward()
