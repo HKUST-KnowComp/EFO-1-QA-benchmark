@@ -17,9 +17,9 @@ from util import (Writer, load_graph, load_task_manager, read_from_yaml,
                   read_indexing, set_global_seed)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', default='config/default-tiny.yaml', type=str)
+parser.add_argument('--config', default='config/default_1p2i.yaml', type=str)
 parser.add_argument('--prefix', default='dev', type=str)
-parser.add_argument('--checkpoint_path', default='load/', type=str)
+parser.add_argument('--checkpoint_path', default=None, type=str)
 parser.add_argument('--load_step', default=0, type=int)
 
 # from torch.utils.tensorboard import SummaryWriter
@@ -28,7 +28,7 @@ parser.add_argument('--load_step', default=0, type=int)
 #     # list of tuple, [0] is query, [1] ans, [2] beta_name
 #     batch_flattened_query = next(iterator)
 #     all_loss = torch.tensor(0, dtype=torch.float)
-#     opt.zero_grad()  # TODO: parallelize query
+#     opt.zero_grad()
 #     # A dict with key of beta_name, value= list of queries
 #     query_dict = collections.defaultdict(list)
 #     ans_dict = collections.defaultdict(list)
@@ -60,10 +60,10 @@ def train_step(model, opt, iterator):
     data = next(iterator)
     emb_list, answer_list = [], []
     for key in data:
-        emb_list.append(data[key]['emd'])
+        emb_list.append(data[key]['emb'])
         answer_list.extend(data[key]['answer_set'])
     all_embedding = torch.cat(emb_list, dim=0)
-    all_positive_logit, all_negative_logit , all_subsampling_weight = model.criterion(all_embedding, answer_list)
+    all_positive_logit, all_negative_logit, all_subsampling_weight = model.criterion(all_embedding, answer_list)
     positive_loss, negative_loss = compute_final_loss(all_positive_logit, all_negative_logit, all_subsampling_weight)
     loss = (positive_loss + negative_loss)/2
     loss.backward()
