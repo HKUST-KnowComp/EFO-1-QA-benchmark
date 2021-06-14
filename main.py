@@ -19,7 +19,7 @@ from util import (Writer, load_graph, load_task_manager, read_from_yaml,
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', default='config/minimal_test.yaml', type=str)
 parser.add_argument('--prefix', default='dev', type=str)
-parser.add_argument('--checkpoint_path', default=None, type=str)
+parser.add_argument('--checkpoint_path', default='../KGReasoning/logs/FB15k-237-betae/1p.2in/beta/g-60.0-mode-(1600,2)/2021.06.03-23:00:40', type=str)
 parser.add_argument('--load_step', default=0, type=int)
 
 # from torch.utils.tensorboard import SummaryWriter
@@ -304,7 +304,8 @@ if __name__ == "__main__":
         test_tm = None
 
     lr = train_config['learning_rate']
-    opt = torch.optim.Adam(model.parameters(), lr=lr)
+    opt = torch.optim.Adam(
+        filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
     init_step = 1
     # exit()
 
