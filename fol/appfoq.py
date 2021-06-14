@@ -212,13 +212,10 @@ class BetaEstimator(AppFOQEstimator):
                                               embedding_dim=self.entity_dim * 2)
         self.relation_embeddings = nn.Embedding(num_embeddings=n_relation,
                                                 embedding_dim=self.relation_dim)
-        self.embedding_range = nn.Parameter(
-            torch.Tensor([(self.gamma.item() + self.epsilon) / entity_dim]),
-            requires_grad=False
-        )
-        nn.init.uniform_(tensor=self.entity_embeddings.weight, a=-self.embedding_range.item(), b=self.embedding_range.item())
-        nn.init.uniform_(tensor=self.relation_embeddings.weight, a=-self.embedding_range.item(), b=self.embedding_range.item())
-        self.entity_regularizer = Regularizer(1, 0.05, 1e9)  # todo: why add 1
+        embedding_range = torch.tensor([(self.gamma + self.epsilon) / entity_dim]).to(self.device)
+        nn.init.uniform_(tensor=self.entity_embeddings.weight, a=-embedding_range.item(), b=embedding_range.item())
+        nn.init.uniform_(tensor=self.relation_embeddings.weight, a=-embedding_range.item(), b=embedding_range.item())
+        self.entity_regularizer = Regularizer(1, 0.05, 1e9)
         self.projection_regularizer = Regularizer(1, 0.05, 1e9)
         self.intersection_net = BetaIntersection(self.entity_dim)
         self.projection_net = BetaProjection(self.entity_dim * 2,
@@ -228,12 +225,12 @@ class BetaEstimator(AppFOQEstimator):
                                              num_layers)
 
     def get_entity_embedding(self, entity_ids: torch.LongTensor):
-        emb = self.entity_embeddings(entity_ids.to(self.device))
+        emb = self.entity_embeddings(entity_ids)
         return self.entity_regularizer(emb)
 
     def get_projection_embedding(self, proj_ids: torch.LongTensor, emb):
         assert emb.shape[0] == len(proj_ids)
-        rel_emb = self.relation_embeddings(proj_ids.to(self.device))
+        rel_emb = self.relation_embeddings(proj_ids)
         pro_emb = self.projection_net(emb, rel_emb)
         return pro_emb
 
@@ -254,7 +251,7 @@ class BetaEstimator(AppFOQEstimator):
 
     def get_difference_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):  # a-b = a and(-b)
         r_neg_emb = 1. / remb
-        return self.get_disjunction_embedding(lemb, r_neg_emb)
+        return self.get_conjunction_embedding(lemb, r_neg_emb)
 
     def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]):
         assert pred_emb.shape[0] == len(answer_set)
@@ -265,13 +262,10 @@ class BetaEstimator(AppFOQEstimator):
         answer_embedding = self.get_entity_embedding(
             torch.tensor(chosen_ans, device=self.device)).squeeze()
         positive_logit = self.compute_logit(answer_embedding, query_dist)
-        negative_embedding_list = []
-        for i in range(len(chosen_false_ans)):  # todo: is there a way to parallelize
-            neg_embedding = self.get_entity_embedding(torch.tensor(chosen_false_ans[i], device=self.device))  # n*dim
-            negative_embedding_list.append(neg_embedding)
-        all_negative_embedding = torch.stack(negative_embedding_list, dim=0)  # batch*negative*dim
+        all_neg_emb = self.get_entity_embedding(torch.tensor(chosen_false_ans, device=self.device).view(-1))
+        all_neg_emb = all_neg_emb.view(-1, self.negative_size, 2*self.entity_dim)  # batch*negative*dim
         query_dist_unsqueezed = torch.distributions.beta.Beta(alpha_embedding.unsqueeze(1), beta_embedding.unsqueeze(1))
-        negative_logit = self.compute_logit(all_negative_embedding, query_dist_unsqueezed)  # b*negative
+        negative_logit = self.compute_logit(all_neg_emb, query_dist_unsqueezed)  # b*negative
         return positive_logit, negative_logit, subsampling_weight.to(self.device)
 
     def compute_logit(self, entity_emb, query_dist):

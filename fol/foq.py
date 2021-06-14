@@ -44,7 +44,6 @@ class FirstOrderQuery(ABC):
         # self.answer_set = {} # this is the answer set for answering deterministic
         pass
 
-
     @property
     @abstractmethod
     def ground_formula(self) -> str:
@@ -144,7 +143,8 @@ class VariableQ(FirstOrderQuery):
                 f"formula {foq_formula} is not in the same equivalence meta query class {self.meta_formula}")
 
     def embedding_estimation(self, estimator: AppFOQEstimator, batch_indices=None):
-        if self.tentities is None: self.tentities = torch.tensor(self.entities)
+        if self.tentities is None:
+            self.tentities = torch.tensor(self.entities).to(self.device)
         if batch_indices:
             ent = self.tentities[torch.tensor(batch_indices)]
         else:
@@ -194,7 +194,8 @@ class VariableQ(FirstOrderQuery):
 
     def to(self, device):
         self.device = device
-        if self.tentities is None: self.tentities = torch.tensor(self.entities)
+        if self.tentities is None:
+            self.tentities = torch.tensor(self.entities).to(device)
         print(f'move variable object in {id(self)} to device {device}')
 
 
@@ -236,7 +237,8 @@ class ProjectionQ(FirstOrderQuery):
                 f"formula {foq_formula} is not in the same equivalence meta query class {self.meta_formula}")
 
     def embedding_estimation(self, estimator: AppFOQEstimator, batch_indices=None):
-        if self.trelations is None: self.trelations = torch.tensor(self.relations)
+        if self.trelations is None:
+            self.trelations = torch.tensor(self.relations).to(self.device)
         if batch_indices:
             rel = self.trelations[torch.tensor(batch_indices)]
         else:
@@ -335,7 +337,8 @@ class ProjectionQ(FirstOrderQuery):
 
     def to(self, device):
         self.device = device
-        if self.trelations is None: self.trelations = torch.tensor(self.relations)
+        if self.trelations is None:
+            self.trelations = torch.tensor(self.relations).to(device)
         print(f'move projection object in {id(self)} to device {device}')
         self.operand_q.to(device)
 
@@ -672,10 +675,10 @@ def gen_foq_meta_formula(depth=0, max_depth=3, early_terminate=False):
 
     t = random.randint(0, 3)
     if t == 0:
-        return f"p({gen_foq_meta_formula(depth+1, max_depth, early_terminate)})"
+        return f"p({gen_foq_meta_formula(depth + 1, max_depth, early_terminate)})"
     elif t == 1:
-        return f"({gen_foq_meta_formula(depth+1, max_depth, et1)})&({gen_foq_meta_formula(depth+1, max_depth, et2)})"
+        return f"({gen_foq_meta_formula(depth + 1, max_depth, et1)})&({gen_foq_meta_formula(depth + 1, max_depth, et2)})"
     elif t == 2:
-        return f"({gen_foq_meta_formula(depth+1, max_depth, et1)})|({gen_foq_meta_formula(depth+1, max_depth, et2)})"
+        return f"({gen_foq_meta_formula(depth + 1, max_depth, et1)})|({gen_foq_meta_formula(depth + 1, max_depth, et2)})"
     elif t == 3:
-        return f"({gen_foq_meta_formula(depth+1, max_depth, et1)})-({gen_foq_meta_formula(depth+1, max_depth, et2)})"
+        return f"({gen_foq_meta_formula(depth + 1, max_depth, et1)})-({gen_foq_meta_formula(depth + 1, max_depth, et2)})"

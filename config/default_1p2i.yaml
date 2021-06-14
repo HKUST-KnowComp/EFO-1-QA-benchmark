@@ -1,6 +1,6 @@
 action: ['train','valid','test']  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: 2
+cuda: 1
 data:
   type: beta
   data_folder: data/FB15k-237-betae
@@ -17,7 +17,6 @@ train:
   checkpoint_every: 10000
   meta_queries:
      - 1p
-     - 2p
      - 2i
 evaluate:  # only used when valid/test in action
   batch_size: 1000
