@@ -17,9 +17,9 @@ from util import (Writer, load_graph, load_task_manager, read_from_yaml,
                   read_indexing, set_global_seed)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', default='config/default_1p2i.yaml', type=str)
+parser.add_argument('--config', default='config/default.yaml', type=str)
 parser.add_argument('--prefix', default='dev', type=str)
-parser.add_argument('--checkpoint_path', default='../KGReasoning/logs/FB15k-237-betae/1p.2in/beta/g-60.0-mode-(1600,2)/2021.06.03-23:00:40', type=str)
+parser.add_argument('--checkpoint_path', default=None, type=str)
 parser.add_argument('--load_step', default=0, type=int)
 
 # from torch.utils.tensorboard import SummaryWriter

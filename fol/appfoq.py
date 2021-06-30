@@ -51,6 +51,19 @@ def negative_sampling(answer_set: List[IntList], negative_size: int, entity_num:
     return all_chosen_ans, all_chosen_false_ans, subsampling_weight
 
 
+def inclusion_sampling(answer_set: List[IntList], negative_size: int, entity_num: int, k=1, base_num=4):
+    all_chosen_ans = []
+    all_chosen_false_ans = []
+    subsampling_weight = torch.zeros(len(answer_set))
+    for i in range(len(answer_set)):
+        all_chosen_ans.append(random.choices(answer_set[i], k=k))
+        subsampling_weight[i] = len(answer_set[i]) + base_num
+        negative_sample = np.random.randint(entity_num, size=negative_size)
+        all_chosen_false_ans.append(negative_sample)
+    subsampling_weight = torch.sqrt(1 / subsampling_weight)
+    return all_chosen_ans, all_chosen_false_ans, subsampling_weight
+
+
 def compute_final_loss(positive_logit, negative_logit, subsampling_weight):
     positive_score = F.logsigmoid(positive_logit)
     negative_score = F.logsigmoid(-negative_logit)
@@ -258,7 +271,7 @@ class BetaEstimator(AppFOQEstimator):
         alpha_embedding, beta_embedding = torch.chunk(pred_emb, 2, dim=-1)
         query_dist = torch.distributions.beta.Beta(alpha_embedding, beta_embedding)
         chosen_ans, chosen_false_ans, subsampling_weight = \
-            negative_sampling(answer_set, negative_size=self.negative_size, entity_num=self.n_entity)
+            inclusion_sampling(answer_set, negative_size=self.negative_size, entity_num=self.n_entity)
         answer_embedding = self.get_entity_embedding(
             torch.tensor(chosen_ans, device=self.device)).squeeze()
         positive_logit = self.compute_logit(answer_embedding, query_dist)
