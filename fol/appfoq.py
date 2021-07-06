@@ -271,7 +271,7 @@ class BetaEstimator(AppFOQEstimator):
         alpha_embedding, beta_embedding = torch.chunk(pred_emb, 2, dim=-1)
         query_dist = torch.distributions.beta.Beta(alpha_embedding, beta_embedding)
         chosen_ans, chosen_false_ans, subsampling_weight = \
-            inclusion_sampling(answer_set, negative_size=self.negative_size, entity_num=self.n_entity)
+            inclusion_sampling(answer_set, negative_size=self.negative_size, entity_num=self.n_entity)  #todo: negative
         answer_embedding = self.get_entity_embedding(
             torch.tensor(chosen_ans, device=self.device)).squeeze()
         positive_logit = self.compute_logit(answer_embedding, query_dist)
@@ -647,12 +647,9 @@ class LogicEstimator(AppFOQEstimator):
         answer_embedding = self.get_entity_embedding(
             torch.tensor(chosen_ans, device=self.device)).squeeze()
         positive_logit = self.compute_logit(answer_embedding, pred_emb)
-        negative_embedding_list = []
-        for i in range(len(chosen_false_ans)):  # todo: is there a way to parallelize
-            neg_embedding = self.get_entity_embedding(torch.tensor(chosen_false_ans[i], device=self.device))  # n*dim
-            negative_embedding_list.append(neg_embedding)
-        all_negative_embedding = torch.stack(negative_embedding_list, dim=0)  # batch*negative*dim
-        negative_logit = self.compute_logit(all_negative_embedding, pred_emb.unsqueeze(dim=1))  # b*negative
+        neg_embedding = self.get_entity_embedding(torch.tensor(chosen_false_ans, device=self.device).view(-1))  # n*dim
+        neg_embedding = neg_embedding.view(-1, self.negative_size, 2*self.entity_dim)  # batch*negative*dim
+        negative_logit = self.compute_logit(neg_embedding, pred_emb.unsqueeze(dim=1))  # b*negative
         return positive_logit, negative_logit, subsampling_weight.to(self.device)
 
     def compute_logit(self, entity_embedding, query_embedding):
@@ -691,22 +688,46 @@ class LogicEstimator(AppFOQEstimator):
 
 
 class CQDEstimator(AppFOQEstimator):
-    def __init__(self, n_entity, n_relation, hidden_dim,
-                 gamma, entity_dim, relation_dim, num_layers,
-                 negative_sample_size, device, evaluate_union):
+    def __init__(self, n_entity, n_relation, gamma, entity_dim, relation_dim, device, norm_type):
         super().__init__()
         self.device = device
         self.n_entity = n_entity
         self.n_relation = n_relation
-        self.hidden_dim = hidden_dim
         self.gamma = gamma
         self.epsilon = 2.0
-        self.negative_size = negative_sample_size
+        self.norm_type = norm_type
         self.entity_dim, self.relation_dim = entity_dim, relation_dim
         self.relation_embeddings = nn.Embedding(num_embeddings=n_relation,
                                                 embedding_dim=self.relation_dim)
         embedding_range = torch.tensor([(self.gamma + self.epsilon) / hidden_dim]).to(self.device)
         nn.init.uniform_(tensor=self.relation_embeddings.weight, a=-embedding_range.item(), b=embedding_range.item())
+
+    def get_entity_embedding(self, entity_ids: torch.Tensor):
+        pass
+
+    def get_projection_embedding(self, proj_ids: torch.Tensor, emb):
+        pass
+
+    def get_conjunction_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
+
+        if self.norm_type == 'min':
+            emb = torch.min(torch.cat([lemb, remb]), dim=-1)
+        elif self.norm_type == 'prod':
+            emb = torch.prod(torch.cat(lemb, remb), dim=-1)
+        else:
+            raise ValueError(f't_norm must be "min" or "prod", got {self.norm_type}')
+        return emb
+
+    def get_disjunction_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
+        if self.norm_type == 'min':
+            emb = torch.max(torch.cat(lemb, remb), dim=-1)
+        elif self.norm_type == 'prod':
+            emb = torch.sum(torch.concat(lemb, remb), dim=-1) - torch.prod()
+        else:
+            raise ValueError(f't_norm must be "min" or "prod", got {self.norm_type}')
+        return emb
+
+
 
 
 
