@@ -39,7 +39,7 @@ def log_all_metrics(path, step, mode, averaged_meta_formula=beta_query.values())
         step_range = np.asarray(df['step'])
         step_index = np.where(step_range == step)[0]
         for metric in df.columns:
-            if metric != 'step' and metric != 'num_queries':
+            if metric != 'step':
                 log[metric][foq_formula] = df[metric][step_index].values[0]
     averaged_metric = {}
     averaged_my_formula = [parse_foq_formula(formula).meta_formula for formula in averaged_meta_formula]
@@ -168,12 +168,12 @@ def comparison(path, all_meta_formula):
 
 # print_loss(graph_path)
 beta_except_3i = [beta_query[formula] for formula in beta_query.keys() if formula != '3i' and formula != '3in']
-test_step = 45000
-test_path = "../log/dev/default_except3i210706.11:07:0086b2bdb6/"
-# test_path = "/home/hyin/DiscreteMeasureReasoning/log/dev/default_1p2i210705.14:44:149b72aa8a/"
-log_all_metrics(test_path, test_step, 'valid', beta_except_3i)
+test_step = 300000
+test_path = "/home/hyin/DiscreteMeasureReasoning/log/dev/default_except3i210706.11:07:0086b2bdb6/"
+# test_path = "/home/hyin/DiscreteMeasureReasoning/log/dev/default210705.14:43:26fba267b0/"
+log_all_metrics(test_path, test_step, 'test', beta_except_3i)
 # train_all, valid_all, test_all = read_beta_log('../download_log/full/')
-train_part, valid_part, test_part = read_beta_log(test_path, 'valid', test_step, beta_except_3i)
+train_part, valid_part, test_part = read_beta_log(test_path, 'test', test_step, beta_except_3i)
 
 
 #comparison('../download_log/1p.2p.2i/', ['1p', '2p', '2i'])
