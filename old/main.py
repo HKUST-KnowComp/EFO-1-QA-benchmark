@@ -83,14 +83,14 @@ def parse_args(args=None):
                         type=int, help="used to speed up torch.dataloader")
     parser.add_argument('-save', '--save_path', default=None, type=str,
                         help="no need to set manually, will configure automatically")
-    parser.add_argument('--max_steps', default=100000,
+    parser.add_argument('--max_steps', default=450001,
                         type=int, help="maximum iterations to train")
     parser.add_argument('--warm_up_steps', default=None, type=int,
                         help="no need to set manually, will configure automatically")
 
     parser.add_argument('--save_checkpoint_steps', default=50000,
                         type=int, help="save checkpoints every xx steps")
-    parser.add_argument('--valid_steps', default=30000, type=int,
+    parser.add_argument('--valid_steps', default=15000, type=int,
                         help="evaluate validation queries every xx steps")
     parser.add_argument('--log_steps', default=100, type=int,
                         help='train log every xx steps')
@@ -112,7 +112,7 @@ def parse_args(args=None):
                         type=int, help="how many queries we use")
     parser.add_argument('--test_tasks', default='1p.2p.3p.2i.3i.2in.3in.ip.pi.inp.pin.pni.2u.up',
                         type=str, help="tasks to be tested")
-    parser.add_argument('--train_tasks', default='1p.2p.2i', type=str,
+    parser.add_argument('--train_tasks', default='1p.2p.3p.2i.3i.2in.3in.inp.pin.pni', type=str,
                         help="tasks connected by dot, refer to the BetaE paper for detailed meaning and structure of each task")
     parser.add_argument('--seed', default=0, type=int, help="random seed")
     parser.add_argument('-betam', '--beta_mode', default="(1600,2)", type=str,

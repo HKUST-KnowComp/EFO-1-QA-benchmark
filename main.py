@@ -17,9 +17,9 @@ from util import (Writer, load_graph, load_task_manager, read_from_yaml,
                   read_indexing, set_global_seed)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', default='config/default_1p2i.yaml', type=str)
-parser.add_argument('--prefix', default='dev', type=str)
-parser.add_argument('--checkpoint_path', default='../KGReasoning/logs/FB15k-237-betae/1p.2in/beta/g-60.0-mode-(1600,2)/2021.06.03-23:00:40', type=str)
+parser.add_argument('--config', default='config/Logic.yaml', type=str)
+parser.add_argument('--prefix', default='test', type=str)
+parser.add_argument('--checkpoint_path', default=None, type=str)
 parser.add_argument('--load_step', default=0, type=int)
 
 # from torch.utils.tensorboard import SummaryWriter
@@ -74,11 +74,11 @@ def train_step(model, opt, iterator):
         'loss': loss.item()
     }
     if model.name == 'logic':
-        entity_embedding = model._parameters['entity_embeddings'].data
+        entity_embedding = model.entity_embeddings.weight.data
         if model.bounded:
-            model._parameters['entity_embeddings'].data = order_bounds(entity_embedding)
+            model.entity_embeddings.weight.data = order_bounds(entity_embedding)
         else:
-            model._parameters['entity_embeddings'].data = torch.clamp(entity_embedding, 0, 1)
+            model.entity_embeddings.weight.data = torch.clamp(entity_embedding, 0, 1)
     return log
 
 

@@ -136,9 +136,10 @@ if __name__ == "__main__":
                                                          reverse_projection_valid)
     import pandas as pd
     answer_none = collections.defaultdict(set)
+    store_path = '../data/FB15k-237-betae'
     store_query_with_check(train_queries, answer_none, train_answers,
-                           '../transformed_data/FB15k-237-betae/', projection_none, projection_train, mode='train')
+                           store_path, projection_none, projection_train, mode='train')
     store_query_with_check(valid_queries, valid_easy_ans, valid_hard_ans,
-                           '../transformed_data/FB15k-237-betae/', projection_train, projection_valid, mode='valid')
+                           store_path, projection_train, projection_valid, mode='valid')
     store_query_with_check(test_queries, test_easy_ans, test_hard_ans,
-                           '../transformed_data/FB15k-237-betae/', projection_valid, projection_test, mode='test')
+                           store_path, projection_valid, projection_test, mode='test')

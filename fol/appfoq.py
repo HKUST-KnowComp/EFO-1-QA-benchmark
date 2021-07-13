@@ -51,6 +51,19 @@ def negative_sampling(answer_set: List[IntList], negative_size: int, entity_num:
     return all_chosen_ans, all_chosen_false_ans, subsampling_weight
 
 
+def inclusion_sampling(answer_set: List[IntList], negative_size: int, entity_num: int, k=1, base_num=4):
+    all_chosen_ans = []
+    all_chosen_false_ans = []
+    subsampling_weight = torch.zeros(len(answer_set))
+    for i in range(len(answer_set)):
+        all_chosen_ans.append(random.choices(answer_set[i], k=k))
+        subsampling_weight[i] = len(answer_set[i]) + base_num
+        negative_sample = np.random.randint(entity_num, size=negative_size)
+        all_chosen_false_ans.append(negative_sample)
+    subsampling_weight = torch.sqrt(1 / subsampling_weight)
+    return all_chosen_ans, all_chosen_false_ans, subsampling_weight
+
+
 def compute_final_loss(positive_logit, negative_logit, subsampling_weight):
     positive_score = F.logsigmoid(positive_logit)
     negative_score = F.logsigmoid(-negative_logit)
@@ -258,12 +271,12 @@ class BetaEstimator(AppFOQEstimator):
         alpha_embedding, beta_embedding = torch.chunk(pred_emb, 2, dim=-1)
         query_dist = torch.distributions.beta.Beta(alpha_embedding, beta_embedding)
         chosen_ans, chosen_false_ans, subsampling_weight = \
-            negative_sampling(answer_set, negative_size=self.negative_size, entity_num=self.n_entity)
+            inclusion_sampling(answer_set, negative_size=self.negative_size, entity_num=self.n_entity)  # todo: negative
         answer_embedding = self.get_entity_embedding(
             torch.tensor(chosen_ans, device=self.device)).squeeze()
         positive_logit = self.compute_logit(answer_embedding, query_dist)
         all_neg_emb = self.get_entity_embedding(torch.tensor(chosen_false_ans, device=self.device).view(-1))
-        all_neg_emb = all_neg_emb.view(-1, self.negative_size, 2*self.entity_dim)  # batch*negative*dim
+        all_neg_emb = all_neg_emb.view(-1, self.negative_size, 2 * self.entity_dim)  # batch*negative*dim
         query_dist_unsqueezed = torch.distributions.beta.Beta(alpha_embedding.unsqueeze(1), beta_embedding.unsqueeze(1))
         negative_logit = self.compute_logit(all_neg_emb, query_dist_unsqueezed)  # b*negative
         return positive_logit, negative_logit, subsampling_weight.to(self.device)
@@ -594,12 +607,12 @@ class LogicEstimator(AppFOQEstimator):
         self.projection_net = LogicProjection(self.entity_dim * 2, self.relation_dim, hidden_dim, num_layers, bounded)
 
     def get_entity_embedding(self, entity_ids: torch.Tensor):
-        emb = self.entity_embeddings(entity_ids.to(self.device))
+        emb = self.entity_embeddings(entity_ids)
         return emb
 
     def get_projection_embedding(self, proj_ids: torch.Tensor, emb):
         assert emb.shape[0] == len(proj_ids)
-        rel_emb = self.relation_embeddings(proj_ids.to(self.device))
+        rel_emb = self.relation_embeddings(proj_ids)
         pro_emb = self.projection_net(emb, rel_emb)
         return pro_emb
 
@@ -634,12 +647,9 @@ class LogicEstimator(AppFOQEstimator):
         answer_embedding = self.get_entity_embedding(
             torch.tensor(chosen_ans, device=self.device)).squeeze()
         positive_logit = self.compute_logit(answer_embedding, pred_emb)
-        negative_embedding_list = []
-        for i in range(len(chosen_false_ans)):  # todo: is there a way to parallelize
-            neg_embedding = self.get_entity_embedding(torch.tensor(chosen_false_ans[i], device=self.device))  # n*dim
-            negative_embedding_list.append(neg_embedding)
-        all_negative_embedding = torch.stack(negative_embedding_list, dim=0)  # batch*negative*dim
-        negative_logit = self.compute_logit(all_negative_embedding, pred_emb.unsqueeze(dim=1))  # b*negative
+        neg_embedding = self.get_entity_embedding(torch.tensor(chosen_false_ans, device=self.device).view(-1))  # n*dim
+        neg_embedding = neg_embedding.view(-1, self.negative_size, 2 * self.entity_dim)  # batch*negative*dim
+        negative_logit = self.compute_logit(neg_embedding, pred_emb.unsqueeze(dim=1))  # b*negative
         return positive_logit, negative_logit, subsampling_weight.to(self.device)
 
     def compute_logit(self, entity_embedding, query_embedding):
@@ -678,28 +688,62 @@ class LogicEstimator(AppFOQEstimator):
 
 
 class CQDEstimator(AppFOQEstimator):
-    def __init__(self, n_entity, n_relation, hidden_dim,
-                 gamma, entity_dim, relation_dim, num_layers,
-                 negative_sample_size, device, evaluate_union):
+    def __init__(self, n_entity, n_relation, gamma, entity_dim, relation_dim, device,
+                 norm_type, regulariser, init_size):
         super().__init__()
         self.device = device
         self.n_entity = n_entity
         self.n_relation = n_relation
-        self.hidden_dim = hidden_dim
         self.gamma = gamma
         self.epsilon = 2.0
-        self.negative_size = negative_sample_size
+        self.norm_type = norm_type
         self.entity_dim, self.relation_dim = entity_dim, relation_dim
-        self.relation_embeddings = nn.Embedding(num_embeddings=n_relation,
-                                                embedding_dim=self.relation_dim)
-        embedding_range = torch.tensor([(self.gamma + self.epsilon) / hidden_dim]).to(self.device)
-        nn.init.uniform_(tensor=self.relation_embeddings.weight, a=-embedding_range.item(), b=embedding_range.item())
+        self.init_size = init_size
+        self.entity_embeddings = nn.Embedding(num_embeddings=n_relation, embedding_dim=2 * self.entity_dim, sparse=True)
+        self.relation_embeddings = nn.Embedding(num_embeddings=n_relation, embedding_dim=2 * self.relation_dim,
+                                                sparse=True)
+        self.entity_embeddings.weight.data *= init_size
+        self.relation_embeddings.weight.data *= init_size
 
+    def get_entity_embedding(self, entity_ids: torch.Tensor):
+        return self.entity_embeddings[entity_ids]
 
+    def get_projection_embedding(self, proj_ids: torch.Tensor, emb):
+        real_rel, imagine_rel = torch.chunk(self.relation_embeddings(proj_ids), 2, dim=-1)
+        real_emb, imagine_emb = torch.chunk(emb, 2, dim=-1)
+        real_query = real_emb * real_rel - imagine_emb * imagine_rel
+        imagine_query = real_emb * imagine_rel + real_rel * imagine_emb
+        return torch.cat([real_query, imagine_query], dim=-1)
 
+    def get_conjunction_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
+        if self.norm_type == 'min':
+            emb = torch.min(torch.cat([lemb, remb]), dim=-1)
+        elif self.norm_type == 'prod':
+            emb = torch.prod(torch.cat(lemb, remb), dim=-1)
+        else:
+            raise ValueError(f't_norm must be "min" or "prod", got {self.norm_type}')
+        return emb
 
+    def get_disjunction_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
+        if self.norm_type == 'min':
+            emb = torch.max(torch.cat(lemb, remb), dim=-1)
+        elif self.norm_type == 'prod':
+            emb = torch.sum(torch.concat(lemb, remb), dim=-1) - torch.prod()
+        else:
+            raise ValueError(f't_norm must be "min" or "prod", got {self.norm_type}')
+        return emb
 
-
-
-
+    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]):
+        real_allentity, imagine_allentity = torch.chunk(self.entity_embeddings.weight, 2, dim=-1)
+        real_pred, imagine_pred = torch.chunk(pred_emb, 2, dim=-1)
+        predictions = torch.matmul(real_pred, real_allentity.transpose(0, 1)) + \
+                      torch.matmul(imagine_pred, imagine_allentity.transpose(0, 1))  # todo: note this is add
+        entropy_loss = nn.CrossEntropyLoss(reduction='mean')
+        loss_predict = entropy_loss(predictions,
+                                    self.get_entity_embedding(torch.tensor(answer_set, device=self.device)))
+        '''
+        regularisation_factors = self.sqrt()
+        loss_regularisation = self.regulariser.forward()
+        '''
+        return loss_predict
 

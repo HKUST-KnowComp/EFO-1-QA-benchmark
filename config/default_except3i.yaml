@@ -1,6 +1,6 @@
 action: ['train','valid','test']  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: 0
+cuda: 6
 data:
   type: beta
   data_folder: data/FB15k-237-betae
@@ -20,9 +20,7 @@ train:
      - 2p
      - 3p
      - 2i
-     - 3i
      - 2in
-     - 3in
      - inp
      - pin
      - pni
@@ -78,5 +76,4 @@ estimator:
   cqd:
     entity_dim: 1000 # actually 2000
     relation_dim: 1000
-    norm_type: product
-
+    norm_type:
