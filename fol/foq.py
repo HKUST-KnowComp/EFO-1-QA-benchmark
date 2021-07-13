@@ -577,8 +577,7 @@ grammar_class = {
 def parse_top_foq_formula(foq_formula: str,
                           z_obj: FirstOrderQuery = VariableQ,
                           f_obj: FirstOrderQuery = ProjectionQ,
-                          binary_ops=binary_ops) -> Tuple[
-    FirstOrderQuery, Tuple[str]]:
+                          binary_ops=binary_ops) -> Tuple[FirstOrderQuery, Tuple[str]]:
     """ A new function to parse top-level first-order query string
     A first-order string must:
         1. follow the meta grammar

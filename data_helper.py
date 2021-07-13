@@ -189,19 +189,3 @@ class TrainDataset(Dataset):
         beta_name = [_[2] for _ in flattened_queries]
         return query, ans_set, beta_name
 
-
-class SingledirectionalOneShotIterator(object):
-    def __init__(self, dataloader):
-        self.iterator = self.one_shot_iterator(dataloader)
-        self.step = 0
-
-    def __next__(self):
-        self.step += 1
-        data = next(self.iterator)
-        return data
-
-    @staticmethod
-    def one_shot_iterator(dataloader):
-        while True:
-            for data in dataloader:
-                yield data
