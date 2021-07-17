@@ -50,6 +50,10 @@ Specifically, the args in one () level are *sorted by alphabetical order*.
 In this way, the formula is the unique representation for a type of query.
 The advantage of this grammar is that we don't need any parser.
 One can use python eval() and then consider nested tuples.
+
+TODO:
+1. WZH : test, generation
+2. YH: sample
 """
 
 # Dobject is only used in a type hints, the Dobject should be used as a dict
