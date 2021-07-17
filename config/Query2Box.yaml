@@ -46,7 +46,7 @@ estimator:
   box:
     entity_dim: 400
     relation_dim: 400
-    offset_activation: None
+    offset_activation: relu
     center_reg: 0.02
     gamma: 24
   dm:
