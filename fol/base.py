@@ -1,6 +1,8 @@
 from abc import ABC
 import random
 from collections import defaultdict
+
+
 class Formula(ABC):
     def __init__(self):
         pass
