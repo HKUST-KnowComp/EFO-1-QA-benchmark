@@ -323,7 +323,7 @@ class BoxOffsetIntersection(nn.Module):
         return offset * gate
 
 
-class CenterIntersection(nn.Module):  # Todo: in box ,this seems to be a 2*self.dim, self.dim
+class CenterIntersection(nn.Module):
 
     def __init__(self, dim):
         super(CenterIntersection, self).__init__()
@@ -348,7 +348,7 @@ def identity(x):
 
 
 class BoxEstimator(AppFOQEstimator):
-    def __init__(self, n_entity, n_relation, gamma, entity_dim, offset_activation, center_reg, negative_size):
+    def __init__(self, n_entity, n_relation, gamma, entity_dim, relation_dim, offset_activation, center_reg, negative_size):
         super().__init__()
         self.name = 'box'
         self.n_entity = n_entity
@@ -356,11 +356,19 @@ class BoxEstimator(AppFOQEstimator):
         self.gamma = gamma
         self.negative_size = negative_size
         self.entity_dim = entity_dim
+        self.relation_dim = relation_dim
+        self.embedding_range = nn.Parameter(
+            torch.Tensor([(self.gamma.item() + self.epsilon) / entity_dim]),
+            requires_grad=False
+        )
         self.entity_embeddings = nn.Embedding(num_embeddings=n_entity,
                                               embedding_dim=self.entity_dim)
         self.relation_embeddings = nn.Embedding(num_embeddings=n_relation,
-                                                embedding_dim=self.entity_dim)
+                                                embedding_dim=self.relation_dim)
         self.offset_embeddings = nn.Embedding(num_embeddings=n_relation, embedding_dim=self.entity_dim)
+        nn.init.uniform_(self.entity_embeddings.weight, -self.embedding_range.item(), self.embedding_range.item())
+        nn.init.uniform_(self.relation_embeddings.weight, -self.embedding_range.item(), self.embedding_range.item())
+        nn.init.uniform_(self.offset_embeddings, 0, self.embedding_range.item())
         self.offset_regularizer = Regularizer(0, 0, 1e9)
         self.center_net = CenterIntersection(self.entity_dim)
         self.offset_net = BoxOffsetIntersection(self.entity_dim)
@@ -375,17 +383,16 @@ class BoxEstimator(AppFOQEstimator):
             assert False, "No valid activation function!"
 
     def get_entity_embedding(self, entity_ids: torch.LongTensor):
-        center_emb = self.entity_embeddings(entity_ids.to(self.device))
+        center_emb = self.entity_embeddings(entity_ids)
         if self.use_cuda >= 0:
-            offset_emb = torch.zeros_like(center_emb).to(self.device)
+            offset_emb = torch.zeros_like(center_emb)
         else:
             offset_emb = torch.zeros_like(center_emb)
         return torch.cat((center_emb, offset_emb), dim=-1)
 
     def get_projection_embedding(self, proj_ids: torch.LongTensor, emb):
         assert emb.shape[0] == len(proj_ids)
-        rel_emb, r_offset_emb = self.relation_embeddings(proj_ids.to(self.device)), \
-                                self.offset_embeddings(proj_ids.to(self.device))
+        rel_emb, r_offset_emb = self.relation_embeddings(proj_ids), self.offset_embeddings(proj_ids)
         r_offset_emb = self.offset_regularizer(r_offset_emb)
         q_emb, q_off_emb = torch.chunk(emb, 2, dim=-1)
         q_emb = torch.add(q_emb, rel_emb)
@@ -406,22 +413,17 @@ class BoxEstimator(AppFOQEstimator):
         new_offset = self.offset_regularizer(new_offset)
         return torch.cat((new_center, new_offset), dim=-1)
 
-    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]) -> torch.Tensor:
+    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]):
         chosen_answer, chosen_false_answer, subsampling_weight = \
-            negative_sampling(answer_set, negative_size=self.negative_size, entity_num=self.n_entity)
-        chosen_answer = torch.LongTensor(chosen_answer)
-        positive_all_embedding = self.get_entity_embedding(chosen_answer.to(self.device))  # b*d
+            inclusion_sampling(answer_set, negative_size=self.negative_size, entity_num=self.n_entity)
+        positive_all_embedding = self.get_entity_embedding(torch.tensor(chosen_answer, device=self.device))  # b*d
         positive_embedding, _ = torch.chunk(positive_all_embedding, 2, dim=-1)
-        negative_embedding_list = []
-        for i in range(len(chosen_false_answer)):
-            neg_embedding = self.get_entity_embedding(torch.LongTensor(chosen_false_answer[i]).to(self.device))  # n*dim
-            negative_embedding_list.append(neg_embedding)
-        all_negative_embedding = torch.stack(negative_embedding_list, dim=0)  # batch*n*dim
-        negative_embedding, _ = torch.chunk(all_negative_embedding, 2, dim=-1)
+        neg_embedding = self.get_entity_embedding(torch.tensor(chosen_false_answer, deivce=self.device).view(-1))
+        neg_embedding = neg_embedding.view(-1, self.negative_size, 2*self.entity_dim)  # batch*n*dim
+        negative_embedding, _ = torch.chunk(neg_embedding, 2, dim=-1)
         positive_logit = self.compute_logit(positive_embedding, pred_emb)
         negative_logit = self.compute_logit(negative_embedding, pred_emb)
-        loss = compute_final_loss(positive_logit, negative_logit, subsampling_weight.to(self.device))
-        return loss
+        return positive_logit, negative_logit, subsampling_weight.to(self.device)
 
     def compute_logit(self, entity_emb, query_emb):
         query_center_embedding, query_offset_embedding = torch.chunk(query_emb, 2, dim=-1)

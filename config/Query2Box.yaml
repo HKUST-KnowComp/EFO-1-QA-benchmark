@@ -1,0 +1,72 @@
+action: ['train','valid','test']  # one of [train, train+valid, train+test, valid, test]
+seed: 0
+cuda: 0
+data:
+  type: beta
+  data_folder: data/FB15k-237-betae
+  cpu: 10
+train:
+  negative_sample_size: 128  # for each positive sample
+  batch_size: 512
+  learning_rate: 0.0001
+  steps: 450000
+  log_every_steps: 100
+  warm_up_steps: 225000
+  evaluate_every_steps: 15000
+  save_every_steps: 10000
+  checkpoint_every: 10000
+  meta_queries:
+     - 1p
+     - 2p
+     - 3p
+     - 2i
+     - 3i
+evaluate:  # only used when valid/test in action
+  batch_size: 1000
+  print: true
+  meta_queries:
+     - 1p
+     - 2p
+     - 3p
+     - 2i
+     - 3i
+     - ip
+     - pi
+     - 2u-DM
+     - up-DM
+estimator:
+  embedding: box # one of [Transe, box, beta, dm]
+  beta:
+    entity_dim: 400
+    relation_dim: 400
+    hidden_dim: 1600
+    num_layers: 2
+    evaluate_union: DM # one of [DM, DNF]
+    gamma: 60
+  box:
+    entity_dim: 400
+    relation_dim: 400
+    offset_activation: None
+    center_reg: 0.02
+    gamma: 24
+  dm:
+    entity_dim: 2
+    relation_dim: 2
+    hidden_dim: 1600
+    num_layers: 2
+  logic:
+    entity_dim: 400
+    relation_dim: 400
+    hidden_dim: 1600
+    num_layers: 2
+    evaluate_union: DM
+    gamma: 0.375
+    t_norm: luk
+    bounded: 1
+    use_att: 1
+    use_gtrans: 0
+  cqd:
+    entity_dim: 1000 # actually 2000
+    relation_dim: 1000
+    norm_type: product
+
