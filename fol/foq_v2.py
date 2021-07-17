@@ -353,7 +353,7 @@ class Projection(FirstOrderSetQuery):
 
 
 class MultipleSetQuery(FirstOrderSetQuery):
-    def __init__(self, queries: List[FirstOrderSetQuery]):
+    def __init__(self, *queries: List[FirstOrderSetQuery]):
         self.sub_queries = queries
 
     @property
@@ -391,31 +391,20 @@ class MultipleSetQuery(FirstOrderSetQuery):
         self.roperand_q.lift()
         return super().lift()
 
-    def top_down_parse(self, lroperand_strs, **kwargs):
-        assert len(lroperand_strs) == 2
-        loperand_str, roperand_str = lroperand_strs
-        lobj, largs = parse_top_foq_formula(foq_formula=loperand_str, **kwargs)
-        robj, rargs = parse_top_foq_formula(foq_formula=roperand_str, **kwargs)
-        self.loperand_q = lobj
-        self.loperand_q.top_down_parse(largs, **kwargs)
-        self.roperand_q = robj
-        self.roperand_q.top_down_parse(rargs, **kwargs)
-
     def check_ground(self):
-        l_n_inst = self.loperand_q.check_ground()
-        r_n_inst = self.roperand_q.check_ground()
-        assert l_n_inst == r_n_inst
-        return l_n_inst
+        checked = set(q.check_ground() for q in self.sub_queries)
+        assert len(checked) == 1
+        return list(checked)[0]
 
     def to(self, device):
-        self.loperand_q.to(device)
-        self.roperand_q.to(device)
+        for q in self.sub_queries:
+            q.to(device)
 
 
 class Intersection(MultipleSetQuery):
     __o__ = 'i'
 
-    def __init__(self, queries: List[FirstOrderSetQuery]):
+    def __init__(self, *queries: List[FirstOrderSetQuery]):
         super().__init__(queries)
 
     def embedding_estimation(self,
@@ -470,7 +459,7 @@ class Intersection(MultipleSetQuery):
 class Union(MultipleSetQuery):
     __o__ = 'u'
 
-    def __init__(self, queries: List[FirstOrderSetQuery]):
+    def __init__(self, *queries: List[FirstOrderSetQuery]):
         super().__init__(queries)
 
     def embedding_estimation(self,
@@ -602,82 +591,59 @@ ops_dict = {
 }
 
 
-def parse_top_foq_formula(foq_formula: str,
-                          z_obj: FirstOrderQuery = VariableQ,
-                          f_obj: FirstOrderQuery = ProjectionQ,
-                          binary_ops=binary_ops) -> Tuple[FirstOrderQuery, Tuple[str]]:
-    """ A new function to parse top-level first-order query string
-    A first-order string must:
-        1. follow the meta grammar
-        2. e and p are placeholders for entity (zero order object) and projection (first order object)
-        3. e and p can be represented by {eid,} or [pid,] by instantiation
-    The output is to breakdown a foq_formula into operations and its argument foq str into formulations like
-    (class_object, [argfoqstr1, argfoqstr2])
+def parse_formula(fosq_formula: str) -> Tuple[FirstOrderSetQuery, Tuple[str]]:
+    """ A new function to parse first-order set query string
     """
+    cached_objects = []
+    todo_ranges = []
 
-    # binary operation decision: identify the top-level binary operator and two arguments
-    level_stack = []
-    top_binary_ops = []
-    for i, c in enumerate(foq_formula):
-        if c in "()":  # if there is any composition
-            if c == '(':
-                level_stack.append(i)
-            else:
-                if level_stack:
-                    begin = level_stack.pop(-1)
-                    if level_stack:
-                        continue
-                    else:
-                        left_arg_str = foq_formula[begin + 1: i]
-                else:
-                    raise SyntaxError(
-                        f"Query {foq_formula} is illegal for () delimiters")
-                # address the only bracket case
-                if begin == 0 and i == len(foq_formula) - 1:
-                    return parse_top_foq_formula(left_arg_str,
-                                                 z_obj=z_obj,
-                                                 f_obj=f_obj,
-                                                 binary_ops=binary_ops)
+    def identify_range(i, j):
+        """ i, and j is the index of ( and ) respectively
+        identify the information contained in the range
+        return
+            ops: operational string
+            sub_range_list: a list of sub ranges
+        """
+        ops = fosq_formula[i+1]
+        level_stack = []
+        sub_range_list = []
+        for k in range(i+1, j):
+            if fosq_formula[k] == '(':
+                level_stack.append(k)
+            elif fosq_formula[k] == ')':
+                begin = level_stack.pop(-1)
+                if len(level_stack) == 0:
+                    sub_range_list.append((begin, k))
+        if ops == 'e':
+            assert len(sub_range_list) == 0
+        elif ops == 'p':
+            assert len(sub_range_list) == 1
+        elif ops == 'd':
+            assert len(sub_range_list) == 2
+        elif ops in 'ui':
+            assert len(sub_range_list) > 1
+        else:
+            raise NotImplementedError(f"Ops {ops} is not defined")
+        return ops, sub_range_list
 
-        elif c in binary_ops:  # handle the conjunction and disjunction
-            if len(level_stack) == 0:  # only when at the top of the syntax tree
-                top_binary_ops.append([i, c])
+    _b = 0
+    _e = len(fosq_formula) - 1
+    todo_ranges.append(_b, _e)
+    while (_b, _e) not in cached_objects:
+        i, j = todo_ranges[-1]
+        ops, sub_range_list = identify_range(i, j)
+        valid_sub_ranges = True
+        for _i, _j in sub_range_list:
+            if not (_i, _j) in cached_objects:
+                todo_ranges.append((_i, _j))
+                valid_sub_ranges = False
 
-    if top_binary_ops:
-        i, c = top_binary_ops[-1]
-        return (binary_ops[c](), (foq_formula[:i], foq_formula[i + 1:]))
-
-    # zero order decision: identify the zero order objects
-    # consider two situations 'e' or '{x1, x2, ..., xn}'
-    # you only need to initialize the variable class and assign the variable if necessary
-    if foq_formula == 'e':
-        return z_obj(), []
-    if foq_formula[0] == '{' and foq_formula[-1] == '}':
-        query = z_obj()
-        try:
-            query.entities = list(eval('[' + foq_formula[1:-1] + ']'))
-        except:
-            raise ValueError(
-                f"fail to initialize f{foq_formula} as the value of zero order object")
-        return query, []
-
-    # first order decision: identify the first order objects
-    # 'psub_foq_formula' or '[p1, p2, ..., pn]sub_foq_formula'
-    # you should initialize the projection class, assign the possible projections if necessary
-    # you should also return the argument for the
-    if foq_formula[0] == 'p':
-        query = f_obj()
-        return query, [foq_formula[1:]]
-    if foq_formula[0] == '[':  # trigger the second situation
-        for i, c in enumerate(foq_formula):
-            if c == ']':
-                query = f_obj()
-                try:
-                    query.relations = list(eval(foq_formula[:i + 1]))
-                except:
-                    raise ValueError(
-                        f"fail to initialize f{foq_formula} as the relation of first order object")
-                return query, [foq_formula[i + 1:]]
+        if valid_sub_ranges is True:
+            sub_objects = [cached_objects[r] for r in sub_range_list]
+            obj = ops_dict[ops](*sub_objects)
+            todo_ranges.pop(-1)
+            cached_objects[(i, j)] = obj
+    return cached_objects[_b, _e]
 
 
 def gen_foq_meta_formula(depth=0, max_depth=3, early_terminate=False):
