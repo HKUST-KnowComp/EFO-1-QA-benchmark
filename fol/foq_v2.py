@@ -591,7 +591,7 @@ ops_dict = {
 }
 
 
-def parse_formula(fosq_formula: str) -> Tuple[FirstOrderSetQuery, Tuple[str]]:
+def parse_formula(fosq_formula: str) -> FirstOrderSetQuery:
     """ A new function to parse first-order set query string
     """
     cached_objects = []
@@ -667,3 +667,5 @@ def gen_foq_meta_formula(depth=0, max_depth=3, early_terminate=False):
         return f"({gen_foq_meta_formula(depth + 1, max_depth, et1)})|({gen_foq_meta_formula(depth + 1, max_depth, et2)})"
     elif t == 3:
         return f"({gen_foq_meta_formula(depth + 1, max_depth, et1)})-({gen_foq_meta_formula(depth + 1, max_depth, et2)})"
+
+
