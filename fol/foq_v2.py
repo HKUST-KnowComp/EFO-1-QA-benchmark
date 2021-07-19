@@ -1,10 +1,8 @@
 import json
 import random
-from abc import ABC, abstractmethod, abstractproperty
-from pickle import APPEND
+from abc import ABC, abstractmethod
 from typing import List, Tuple, TypedDict
 from typing import Union as TUnion
-from utils.dataset import Subset
 
 import torch
 
@@ -70,12 +68,6 @@ class FirstOrderSetQuery(ABC):
     def formula(self) -> str:
         """
         Where we store the structure information
-        """
-        pass
-
-    @abstractmethod
-    def parse(self, formula: Formula):
-        """ Parse the formula
         """
         pass
 
@@ -233,7 +225,7 @@ class Projection(FirstOrderSetQuery):
 
     @property
     def formula(self):
-        return f"(p,{self.operand_q.meta_formula})"
+        return f"(p,{self.operand_q.formula})"
 
     @property
     def dumps(self):
@@ -374,7 +366,7 @@ class MultipleSetQuery(FirstOrderSetQuery):
     def formula(self):
         return "({},{})".format(
             self.__o__,
-            ",".join(subq.formula for subq in self.sub_queries)
+            ",".join(sorted(subq.formula for subq in self.sub_queries))
         )
 
     def additive_ground(self, dobject: Dobject):
@@ -409,7 +401,7 @@ class Intersection(MultipleSetQuery):
     __o__ = 'i'
 
     def __init__(self, *queries: List[FirstOrderSetQuery]):
-        super().__init__(queries)
+        super().__init__(*queries)
 
     def embedding_estimation(self,
                              estimator: AppFOQEstimator,
@@ -464,7 +456,7 @@ class Union(MultipleSetQuery):
     __o__ = 'u'
 
     def __init__(self, *queries: List[FirstOrderSetQuery]):
-        super().__init__(queries)
+        super().__init__(*queries)
 
     def embedding_estimation(self,
                              estimator: AppFOQEstimator,
@@ -585,6 +577,19 @@ class Difference(FirstOrderSetQuery):
         robjs = self.roperand_q.random_query(projs, cumulative)
         return lobjs - robjs
 
+    def lift(self):
+        self.lquery.lift()
+        self.rquery.lift()
+
+    def check_ground(self) -> int:
+        n1 = self.lquery.check_ground()
+        n2 = self.rquery.check_ground()
+        assert n1 == n2
+        return n1
+
+    def to(self, device):
+        self.lquery.to(device)
+        self.rquery.to(device)
 
 ops_dict = {
     'e': Entity,
@@ -595,10 +600,11 @@ ops_dict = {
 }
 
 
-def parse_formula(fosq_formula: str) -> Tuple[FirstOrderSetQuery, Tuple[str]]:
+def parse_formula(fosq_formula: str) -> FirstOrderSetQuery:
     """ A new function to parse first-order set query string
     """
-    cached_objects = []
+    cached_objects = {}
+    cached_subranges = {}
     todo_ranges = []
 
     def identify_range(i, j):
@@ -626,16 +632,24 @@ def parse_formula(fosq_formula: str) -> Tuple[FirstOrderSetQuery, Tuple[str]]:
             assert len(sub_range_list) == 2
         elif ops in 'ui':
             assert len(sub_range_list) > 1
+        elif ops in '()':
+            return identify_range(i+1, j-1)
         else:
             raise NotImplementedError(f"Ops {ops} is not defined")
         return ops, sub_range_list
 
     _b = 0
     _e = len(fosq_formula) - 1
-    todo_ranges.append(_b, _e)
+    todo_ranges.append((_b, _e))
     while (_b, _e) not in cached_objects:
         i, j = todo_ranges[-1]
-        ops, sub_range_list = identify_range(i, j)
+
+        if (i, j) in cached_subranges:
+            ops, sub_range_list = cached_subranges[(i, j)]
+        else:
+            ops, sub_range_list = identify_range(i, j)
+            cached_subranges[(i, j)] = (ops, sub_range_list)
+
         valid_sub_ranges = True
         for _i, _j in sub_range_list:
             if not (_i, _j) in cached_objects:
