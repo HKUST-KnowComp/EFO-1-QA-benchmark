@@ -88,7 +88,7 @@ class FirstOrderSetQuery(ABC):
 
     @abstractmethod
     def backward_sample(self, projs, rprojs,
-                        contain: bool = None,
+                        contain: bool = True,
                         keypoint: int = None,
                         cumulative: bool = False, **kwargs):
         pass
@@ -174,7 +174,7 @@ class Entity(FirstOrderSetQuery):
         return {self.entities[0]}
 
     def backward_sample(self, projs, rprojs,
-                        contain: bool = None,
+                        contain: bool = True,
                         keypoint: int = None,
                         cumulative: bool = False, **kwargs):
         if keypoint:
@@ -270,7 +270,7 @@ class Projection(FirstOrderSetQuery):
         return answer
 
     def backward_sample(self, projs, rprojs,
-                        contain: bool = None,
+                        contain: bool = True,
                         keypoint: int = None,
                         cumulative: bool = False, **kwargs):
         # since the projection[next_point][self.rel] may contains essential_point even if not starting from it
@@ -412,44 +412,43 @@ class Intersection(MultipleSetQuery):
 
     def deterministic_query(self, projs):
         return set.intersection(
-            q.deterministic_query(projs) for q in self.sub_queries
+            *(q.deterministic_query(projs) for q in self.sub_queries)
         )
 
     def backward_sample(self, projs, rprojs,
                         contain: bool = True,
                         keypoint: int = None,
                         cumulative: bool = False, **kwargs):
+        sub_obj_list = []
         if keypoint:
             if contain:
-                lobjs = self.loperand_q.backward_sample(
-                    projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
-                robjs = self.roperand_q.backward_sample(
-                    projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
+                for query in self.sub_queries:
+                    sub_objs = query.backward_sample(
+                        projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
+                    sub_obj_list.append(sub_objs)
             else:
-                choose_formula = random.randint(0, 1)
-                if choose_formula == 0:
-                    lobjs = self.loperand_q.backward_sample(
-                        projs, rprojs, contain=False, keypoint=keypoint, cumulative=cumulative)
-                    robjs = self.roperand_q.backward_sample(
-                        projs, rprojs, cumulative=cumulative)
-                else:
-                    lobjs = self.loperand_q.backward_sample(
-                        projs, rprojs, cumulative=cumulative)
-                    robjs = self.roperand_q.backward_sample(
-                        projs, rprojs, contain=False, keypoint=keypoint, cumulative=cumulative)
+                choose_formula = random.randint(0, len(self.sub_queries))
+                for i in range(len(self.sub_queries)):
+                    if i != choose_formula:
+                        sub_objs = self.sub_queries[i].backward_sample(projs, rprojs, cumulative=cumulative)
+                    else:
+                        sub_objs = self.sub_queries[i].backward_sample(
+                            projs, rprojs, contain=False, keypoint=keypoint, cumulative=cumulative)
+                    sub_obj_list.append(sub_objs)
         else:
             keypoint = random.sample(set(projs.keys()), 1)[0]
-            lobjs = self.loperand_q.backward_sample(
-                projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
-            robjs = self.roperand_q.backward_sample(
-                projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
-
-        return lobjs.intersection(robjs)
+            for query in self.sub_queries:
+                sub_objs = query.backward_sample(
+                    projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
+                sub_obj_list.append(sub_objs)
+        return set.intersection(*sub_obj_list)
 
     def random_query(self, projs, cumulative=False):
-        lobjs = self.loperand_q.random_query(projs, cumulative)
-        robjs = self.roperand_q.random_query(projs, cumulative)
-        return lobjs.intersection(robjs)
+        sub_obj_list = []
+        for query in self.sub_queries:
+            sub_obj = query.random_query(projs, cumulative=cumulative)
+            sub_obj_list.append(sub_obj)
+        return set.intersection(*sub_obj_list)
 
 
 class Union(MultipleSetQuery):
@@ -467,43 +466,43 @@ class Union(MultipleSetQuery):
 
     def deterministic_query(self, projs):
         return set.union(
-            q.deterministic_query(projs) for q in self.sub_queries
+            *(q.deterministic_query(projs) for q in self.sub_queries)
         )
 
     def backward_sample(self, projs, rprojs,
                         contain: bool = True,
                         keypoint: int = None,
                         cumulative: bool = False, **kwargs):
+        sub_obj_list = []
         if keypoint:
             if contain:
-                choose_formula = random.randint(0, 1)
-                if choose_formula == 0:
-                    lobjs = self.loperand_q.backward_sample(
-                        projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
-                    robjs = self.roperand_q.backward_sample(
-                        projs, rprojs, cumulative=cumulative)
-                else:
-                    lobjs = self.loperand_q.backward_sample(
-                        projs, rprojs, cumulative=cumulative)
-                    robjs = self.roperand_q.backward_sample(
-                        projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
+                choose_formula_num = random.randint(0, len(self.sub_queries))
+                for i in range(len(self.sub_queries)):
+                    if i == choose_formula_num:
+                        sub_objs = self.sub_queries[i].backward_sample(
+                            projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
+                        sub_obj_list.append(sub_objs)
+                    else:
+                        sub_objs = self.sub_queries[i].backward_sample(projs, rprojs, cumulative=cumulative)
+                        sub_obj_list.append(sub_objs)
             else:
-                lobjs = self.loperand_q.backward_sample(
-                    projs, rprojs, contain=False, keypoint=keypoint, cumulative=cumulative)
-                robjs = self.roperand_q.backward_sample(
-                    projs, rprojs, contain=False, keypoint=keypoint, cumulative=cumulative)
-        else:
-            lobjs = self.loperand_q.backward_sample(
-                projs, rprojs, cumulative=cumulative)
-            robjs = self.roperand_q.backward_sample(
-                projs, rprojs, cumulative=cumulative)
+                for query in self.sub_queries:
+                    sub_objs = query.backward_sample(
+                        projs, rprojs, contain=False, keypoint=keypoint, cumulative=cumulative)
+                    sub_obj_list.append(sub_objs)
 
-        return lobjs.union(robjs)
+        else:
+            for query in self.sub_queries:
+                sub_objs = query.backward_sample(projs, rprojs, cumulative=cumulative)
+                sub_obj_list.append(sub_objs)
+        return set.union(*sub_obj_list)
 
     def random_query(self, projs, cumulative=False):
-        lobjs = self.loperand_q.random_query(projs, cumulative)
-        robjs = self.roperand_q.random_query(projs, cumulative)
-        return lobjs.union(robjs)
+        sub_obj_list = []
+        for query in self.sub_queries:
+            sub_objs = query.random_query(projs, cumulative=cumulative)
+            sub_obj_list.append(sub_objs)
+        return set.union(*sub_obj_list)
 
 
 class Difference(FirstOrderSetQuery):
@@ -539,7 +538,7 @@ class Difference(FirstOrderSetQuery):
 
     def deterministic_query(self, projs):
         l_result = self.lquery.deterministic_query(projs)
-        r_result = self.lquery.deterministic_query(projs)
+        r_result = self.rquery.deterministic_query(projs)
         return l_result - r_result
 
     def backward_sample(self, projs, rprojs,
@@ -548,33 +547,33 @@ class Difference(FirstOrderSetQuery):
                         cumulative: bool = False, **kwargs):
         if keypoint:
             if contain:
-                lobjs = self.loperand_q.backward_sample(
+                lobjs = self.lquery.backward_sample(
                     projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
-                robjs = self.roperand_q.backward_sample(
+                robjs = self.rquery.backward_sample(
                     projs, rprojs, contain=False, keypoint=keypoint, cumulative=cumulative)
             else:
                 choose_formula = random.randint(0, 1)
                 if choose_formula == 0:
-                    lobjs = self.loperand_q.backward_sample(
+                    lobjs = self.lquery.backward_sample(
                         projs, rprojs, contain=False, keypoint=keypoint, cumulative=cumulative)
-                    robjs = self.roperand_q.backward_sample(
+                    robjs = self.rquery.backward_sample(
                         projs, rprojs, cumulative=cumulative)
                 else:
-                    lobjs = self.loperand_q.backward_sample(
+                    lobjs = self.lquery.backward_sample(
                         projs, rprojs, cumulative=cumulative)
-                    robjs = self.roperand_q.backward_sample(
+                    robjs = self.rquery.backward_sample(
                         projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
         else:
-            lobjs = self.loperand_q.backward_sample(
+            lobjs = self.lquery.backward_sample(
                 projs, rprojs, cumulative=cumulative)
-            robjs = self.roperand_q.backward_sample(
+            robjs = self.rquery.backward_sample(
                 projs, rprojs, cumulative=cumulative)
 
         return lobjs - robjs
 
     def random_query(self, projs, cumulative=False):
-        lobjs = self.loperand_q.random_query(projs, cumulative)
-        robjs = self.roperand_q.random_query(projs, cumulative)
+        lobjs = self.lquery.random_query(projs, cumulative)
+        robjs = self.rquery.random_query(projs, cumulative)
         return lobjs - robjs
 
     def lift(self):
