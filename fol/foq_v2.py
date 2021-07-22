@@ -240,7 +240,7 @@ class Projection(FirstOrderSetQuery):
         assert obj == self.__o__
         assert all(isinstance(i, int) for i in relation_list)
         self.relations.extend(relation_list)
-        self.operand_q.additive_ground(sub_dobject)
+        self.operand_q.additive_ground(json.loads(sub_dobject))
 
     def embedding_estimation(self,
                              estimator: AppFOQEstimator,
@@ -374,7 +374,7 @@ class MultipleSetQuery(FirstOrderSetQuery):
         assert obj == self.__o__
         assert len(self.sub_queries) == len(sub_dobjects)
         for q, dobj in zip(self.sub_queries, sub_dobjects):
-            q.additive_ground(dobj)
+            q.additive_ground(json.loads(dobj))
 
     def embedding_estimation(self,
                              estimator: AppFOQEstimator,
@@ -383,8 +383,8 @@ class MultipleSetQuery(FirstOrderSetQuery):
                 for q in self.sub_queries]
 
     def lift(self):
-        self.loperand_q.lift()
-        self.roperand_q.lift()
+        for query in self.sub_queries:
+            query.lift()
         return super().lift()
 
     def check_ground(self):
@@ -527,8 +527,8 @@ class Difference(FirstOrderSetQuery):
     def additive_ground(self, dobject: Dobject):
         obj, (ldobj, rdobj) = dobject['o'], dobject['a']
         assert obj == self.__o__
-        self.lquery.additive_ground(ldobj)
-        self.rquery.additive_ground(rdobj)
+        self.lquery.additive_ground(json.loads(ldobj))
+        self.rquery.additive_ground(json.loads(rdobj))
 
     def embedding_estimation(self,
                              estimator: AppFOQEstimator,
