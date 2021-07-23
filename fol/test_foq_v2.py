@@ -45,13 +45,13 @@ beta_query = {
     '3p': 'p(p(p(e)))',
     '2i': 'p(e)&p(e)',
     '3i': 'p(e)&p(e)&p(e)',
+    'ip': 'p(p(e)&p(e))',
+    'pi': 'p(p(e))&p(e)',
     '2in': 'p(e)-p(e)',
     '3in': 'p(e)&p(e)-p(e)',
     'inp': 'p(p(e)-p(e))',
     'pin': 'p(p(e))-p(e)',
     'pni': 'p(e)-p(p(e))',
-    'ip': 'p(p(e)&p(e))',
-    'pi': 'p(e)&p(p(e))',
     '2u': 'p(e)|p(e)',
     'up': 'p(p(e)|p(e))'
 }
@@ -63,20 +63,15 @@ beta_query_v2 = {
     '3p': '(p,(p,(p,(e))))',
     '2i': '(i,(p,(e)),(p,(e)))',
     '3i': '(i,(p,(e)),(p,(e)),(p,(e)))',
+    'ip': '(p,(i,(p,(e)),(p,(e))))',
+    'pi': '(i,(p,(p,(e))),(p,(e)))',
     '2in': '(d,(p,(e)),(p,(e)))',
     '3in': '(d,(i,(p,(e)),(p,(e))),(p,(e)))',
     'inp': '(p,(d,(p,(e)),(p,(e))))',
     'pin': '(d,(p,(p,(e))),(p,(e)))',
-    'pni': '(d,(p,(e)),((p,(e))))',
-    'ip': '(p,(i,(p,(e)),(p,(e))))',
-    'pi': '(i,(p,(e)),(p,(p,(e))))',
+    'pni': '(d,(p,(e)),(p,(p,(e))))',
     '2u': '(u,(p,(e)),(p,(e)))',
     'up': '(p,(u,(p,(e)),(p,(e))))'
-}
-
-
-grounded_beta_query = {
-    '1p': '([77],({30}))',
 }
 
 
@@ -86,7 +81,6 @@ def test_parse_formula():
         oobj = parse_formula(obj.formula)
         assert oobj.formula == obj.formula
         print(k, obj, obj.formula)
-
 
 
 def test_parse_grounded_formula():
