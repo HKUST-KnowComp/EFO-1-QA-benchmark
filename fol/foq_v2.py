@@ -235,7 +235,7 @@ class Projection(FirstOrderSetQuery):
     def dumps(self):
         dobject = {
             'o': self.__o__,
-            'a': [self.relations, self.operand_q.dumps]
+            'a': [self.relations, json.loads(self.operand_q.dumps)]
         }
         return json.dumps(dobject)
 
@@ -361,7 +361,7 @@ class MultipleSetQuery(FirstOrderSetQuery):
         dobject = {
             'o': self.__o__,
             'a': [
-                subq.dumps for subq in self.sub_queries
+                json.loads(subq.dumps) for subq in self.sub_queries
             ]
         }
         return json.dumps(dobject)
@@ -525,7 +525,7 @@ class Difference(FirstOrderSetQuery):
     def dumps(self):
         dobject = {
             'o': self.__o__,
-            'a': [self.lquery.dumps, self.rquery.dumps]
+            'a': [json.loads(self.lquery.dumps), json.loads(self.rquery.dumps)]
         }
         return json.dumps(dobject)
 
