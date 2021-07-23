@@ -636,6 +636,7 @@ class Difference(FirstOrderSetQuery):
 
 ops_dict = {
     'e': Entity,
+    'n': Negation,
     'p': Projection,
     'd': Difference,
     'i': Intersection,
@@ -669,7 +670,7 @@ def parse_formula(fosq_formula: str) -> FirstOrderSetQuery:
                     sub_range_list.append((begin, k))
         if ops == 'e':
             assert len(sub_range_list) == 0
-        elif ops == 'p':
+        elif ops in 'pn':
             assert len(sub_range_list) == 1
         elif ops == 'd':
             assert len(sub_range_list) == 2
