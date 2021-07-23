@@ -14,22 +14,14 @@ from fol.sampler import load_data, read_indexing
 def random_e_ground(foq_formula):
     for i, c in enumerate(foq_formula):
         if c == 'e':
-<<<<<<< HEAD
-            return foq_formula[:i] + "{" + str(random.randint(0, 99)) + "}" + foq_formula[i+1:]
-=======
             return foq_formula[:i] + "{" + str(random.randint(0, 99)) + "}" + foq_formula[i + 1:]
->>>>>>> 537491fc76a9d047b0982ae3ad059830379a74e5
     raise ValueError("Nothing to gound")
 
 
 def random_p_ground(foq_formula):
     for i, c in enumerate(foq_formula):
         if c == 'p':
-<<<<<<< HEAD
-            return foq_formula[:i] + "[" + str(random.randint(0, 99)) + "]" + foq_formula[i+1:]
-=======
             return foq_formula[:i] + "[" + str(random.randint(0, 99)) + "]" + foq_formula[i + 1:]
->>>>>>> 537491fc76a9d047b0982ae3ad059830379a74e5
     raise ValueError("Nothing to gound")
 
 
