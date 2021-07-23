@@ -86,7 +86,7 @@ def test_parse_formula():
         oobj = parse_formula(obj.formula)
         assert oobj.formula == obj.formula
         print(k, obj, obj.formula)
-        print(obj.dumps)
+
 
 
 def test_parse_grounded_formula():
@@ -143,11 +143,11 @@ def test_sample():
         ans_check_sample = ansclass.deterministic_query(projection_train)
         assert ans_sample == ans_check_sample
         query_dumps = ansclass.dumps
-        query_dobject = json.loads(query_dumps)
         brand_new_instance = parse_formula(query_structure)
-        brand_new_instance.additive_ground(query_dobject)
+        brand_new_instance.additive_ground(json.loads(query_dumps))
         ans_another = brand_new_instance.deterministic_query(projection_train)
         assert ans_another == ans_sample
+        print(ansclass.dumps)
 
 
 def test_backward_sample():
@@ -169,7 +169,6 @@ def test_backward_sample():
             projection_train, reverse_projection_train, cumulative=True)
         ans_check_back_sample = ansclass.deterministic_query(projection_train)
         assert ans_check_back_sample == ans_back_sample
-
         query_dumps = ansclass.dumps
         check_instance = parse_formula(query_structure)
         check_instance.additive_ground(json.loads(query_dumps))
