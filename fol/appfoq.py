@@ -262,6 +262,9 @@ class BetaEstimator(AppFOQEstimator):
         neg_emb = self.get_conjunction_embedding(l_neg, r_neg)
         return 1. / neg_emb
 
+    def get_negation_embedding(self, emb: torch.Tensor):
+        return 1. / emb
+
     def get_difference_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):  # a-b = a and(-b)
         r_neg_emb = 1. / remb
         return self.get_conjunction_embedding(lemb, r_neg_emb)

@@ -1,4 +1,3 @@
-from _typeshed import OpenBinaryMode
 import json
 import random
 from abc import ABC, abstractmethod, abstractproperty
@@ -213,11 +212,14 @@ class Negation(FirstOrderSetQuery):
     __o__ = 'n'
 
     def __init__(self, q: FirstOrderSetQuery=None):
+        super().__init__()
         self.query = q
 
+    @property
     def formula(self):
         return f"(n,{self.query.formula})"
 
+    @property
     def dumps(self):
         dobject = {
             'o': self.__o__,
@@ -234,19 +236,22 @@ class Negation(FirstOrderSetQuery):
                              estimator: AppFOQEstimator,
                              batch_indices=None):
         operand_emb = self.query.embedding_estimation(estimator, batch_indices)
-        return estimator.get_negation_embedding(rel, operand_emb)
+        return estimator.get_negation_embedding(operand_emb)
 
     def lift(self):
         self.query.lift()
 
     def deterministic_query(self, projection):
-        pass
+        ans = projection.keys() - self.query.deterministic_query(projection)
+        return ans
 
-    def backward_sample(self, projection):
-        pass
+    def backward_sample(self, projs, rprojs,
+                        contain: bool = True, keypoint: int = None, cumulative: bool = False, **kwargs):
+        return projs.keys() - self.query.backward_sample(projs, rprojs, 1-contain, keypoint, cumulative, **kwargs)
 
     def random_query(self, projs, cumulative=False):
-        pass
+        ans = projs.keys() - self.query.random_query(projs, cumulative)
+        return ans
 
     def check_ground(self) -> int:
         return self.query.check_ground()
@@ -411,7 +416,7 @@ class MultipleSetQuery(FirstOrderSetQuery):
     def formula(self):
         return "({},{})".format(
             self.__o__,
-            ",".join(sorted(subq.formula for subq in self.sub_queries))
+            ",".join(subq.formula for subq in self.sub_queries)
         )
 
     def additive_ground(self, dobject: Dobject):
