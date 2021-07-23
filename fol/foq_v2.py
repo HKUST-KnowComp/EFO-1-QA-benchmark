@@ -1,3 +1,4 @@
+from _typeshed import OpenBinaryMode
 import json
 import random
 from abc import ABC, abstractmethod, abstractproperty
@@ -23,6 +24,7 @@ We begin with the structure of the Dobject
 Each Dobject contains two kv pairs:
     - 'o' for operation
         - 'e' for entity,       1 argument: list of entity_ids
+        - 'n' for negation,     1 argument: list of negations
         - 'p' for projection,   2 arguments: list of relation_ids, dict
         - 'd' for difference,   2 arguments: dict, dict
         - 'i' for intersection, multiple arguments: dict
@@ -165,7 +167,6 @@ class Entity(FirstOrderSetQuery):
     def lift(self):
         self.entities = []
         self.tentities = None
-        return super().lift()
 
     def deterministic_query(self, args, **kwargs):
         # TODO: change to return a list of set
@@ -206,6 +207,52 @@ class Entity(FirstOrderSetQuery):
         if self.tentities is None:
             self.tentities = torch.tensor(self.entities).to(device)
         print(f'move variable object in {id(self)} to device {device}')
+
+
+class Negation(FirstOrderSetQuery):
+    __o__ = 'n'
+
+    def __init__(self, q: FirstOrderSetQuery=None):
+        self.query = q
+
+    def formula(self):
+        return f"(n,{self.query.formula})"
+
+    def dumps(self):
+        dobject = {
+            'o': self.__o__,
+            'a': json.loads(self.query.dumps)
+        }
+        return json.dumps(dobject)
+
+    def additive_ground(self, dobject: Dobject):
+        obj, sub_dobject = dobject['o'], dobject['a']
+        assert obj == self.__o__
+        self.query.additive_ground(sub_dobject)
+    
+    def embedding_estimation(self,
+                             estimator: AppFOQEstimator,
+                             batch_indices=None):
+        operand_emb = self.query.embedding_estimation(estimator, batch_indices)
+        return estimator.get_negation_embedding(rel, operand_emb)
+
+    def lift(self):
+        self.query.lift()
+
+    def deterministic_query(self, projection):
+        pass
+
+    def backward_sample(self, projection):
+        pass
+
+    def random_query(self, projs, cumulative=False):
+        pass
+
+    def check_ground(self) -> int:
+        return self.query.check_ground()
+
+    def to(self, device):
+        self.query.to(device)
 
 
 class Projection(FirstOrderSetQuery):
@@ -257,7 +304,7 @@ class Projection(FirstOrderSetQuery):
     def lift(self):
         self.relations = []
         self.trelations = None
-        return super().lift()
+        self.operand_q.lift()
 
     def deterministic_query(self, projs):
         rel = self.relations[0]
@@ -383,7 +430,6 @@ class MultipleSetQuery(FirstOrderSetQuery):
     def lift(self):
         for query in self.sub_queries:
             query.lift()
-        return super().lift()
 
     def check_ground(self):
         checked = set(q.check_ground() for q in self.sub_queries)
