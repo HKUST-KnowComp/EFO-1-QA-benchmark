@@ -1,10 +1,9 @@
 import json
 import random
-from abc import ABC, abstractmethod, abstractproperty
-from pickle import APPEND
+from itertools import product
+from abc import ABC, abstractmethod
 from typing import List, Tuple, TypedDict
 from typing import Union as TUnion
-from utils.dataset import Subset
 
 import torch
 
@@ -231,7 +230,7 @@ class Negation(FirstOrderSetQuery):
         obj, sub_dobject = dobject['o'], dobject['a']
         assert obj == self.__o__
         self.query.additive_ground(sub_dobject)
-    
+
     def embedding_estimation(self,
                              estimator: AppFOQEstimator,
                              batch_indices=None):
@@ -713,24 +712,50 @@ def parse_formula(fosq_formula: str) -> FirstOrderSetQuery:
     return cached_objects[_b, _e]
 
 
-def gen_foq_meta_formula(depth=0, max_depth=3, early_terminate=False):
-    if depth >= max_depth or early_terminate:
-        return "p(e)"
+def partition_iterator(num):
+    """
+    return a iterator for all partitions [n1, n2, ..., nk]
+    of the given num, such that n1 + n2 + ... + nk = num
+    """
+    for i in range(1, num):
+        for remain in partition_iterator(num-i):
+            yield [i] + [remain]
 
-    et_choice = random.randint(0, 2)
-    if et_choice == 0:
-        et1, et2 = False, False
-    elif et_choice == 1:
-        et1, et2 = True, False
-    elif et_choice == 2:
-        et1, et2 = False, True
 
-    t = random.randint(0, 3)
-    if t == 0:
-        return f"p({gen_foq_meta_formula(depth + 1, max_depth, early_terminate)})"
-    elif t == 1:
-        return f"({gen_foq_meta_formula(depth + 1, max_depth, et1)})&({gen_foq_meta_formula(depth + 1, max_depth, et2)})"
-    elif t == 2:
-        return f"({gen_foq_meta_formula(depth + 1, max_depth, et1)})|({gen_foq_meta_formula(depth + 1, max_depth, et2)})"
-    elif t == 3:
-        return f"({gen_foq_meta_formula(depth + 1, max_depth, et1)})-({gen_foq_meta_formula(depth + 1, max_depth, et2)})"
+def binary_formula_iterator(depth=4, num_anchor_nodes=4, root=False):
+    # decide the ops, we didn't consider the negation as the top-level operator
+    if root:
+        op_candidates = "epiu"
+    else:
+        op_candidates = "enpiu"
+
+    # when the depth is 1, we have only "e" to choose
+    if depth == 1:
+        op_candidates = "e"
+    if depth == 2:
+        op_candidates = "epiu"
+
+    for op in op_candidates:
+        if (op == 'e' and num_anchor_nodes == 1):
+            yield "(e)"
+        elif op in 'np':
+            arg_candidate_iterator = binary_formula_iterator(
+                depth=depth-1,
+                num_anchor_nodes=num_anchor_nodes)
+            for f in arg_candidate_iterator:
+                yield f"({op},{f})"
+        elif op in 'iud':
+            for arg1_num_anchor_nodes in range(1, num_anchor_nodes):
+                arg2_num_anchor_nodes = num_anchor_nodes \
+                                        - arg1_num_anchor_nodes
+                arg1_candidate_iterator = binary_formula_iterator(
+                    depth=depth-1,
+                    num_anchor_nodes=arg1_num_anchor_nodes
+                )
+                arg2_candidate_iterator = binary_formula_iterator(
+                    depth=depth-1,
+                    num_anchor_nodes=arg2_num_anchor_nodes
+                )
+                for f1, f2 in product(arg1_candidate_iterator,
+                                      arg2_candidate_iterator):
+                    yield f"({op},{f1},{f2})"
