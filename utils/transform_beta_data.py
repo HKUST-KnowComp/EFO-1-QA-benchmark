@@ -97,37 +97,37 @@ def transform_json_query(query, meta_formula):
         new_query = f'{{"o": "i", "a": [{{"o": "p", "a": [[{r1}], {{"o": "e", "a": [{e1}]}}]}}, {{"o": "p", "a": [[{r2}], {{"o": "e", "a": [{e2}]}}]}}, {{"o": "p", "a": [[{r3}], {{"o": "e", "a": [{e3}]}}]}}]}}'
     elif meta_formula == 'ip':
         e1, e2, r1, r2, r3 = query[0][0][0], query[0][1][0], query[0][0][1][0], query[0][1][1][0], query[1][0]
-        new_query = f'{{"o": "p", "a": [[{r3}], {{"o": "i", "a": ["{{"o": "p", "a": [[{r1}], "{{"o": "e", "a": [{e1}]}}"]}}","{{"o": "p", "a": [[{r2}], "{{"o": "e", "": [{e2}]}}"]}}"]}}'
+        new_query = f'{{"o": "p", "a": [[{r3}], {{"o": "i", "a": [{{"o": "p", "a": [[{r1}], {{"o": "e", "a": [{e1}]}}]}}, {{"o": "p", "a": [[{r2}], {{"o": "e", "a": [{e2}]}}]}}]}}]}}'
     elif meta_formula == 'pi':
         e1, e2, r1, r2, r3 = query[0][0], query[1][0], query[0][1][0], query[0][1][1], query[1][1][0]
-        new_query = f'{{"o": "i", "a": [{{"o": "p", "a": [[{r3}], {{"o": "e", "a": [5233]}}]}}, {{"o": "p", "a": [[30], {{"o": "p", "a": [[30], {{"o": "e", "a": [1124]}}]}}]}}]}}'
+        new_query = f'{{"o": "i", "a": [{{"o": "p", "a": [[{r2}], {{"o": "p", "a": [[{r1}], {{"o": "e", "a": [{e1}]}}]}}]}}, {{"o": "p", "a": [[{r3}], {{"o": "e", "a": [{e2}]}}]}}]}}'
     elif meta_formula == '2in':
         e1, e2, r1, r2 = query[0][0], query[1][0], query[0][1][0], query[1][1][0]
-        new_query = f'{{"o": "d", "a": [{{"o": "p", "a": [[{r1}], {{"o": "e", "a": [{e1}]}}]}}, {{"o": "p", "a": [[{r2}], {{"o": "e", "a": [{e2}]}}]}}]}}'
+        new_query = f'{{"o": "i", "a": [{{"o": "p", "a": [[{r1}], {{"o": "e", "a": [{e1}]}}]}}, {{"o": "n", "a": {{"o": "p", "a": [[{r2}], {{"o": "e", "a": [{e2}]}}]}}}}]}}'
     elif meta_formula == '3in':
         e1, e2, e3, r1, r2, r3 = query[0][0], query[1][0], query[2][0], query[0][1][0], query[1][1][0], query[2][1][0]
-        new_query = f'{{"o": "d", "a": [{{"o": "i", "a": [{{"o": "p", "a": [[{r1}], {{"o": "e", "a": [{e1}]}}]}}, {{"o": "p", "a": [[{r2}], {{"o": "e", "a": [{e2}]}}]}}]}}, {{"o": "p", "a": [[{r3}], {{"o": "e", "a": [{e3}]}}]}}]}}'
+        new_query = f'{{"o": "i", "a": [{{"o": "p", "a": [[{r1}], {{"o": "e", "a": [{e1}]}}]}}, {{"o": "p", "a": [[{r2}], {{"o": "e", "a": [{e2}]}}]}}, {{"o": "n", "a": {{"o": "p", "a": [[{r3}], {{"o": "e", "a": [{e3}]}}]}}}}]}}'
     elif meta_formula == 'inp':
         e1, e2, r1, r2, r3 = query[0][0][0], query[0][1][0], query[0][0][1][0], query[0][1][1][0], query[1][0]
-        new_query = f"[{r3}]([{r1}]({{{e1}}})-[{r2}]({{{e2}}}))"
+        new_query = f'{{"o": "p", "a": [[{r3}], {{"o": "i", "a": [{{"o": "p", "a": [[{r1}], {{"o": "e", "a": [{e1}]}}]}}, {{"o": "n", "a": {{"o": "p", "a": [[{r2}], {{"o": "e", "a": [{e2}]}}]}}}}]}}]}}'
     elif meta_formula == 'pin':
         e1, e2, r1, r2, r3 = query[0][0], query[1][0], query[0][1][0], query[0][1][1], query[1][1][0]
-        new_query = f"[{r2}]([{r1}]({{{e1}}}))-[{r3}]({{{e2}}})"
+        new_query = f'{{"o": "i", "a": [{{"o": "p", "a": [[{r2}], {{"o": "p", "a": [[{r1}], {{"o": "e", "a": [{e1}]}}]}}]}}, {{"o": "n", "a": {{"o": "p", "a": [[{r3}], {{"o": "e", "a": [{e2}]}}]}}}}]}}'
     elif meta_formula == 'pni':
         e1, e2, r1, r2, r3 = query[0][0], query[1][0], query[0][1][0], query[0][1][1], query[1][1][0]
-        new_query = f"[{r3}]({{{e2}}})-[{r2}]([{r1}]({{{e1}}}))"
+        new_query = f'{{"o": "i", "a": [{{"o": "n", "a": {{"o": "p", "a": [[{r2}], {{"o": "p", "a": [[{r1}], {{"o": "e", "a": [{e1}]}}]}}]}}}}, {{"o": "p", "a": [[{r3}], {{"o": "e", "a": [{e2}]}}]}}]}}'
     elif meta_formula == '2u-DNF':
         e1, e2, r1, r2 = query[0][0], query[1][0], query[0][1][0], query[1][1][0]
-        new_query = f"[{r1}]({{{e1}}})|[{r2}]({{{e2}}})"
+        new_query = f'{{"o": "u", "a": [{{"o": "p", "a": [[{r1}], {{"o": "e", "a": [{e1}]}}]}}, {{"o": "p", "a": [[{r2}], {{"o": "e", "a": [{e2}]}}]}}]}}'
     elif meta_formula == 'up-DNF':
         e1, e2, r1, r2, r3 = query[0][0][0], query[0][1][0], query[0][0][1][0], query[0][1][1][0], query[1][0]
-        new_query = f"[{r3}]([{r1}]({{{e1}}})|[{r2}]({{{e2}}}))"
+        new_query = f'{{"o": "p", "a": [[{r3}], {{"o": "u", "a": [{{"o": "p", "a": [[{r1}], {{"o": "e", "a": [{e1}]}}]}}, {{"o": "p", "a": [[{r2}], {{"o": "e", "a": [{e2}]}}]}}]}}]}}'
     elif meta_formula == '2u-DM':
         e1, e2, r1, r2 = query[0][0][0], query[0][1][0], query[0][0][1][0], query[0][1][1][0]
-        new_query = f"[{r1}]({{{e1}}})|[{r2}]({{{e2}}})"
+        new_query = f'{{"o": "n", "a": {{"o": "i", "a": [{{"o": "n", "a": {{"o": "p", "a": [[{r1}], {{"o": "e", "a": [{e1}]}}]}}}}, {{"o": "n", "a": {{"o": "p", "a": [[{r2}], {{"o": "e", "a": [{e2}]}}]}}}}]}}}}'
     elif meta_formula == 'up-DM':
         e1, e2, r1, r2, r3 = query[0][0][0], query[0][1][0], query[0][0][1][0], query[0][1][1][0], query[1][1]
-        new_query = f"[{r3}]([{r1}]({{{e1}}})|[{r2}]({{{e2}}}))"
+        new_query = f'{{"o": "p", "a": [[345], {{"o": "n", "a": {{"o": "i", "a": [{{"o": "n", "a": {{"o": "p", "a": [[344], {{"o": "e", "a": [12039]}}]}}, {{"o": "n", "a": {{"o": "p", "a": [[261], {{"o": "e", "a": [11639]}}]}}}}]}}}}]}}'
     else:
         new_query = None
         print('not valid name!')
@@ -139,6 +139,7 @@ def store_json_query_with_check(
     for beta_structure in queries.keys():
         my_train_data = collections.defaultdict(list)
         beta_name = query_name_dict[beta_structure]
+        print(f'task {beta_name} parsing')
         meta_formula_v2 = beta_query_v2[beta_name]
         query_set = queries[beta_structure]
         for i, query in enumerate(query_set):
