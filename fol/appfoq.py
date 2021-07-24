@@ -86,11 +86,11 @@ class AppFOQEstimator(ABC, nn.Module):
         pass
 
     @abstractmethod
-    def get_conjunction_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
+    def get_conjunction_embedding(self, conj_emb: List[torch.Tensor]):
         pass
 
     @abstractmethod
-    def get_disjunction_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
+    def get_disjunction_embedding(self, disj_emb: List[torch.Tensor]):
         pass
 
     @abstractmethod
@@ -122,12 +122,11 @@ class TransEEstimator(AppFOQEstimator):
         assert emb.shape[0] == proj_ids.shape[0]
         return self.relation_embeddings(proj_ids) + emb
 
-    def get_conjunction_embedding(self, lemb, remb):
-        assert lemb.shape
-        return torch.minimum(lemb, remb)
+    def get_conjunction_embedding(self, conj_emb):
+        pass
 
-    def get_disjunction_embedding(self, lemb, remb):
-        return torch.maximum(lemb, remb)
+    def get_disjunction_embedding(self, disj_emb):
+        pass
 
     def get_difference_embedding(self, lemb, remb):
         return torch.clamp(lemb - remb, 0)
@@ -207,7 +206,7 @@ class BetaEstimator(AppFOQEstimator):
 
     def __init__(self, n_entity, n_relation, hidden_dim,
                  gamma, entity_dim, relation_dim, num_layers,
-                 negative_sample_size, evaluate_union, device):
+                 negative_sample_size, device):
         super().__init__()
         self.name = 'beta'
         self.device = device
@@ -247,26 +246,31 @@ class BetaEstimator(AppFOQEstimator):
         pro_emb = self.projection_net(emb, rel_emb)
         return pro_emb
 
-    def get_conjunction_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
-        l_alpha, l_beta = torch.chunk(lemb, 2, dim=-1)  # b*dim
-        r_alpha, r_beta = torch.chunk(remb, 2, dim=-1)
-        all_alpha = torch.stack([l_alpha, r_alpha])  # 2*b*dim
-        all_beta = torch.stack([l_beta, r_beta])
+    def get_conjunction_embedding(self, conj_emb: List[torch.Tensor]):
+        sub_alpha_list, sub_beta_list = [], []
+        for sub_emb in conj_emb:
+            sub_alpha, sub_beta = torch.chunk(sub_emb, 2, dim=-1)
+            sub_alpha_list.append(sub_alpha)  # b*dim
+            sub_beta_list.append(sub_beta)
+        all_alpha = torch.stack(sub_alpha_list)  # conj*b*dim
+        all_beta = torch.stack(sub_beta_list)
         new_alpha, new_beta = self.intersection_net(all_alpha, all_beta)
         embedding = torch.cat([new_alpha, new_beta], dim=-1)
         return embedding
 
-    def get_disjunction_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
-        l_neg = 1. / lemb
-        r_neg = 1. / remb
-        neg_emb = self.get_conjunction_embedding(l_neg, r_neg)
+    def get_disjunction_embedding(self, disj_emb: List[torch.Tensor]):
+        sub_neg_list = []
+        for sub_emb in disj_emb:
+            sub_neg_emb = 1. / sub_emb
+            sub_neg_list.append(sub_neg_emb)
+        neg_emb = self.get_conjunction_embedding(sub_neg_list)
         return 1. / neg_emb
 
     def get_negation_embedding(self, emb: torch.Tensor):
         return 1. / emb
 
     def get_difference_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):  # a-b = a and(-b)
-        r_neg_emb = 1. / remb
+        r_neg_emb = self.get_negation_embedding(remb)
         return self.get_conjunction_embedding(lemb, r_neg_emb)
 
     def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]):
@@ -403,17 +407,20 @@ class BoxEstimator(AppFOQEstimator):
         q_off_emb = torch.add(q_off_emb, self.func(r_offset_emb))
         return torch.cat((q_emb, q_off_emb), dim=-1)
 
-    def get_disjunction_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
+    def get_disjunction_embedding(self, disj_emb: List[torch.Tensor]):
         assert False, "box cannot handle disjunction"
 
     def get_difference_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
         assert False, "box cannot handle negation"
 
-    def get_conjunction_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
-        l_center, l_offset = torch.chunk(lemb, 2, dim=-1)
-        r_center, r_offset = torch.chunk(remb, 2, dim=-1)
-        new_center = self.center_net(torch.stack((l_center, r_center)))
-        new_offset = self.offset_net(torch.stack((l_offset, r_offset)))
+    def get_conjunction_embedding(self, conj_emb: List[torch.Tensor]):
+        sub_center_list, sub_offset_list = [], []
+        for sub_emb in conj_emb:
+            sub_center, sub_offset = torch.chunk(sub_emb, 2, dim=-1)
+            sub_center_list.append(sub_center)
+            sub_offset_list.append(sub_offset)
+        new_center = self.center_net(torch.stack(sub_center_list))
+        new_offset = self.offset_net(torch.stack(sub_offset_list))
         return torch.cat((new_center, new_offset), dim=-1)
 
     def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]):
@@ -629,21 +636,23 @@ class LogicEstimator(AppFOQEstimator):
             embedding = 1 - embedding
         return embedding
 
-    def get_conjunction_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
-        all_emb = torch.stack([lemb, remb])
+    def get_conjunction_embedding(self, conj_emb: List[torch.Tensor]):
+        all_emb = torch.stack(conj_emb)
         emb = self.center_net(all_emb)
         return emb
 
-    def get_disjunction_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
-        n_lemb = self.get_negation_embedding(lemb)
-        n_remb = self.get_negation_embedding(remb)
-        n_emb = self.get_conjunction_embedding(n_lemb, n_remb)
+    def get_disjunction_embedding(self, disj_emb: List[torch.Tensor]):
+        sub_neg_list = []
+        for sub_emb in disj_emb:
+            sub_neg = self.get_negation_embedding(sub_emb)
+            sub_neg_list.append(sub_neg)
+        n_emb = self.get_conjunction_embedding(sub_neg_list)
         emb = self.get_negation_embedding(n_emb)
         return emb
 
     def get_difference_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
         n_remb = self.get_negation_embedding(remb)
-        return self.get_conjunction_embedding(lemb, n_remb)
+        return self.get_conjunction_embedding([lemb, n_remb])
 
     def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]):
         assert pred_emb.shape[0] == len(answer_set)
@@ -720,20 +729,20 @@ class CQDEstimator(AppFOQEstimator):
         imagine_query = real_emb * imagine_rel + real_rel * imagine_emb
         return torch.cat([real_query, imagine_query], dim=-1)
 
-    def get_conjunction_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
+    def get_conjunction_embedding(self, conj_emb: List[torch.Tensor]):
         if self.norm_type == 'min':
-            emb = torch.min(torch.cat([lemb, remb]), dim=-1)
+            emb = torch.min(torch.cat(conj_emb), dim=-1)
         elif self.norm_type == 'prod':
-            emb = torch.prod(torch.cat(lemb, remb), dim=-1)
+            emb = torch.prod(torch.cat(conj_emb), dim=-1)
         else:
             raise ValueError(f't_norm must be "min" or "prod", got {self.norm_type}')
         return emb
 
-    def get_disjunction_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
+    def get_disjunction_embedding(self, disj_emb: List[torch.Tensor]):
         if self.norm_type == 'min':
-            emb = torch.max(torch.cat(lemb, remb), dim=-1)
+            emb = torch.max(torch.cat(disj_emb), dim=-1)
         elif self.norm_type == 'prod':
-            emb = torch.sum(torch.concat(lemb, remb), dim=-1) - torch.prod()
+            emb = torch.sum(torch.cat(disj_emb), dim=-1) - torch.prod()
         else:
             raise ValueError(f't_norm must be "min" or "prod", got {self.norm_type}')
         return emb
@@ -752,3 +761,38 @@ class CQDEstimator(AppFOQEstimator):
         '''
         return loss_predict
 
+
+class NLKEstimator(AppFOQEstimator):
+    name = "NewLook"
+
+    def __init__(self, n_entity, n_relation, hidden_dim,
+                 gamma, entity_dim, relation_dim, num_layers,
+                 negative_sample_size, evaluate_union, device):
+        super().__init__()
+        self.name = 'beta'
+        self.device = device
+        self.n_entity = n_entity
+        self.n_relation = n_relation
+        self.hidden_dim = hidden_dim
+        self.gamma = nn.Parameter(
+            torch.Tensor([gamma]),
+            requires_grad=False
+        )
+        self.epsilon = 2.0
+        self.negative_size = negative_sample_size
+        self.entity_dim, self.relation_dim = entity_dim, relation_dim
+        self.entity_embeddings = nn.Embedding(num_embeddings=n_entity,
+                                              embedding_dim=self.entity_dim * 2)
+        self.relation_embeddings = nn.Embedding(num_embeddings=n_relation,
+                                                embedding_dim=self.relation_dim)
+        embedding_range = torch.tensor([(self.gamma + self.epsilon) / entity_dim]).to(self.device)
+        nn.init.uniform_(tensor=self.entity_embeddings.weight, a=-embedding_range.item(), b=embedding_range.item())
+        nn.init.uniform_(tensor=self.relation_embeddings.weight, a=-embedding_range.item(), b=embedding_range.item())
+        self.entity_regularizer = Regularizer(1, 0.05, 1e9)
+        self.projection_regularizer = Regularizer(1, 0.05, 1e9)
+        self.intersection_net = BetaIntersection(self.entity_dim)
+        self.projection_net = BetaProjection(self.entity_dim * 2,
+                                             self.relation_dim,
+                                             hidden_dim,
+                                             self.projection_regularizer,
+                                             num_layers)

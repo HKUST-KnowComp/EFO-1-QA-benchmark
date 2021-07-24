@@ -17,7 +17,7 @@ from util import (Writer, load_graph, load_task_manager, read_from_yaml,
                   read_indexing, set_global_seed)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', default='config/Query2Box.yaml', type=str)
+parser.add_argument('--config', default='config/default.yaml', type=str)
 parser.add_argument('--prefix', default='test', type=str)
 parser.add_argument('--checkpoint_path', default=None, type=str)
 parser.add_argument('--load_step', default=0, type=int)

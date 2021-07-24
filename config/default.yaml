@@ -44,6 +44,8 @@ evaluate:  # only used when valid/test in action
      - pi
      - 2u-DM
      - up-DM
+     # - 2u-DNF
+     # - up-DNF
 estimator:
   embedding: beta # one of [Transe, box, beta, dm]
   beta:
@@ -51,7 +53,7 @@ estimator:
     relation_dim: 400
     hidden_dim: 1600
     num_layers: 2
-    evaluate_union: DM # one of [DM, DNF]
+    # evaluate_union: DM # one of [DM, DNF] after parsing it can be omitted
     gamma: 60
   box:
     entity_dim: 400

@@ -8,17 +8,19 @@ from typing import List
 import numpy as np
 import pandas as pd
 import torch
+import json
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
-from fol import parse_foq_formula
+from fol import parse_foq_formula, parse_formula, beta_query_v2
 
 
 class Task:
-    def __init__(self, filename):
+    def __init__(self, filename, task_betaname):
         self.filename = filename
         self.device = None
         self.query_instance = None
+        self.beta_name = task_betaname
         self.answer_set = None
         self.easy_answer_set = None
         self.hard_answer_set = None
@@ -45,6 +47,7 @@ class Task:
                 self.length = len(self.query_instance)
         else:
             df = pd.read_csv(self.filename)
+            self.query_instance = parse_formula(beta_query_v2[self.beta_name])
             self._parse(df)
             data = {'query_instance': self.query_instance, 'answer_set': self.answer_set,
                     'easy_answer_set': self.easy_answer_set, 'hard_answer_set': self.hard_answer_set}
@@ -76,10 +79,7 @@ class Task:
 
     def _parse(self, df):
         for q in tqdm(df['query']):
-            if self.query_instance is None:
-                self.query_instance = parse_foq_formula(q)
-            else:
-                self.query_instance.additive_ground(q)
+            self.query_instance.additive_ground(json.loads(q))
 
         if 'answer_set' in df.columns:
             self.answer_set = df.answer_set.map(lambda x: list(eval(x))).tolist()
@@ -100,7 +100,7 @@ class Task:
 
 class TaskManager:
     def __init__(self, mode, tasks: List[Task], device):
-        self.tasks = {t.query_instance.meta_formula: t for t in tasks}
+        self.tasks = {t.query_instance.formula: t for t in tasks}
         self.task_iterators = {}
         self.mode = mode
         partition = []

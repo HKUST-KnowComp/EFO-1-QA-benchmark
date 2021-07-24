@@ -17,7 +17,6 @@ import yaml
 
 from data_helper import Task
 
-
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
 
@@ -208,17 +207,12 @@ def read_indexing(data_path):
 def load_task_manager(data_folder, mode, task_names=[]):
     all_data = []
     tasks = []
-    filenames = []
     if task_names:
         for task_name in task_names:
             filename = os.path.join(data_folder, f'{mode}_{task_name}.csv')
-            filenames.append(filename)
-
-    for filename in filenames:
-        print(f'[data] load query from file {filename}')
-        task = Task(filename)
-        tasks.append(task)
-
+            print(f'[data] load query from file {filename}')
+            task = Task(filename, task_name)
+            tasks.append(task)
     return tasks
 
 
