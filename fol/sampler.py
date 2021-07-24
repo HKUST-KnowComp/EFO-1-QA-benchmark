@@ -389,7 +389,15 @@ def parse_string(query, gc, projection, projection_origin, reverse_projection, r
     raise SyntaxError(f"Query {query} fall out of branches")
 
 
+'''
+    + - stands for inverse relation
+    also note that some relations are actually multiple relations combined
+    the valid/test dataset seems to be a bit wrong for it contains edges/nodes which never seen in the train split
+'''
+
+
 def load_data(input_edge_file, all_entity_dict, all_relation_dict, projection_origin, reverse_projection_origin):
+
     projections = copy.deepcopy(projection_origin)
     reverse = copy.deepcopy(reverse_projection_origin)
     with open(input_edge_file, 'r', errors='ignore') as infile:
@@ -420,6 +428,19 @@ def read_indexing(data_path):
     id2rel = pickle.load(
         open(os.path.join(data_path, "id2rel.pkl"), 'rb'))
     return ent2id, rel2id, id2ent, id2rel
+
+
+def load_data_with_indexing(pickle_datapath, rawdata_path):
+    entity_dict, relation_dict, id2ent, id2rel = read_indexing(pickle_datapath)
+    proj_none = collections.defaultdict(lambda: collections.defaultdict(set))
+    reverse_none = collections.defaultdict(lambda: collections.defaultdict(set))
+    proj_train, reverse_train = load_data(os.path.join(rawdata_path, "train.txt"),
+                                          entity_dict, relation_dict, proj_none, reverse_none)
+    proj_valid, reverse_valid = load_data(os.path.join(rawdata_path, "valid.txt"),
+                                          entity_dict, relation_dict, proj_train, reverse_train)
+    proj_test, reverse_test = load_data(os.path.join(rawdata_path, "test.txt"),
+                                        entity_dict, relation_dict, proj_valid, reverse_valid)
+    return entity_dict, relation_dict, proj_train, reverse_train, proj_valid, reverse_valid, proj_test, reverse_test
 
 
 def compare_depth_query(depth1, depth2, depth_dict,
@@ -490,10 +511,10 @@ if __name__ == "__main__":
     stanford_data_path = '../data/FB15k-237-betae'
     all_entity_dict, all_relation_dict, id2ent, id2rel = read_indexing(stanford_data_path)
     projection_none = [collections.defaultdict(set) for i in range(len(all_entity_dict))]
-    reverse_proection_none = [collections.defaultdict(set) for i in range(len(all_entity_dict))]
+    reverse_projection_none = [collections.defaultdict(set) for i in range(len(all_entity_dict))]
     projection_train, reverse_projection_train = load_data('../datasets_knowledge_embedding/FB15k-237/train.txt',
                                                            all_entity_dict, all_relation_dict, projection_none,
-                                                           reverse_proection_none)
+                                                           reverse_projection_none)
     projection_valid, reverse_projection_valid = load_data('../datasets_knowledge_embedding/FB15k-237/valid.txt',
                                                            all_entity_dict, all_relation_dict, projection_train,
                                                            reverse_projection_train)
@@ -535,7 +556,7 @@ if __name__ == "__main__":
     all_similarity = compare_depth_query(depth1=3, depth2=9, depth_dict=all_depth_meta_string,
                                          projection_hard=projection_train,
                                          projection_origin=projection_none, reverse_hard=reverse_projection_train,
-                                         reverse_origin=reverse_proection_none, grammer_class=grammar_class,
+                                         reverse_origin=reverse_projection_none, grammer_class=grammar_class,
                                          start_point_num=10, query_num=10)
     data = np.zeros(1000, dtype=float)
     idx = 0
