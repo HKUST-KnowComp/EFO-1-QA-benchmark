@@ -267,20 +267,20 @@ class Projection(FirstOrderSetQuery):
 
     def __init__(self, q: FirstOrderSetQuery = None):
         super().__init__()
-        self.operand_q = q
+        self.query = q
         self.relations = []
         self.trelations = None
         self.device = 'cpu'
 
     @property
     def formula(self):
-        return f"(p,{self.operand_q.formula})"
+        return f"(p,{self.query.formula})"
 
     @property
     def dumps(self):
         dobject = {
             'o': self.__o__,
-            'a': [self.relations, json.loads(self.operand_q.dumps)]
+            'a': [self.relations, json.loads(self.query.dumps)]
         }
         return json.dumps(dobject)
 
@@ -289,7 +289,7 @@ class Projection(FirstOrderSetQuery):
         assert obj == self.__o__
         assert all(isinstance(i, int) for i in relation_list)
         self.relations.extend(relation_list)
-        self.operand_q.additive_ground(sub_dobject)
+        self.query.additive_ground(sub_dobject)
 
     def embedding_estimation(self,
                              estimator: AppFOQEstimator,
@@ -300,7 +300,7 @@ class Projection(FirstOrderSetQuery):
             rel = self.trelations[torch.tensor(batch_indices)]
         else:
             rel = self.trelations
-        operand_emb = self.operand_q.embedding_estimation(estimator,
+        operand_emb = self.query.embedding_estimation(estimator,
                                                           batch_indices)
         return estimator.get_projection_embedding(rel,
                                                   operand_emb)
@@ -308,11 +308,11 @@ class Projection(FirstOrderSetQuery):
     def lift(self):
         self.relations = []
         self.trelations = None
-        self.operand_q.lift()
+        self.query.lift()
 
     def deterministic_query(self, projs):
         rel = self.relations[0]
-        result = self.operand_q.deterministic_query(projs)
+        result = self.query.deterministic_query(projs)
         answer = set()
         for e in result:
             answer.update(projs[e][rel])
@@ -344,7 +344,7 @@ class Projection(FirstOrderSetQuery):
             else:
                 break
 
-        p_object = self.operand_q.backward_sample(projs, rprojs,
+        p_object = self.query.backward_sample(projs, rprojs,
                                                   contain=True, keypoint=parent, cumulative=cumulative, **kwargs)
         if None in p_object:  # FIXME: why this is a none in return type
             raise ValueError
@@ -362,7 +362,7 @@ class Projection(FirstOrderSetQuery):
         return objects
 
     def random_query(self, projs, cumulative=False):
-        variable = self.operand_q.random_query(projs, cumulative)
+        variable = self.query.random_query(projs, cumulative)
         objects = set()
         if len(variable) == 0:
             if cumulative:
@@ -385,7 +385,7 @@ class Projection(FirstOrderSetQuery):
         return objects
 
     def check_ground(self):
-        n_inst = self.operand_q.check_ground()
+        n_inst = self.query.check_ground()
         assert len(self.relations) == n_inst
         return n_inst
 
@@ -394,7 +394,7 @@ class Projection(FirstOrderSetQuery):
         if self.trelations is None:
             self.trelations = torch.tensor(self.relations).to(device)
         print(f'move projection object in {id(self)} to device {device}')
-        self.operand_q.to(device)
+        self.query.to(device)
 
 
 class MultipleSetQuery(FirstOrderSetQuery):
@@ -415,7 +415,7 @@ class MultipleSetQuery(FirstOrderSetQuery):
     def formula(self):
         return "({},{})".format(
             self.__o__,
-            ",".join(subq.formula for subq in self.sub_queries)
+            ",".join(sorted(subq.formula for subq in self.sub_queries))
         )
 
     def additive_ground(self, dobject: Dobject):
@@ -722,40 +722,84 @@ def partition_iterator(num):
             yield [i] + [remain]
 
 
-def binary_formula_iterator(depth=4, num_anchor_nodes=4, root=False):
+def binary_formula_iterator(depth=5,
+                            num_anchor_nodes=4,
+                            parent=None):
     # decide the ops, we didn't consider the negation as the top-level operator
-    if root:
+    if parent is None:
         op_candidates = "epiu"
-    else:
-        op_candidates = "enpiu"
+    else:  # then parent can be one of pniu
+        if parent == 'p':
+            op_candidates = "epiu"
+        elif parent == 'n':
+            op_candidates = "piu"
+        elif parent == 'i':
+            op_candidates = "pniu"
+        elif parent == 'u':
+            op_candidates = "piu"
 
     # when the depth is 1, we have only "e" to choose
     if depth == 1:
         op_candidates = "e"
-    if depth == 2:
-        op_candidates = "epiu"
 
     for op in op_candidates:
         if (op == 'e' and num_anchor_nodes == 1):
-            yield "(e)"
+            yield "(p,(e))"
         elif op in 'np':
             arg_candidate_iterator = binary_formula_iterator(
                 depth=depth-1,
-                num_anchor_nodes=num_anchor_nodes)
+                num_anchor_nodes=num_anchor_nodes,
+                parent=op)
             for f in arg_candidate_iterator:
                 yield f"({op},{f})"
-        elif op in 'iud':
+        elif op in 'iu':
             for arg1_num_anchor_nodes in range(1, num_anchor_nodes):
                 arg2_num_anchor_nodes = num_anchor_nodes \
                                         - arg1_num_anchor_nodes
                 arg1_candidate_iterator = binary_formula_iterator(
                     depth=depth-1,
-                    num_anchor_nodes=arg1_num_anchor_nodes
+                    num_anchor_nodes=arg1_num_anchor_nodes,
+                    parent=op
                 )
                 arg2_candidate_iterator = binary_formula_iterator(
                     depth=depth-1,
-                    num_anchor_nodes=arg2_num_anchor_nodes
+                    num_anchor_nodes=arg2_num_anchor_nodes,
+                    parent=op
                 )
                 for f1, f2 in product(arg1_candidate_iterator,
                                       arg2_candidate_iterator):
                     yield f"({op},{f1},{f2})"
+
+
+def copy_projection(p: Projection) -> Projection:
+    _p = Projection()
+    _p.relations = p.relations
+    return _p
+
+
+def projection_sink(fosq: FirstOrderSetQuery,
+                    upper_projection_stack=[]) -> FirstOrderSetQuery:
+    _upper_projection_stack = [copy_projection(p) for p in upper_projection_stack]
+    if fosq.__o__ == 'p':
+        _upper_projection_stack += [copy_projection(fosq)]
+        return projection_sink(fosq.query, _upper_projection_stack)
+    elif fosq.__o__ == 'e':
+        while len(_upper_projection_stack) > 0:
+            p = _upper_projection_stack.pop(-1)
+            p.query = fosq
+            fosq = p
+        return fosq
+    elif fosq.__o__ == 'n':
+        fosq.query = projection_sink(fosq.query, _upper_projection_stack)
+        return fosq
+    elif fosq.__o__ in 'iu':  # the inter section and union
+        fosq.sub_queries = [projection_sink(q, _upper_projection_stack) for q in fosq.sub_queries]
+        return fosq
+
+
+def convert_to_normal_form(query: FirstOrderSetQuery):
+    def _top_level_union_convertor(query):
+        pass
+
+    def _sec_level_intersection_convertor(query):
+        pass
