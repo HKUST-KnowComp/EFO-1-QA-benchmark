@@ -712,31 +712,19 @@ def parse_formula(fosq_formula: str) -> FirstOrderSetQuery:
     return cached_objects[_b, _e]
 
 
-def partition_iterator(num):
-    """
-    return a iterator for all partitions [n1, n2, ..., nk]
-    of the given num, such that n1 + n2 + ... + nk = num
-    """
-    for i in range(1, num):
-        for remain in partition_iterator(num-i):
-            yield [i] + [remain]
-
+op_candidates_dict = {
+    "p": "epiu",
+    "n": "piu",
+    "i": {1: "pniu", 2: "pniu"},
+    "u": {1: "piu", 2: "piu"}
+}
 
 def binary_formula_iterator(depth=5,
                             num_anchor_nodes=4,
-                            parent=None):
+                            op_candidates=None):
     # decide the ops, we didn't consider the negation as the top-level operator
-    if parent is None:
+    if op_candidates is None:
         op_candidates = "epiu"
-    else:  # then parent can be one of pniu
-        if parent == 'p':
-            op_candidates = "epiu"
-        elif parent == 'n':
-            op_candidates = "piu"
-        elif parent == 'i':
-            op_candidates = "pniu"
-        elif parent == 'u':
-            op_candidates = "piu"
 
     # when the depth is 1, we have only "e" to choose
     if depth == 1:
@@ -749,7 +737,7 @@ def binary_formula_iterator(depth=5,
             arg_candidate_iterator = binary_formula_iterator(
                 depth=depth-1,
                 num_anchor_nodes=num_anchor_nodes,
-                parent=op)
+                op_candidates=op_candidates_dict[op])
             for f in arg_candidate_iterator:
                 yield f"({op},{f})"
         elif op in 'iu':
@@ -757,31 +745,55 @@ def binary_formula_iterator(depth=5,
                 arg2_num_anchor_nodes = num_anchor_nodes \
                                         - arg1_num_anchor_nodes
                 arg1_candidate_iterator = binary_formula_iterator(
-                    depth=depth-1,
+                    depth=depth,
                     num_anchor_nodes=arg1_num_anchor_nodes,
-                    parent=op
+                    op_candidates=op_candidates_dict[op][1]
                 )
                 arg2_candidate_iterator = binary_formula_iterator(
-                    depth=depth-1,
+                    depth=depth,
                     num_anchor_nodes=arg2_num_anchor_nodes,
-                    parent=op
+                    op_candidates=op_candidates_dict[op][2]
                 )
                 for f1, f2 in product(arg1_candidate_iterator,
                                       arg2_candidate_iterator):
                     yield f"({op},{f1},{f2})"
 
 
-def copy_projection(p: Projection) -> Projection:
-    _p = Projection()
-    _p.relations = p.relations
-    return _p
+def copy_query(q: FirstOrderSetQuery, deep=False) -> FirstOrderSetQuery:
+    op = q.__o__
+    if op == 'e':
+        _q = Entity()
+        _q.entities = q.entities
+        return _q
+    elif op == 'p':
+        _q = Projection()
+        _q.relations = q.relations
+        if deep:
+            _q.query = copy_query(q.query, deep)
+        return _q
+    elif op == 'n':
+        _q = Negation()
+        if deep:
+            _q.query = copy_query(q.query, deep)
+        return _q
+    elif op in 'ui':
+        _q = ops_dict[op]()
+        if deep:
+            _q.sub_queries = [copy_query(sq, deep) for sq in q.sub_queries]
+        return _q
+    else:
+        raise NotImplementedError
 
 
 def projection_sink(fosq: FirstOrderSetQuery,
                     upper_projection_stack=[]) -> FirstOrderSetQuery:
-    _upper_projection_stack = [copy_projection(p) for p in upper_projection_stack]
+    """Move the projections at the bottom of the tree, i.e.,
+    we only allow p -> p/e
+    """
+    _upper_projection_stack = [copy_query(p)
+                               for p in upper_projection_stack]
     if fosq.__o__ == 'p':
-        _upper_projection_stack += [copy_projection(fosq)]
+        _upper_projection_stack += [copy_query(fosq)]
         return projection_sink(fosq.query, _upper_projection_stack)
     elif fosq.__o__ == 'e':
         while len(_upper_projection_stack) > 0:
@@ -793,13 +805,126 @@ def projection_sink(fosq: FirstOrderSetQuery,
         fosq.query = projection_sink(fosq.query, _upper_projection_stack)
         return fosq
     elif fosq.__o__ in 'iu':  # the inter section and union
-        fosq.sub_queries = [projection_sink(q, _upper_projection_stack) for q in fosq.sub_queries]
+        fosq.sub_queries = [projection_sink(q, _upper_projection_stack)
+                            for q in fosq.sub_queries]
         return fosq
 
+"""
+    if fosq.__o__ == 'e':
 
-def convert_to_normal_form(query: FirstOrderSetQuery):
-    def _top_level_union_convertor(query):
-        pass
+    elif fosq.__o__ == 'p':
 
-    def _sec_level_intersection_convertor(query):
-        pass
+    elif fosq.__o__ == 'n':
+
+    elif fosq.__o__ == 'i':
+
+    elif fosq.__o__ == 'u':
+
+    else:
+"""
+
+
+def DeMorgan_rule(fosq: FirstOrderSetQuery) -> FirstOrderSetQuery:
+    """ Move the negation down of itersection and union.
+        n -> i -> fosq should be converted to u -> n -> fosq
+        n -> u -> fosq should be converted to i -> n -> fosq
+    """
+    if fosq.__o__ == 'e':
+        return fosq
+    elif fosq.__o__ == 'p':
+        return fosq
+    elif fosq.__o__ == 'n':
+        sub_q = fosq.query
+        # de Morgan rule 1
+        if sub_q.__o__ == 'i':
+            sub_sub_qs = sub_q.sub_queries
+            _fosq = Union(
+                *[Negation(q=DeMorgan_rule(q)) for q in sub_sub_qs]
+            )
+        elif sub_q.__o__ == 'u':
+            sub_sub_qs = sub_q.sub_queries
+            _fosq = Intersection(
+                *[Negation(q=DeMorgan_rule(q)) for q in sub_sub_qs]
+            )
+        else:
+            _fosq = fosq
+        return _fosq
+
+    elif fosq.__o__ in 'iu':
+        fosq.sub_queries = [DeMorgan_rule(q) for q in fosq.sub_queries]
+        return fosq
+    else:
+        raise NotImplementedError
+
+
+def intersection_bubble(fosq: FirstOrderSetQuery) -> FirstOrderSetQuery:
+    pass
+
+
+def union_bubble(fosq: FirstOrderSetQuery) -> FirstOrderSetQuery:
+    """ Move the union at the top of the tree
+    For any i -> u pairs, we will make it as a u -> i pair
+    If we use projection sink, de Morgan rule and union bubble, then we get dnf
+    We handle the situation where (A or B) and (C), it should be (A and C) or (B and C)
+    """
+    if fosq.__o__ == 'e':
+        return fosq
+    elif fosq.__o__ in 'pn':
+        fosq.query = union_bubble(fosq.query)
+        return fosq
+
+    elif fosq.__o__ == 'i':
+        fosq.sub_queries = [union_bubble(q) for q in fosq.sub_queries]
+
+        union_subq = None
+        other_subq = []
+        for q in fosq.sub_queries:
+            if q.__o__ == 'u' and union_subq is None:
+                union_subq = q
+            else:
+                other_subq.append(q)
+        if union_subq is None:
+            return fosq
+
+        if len(other_subq) == 1:
+            C = other_subq[0]
+        else:
+            C = Intersection(*other_subq)
+        _fosq = Union(
+            *[Intersection(q, copy_query(C, deep=True))
+              for q in union_subq.sub_queries]
+        )
+        return union_bubble(_fosq)
+    elif fosq.__o__ == 'u':
+        fosq.sub_queries = [union_bubble(q) for q in fosq.sub_queries]
+        return fosq
+    else:
+        raise NotImplementedError
+
+
+def concate_iu_chains(fosq: FirstOrderSetQuery) -> FirstOrderSetQuery:
+    if fosq.__o__ in 'pn':
+        fosq.query = concate_iu_chains(fosq.query)
+        return fosq
+    if fosq.__o__ == 'e':
+        return fosq
+    if fosq.__o__ in 'iu':
+        op = fosq.__o__
+        same_root_queries = []
+        other_queries = []
+        for q in fosq.sub_queries:
+            if q.__o__ == op:
+                same_root_queries.append(q)
+            else:
+                other_queries.append(q)
+        if len(same_root_queries) == 0:
+            fosq.sub_queries = [concate_iu_chains(q) for q in fosq.sub_queries]
+            return fosq
+        sub_queries = other_queries
+        for q in same_root_queries:
+            sub_queries += q.sub_queries
+        _fosq = ops_dict[op](*sub_queries)
+        assert _fosq.formula != fosq.formula
+        return concate_iu_chains(_fosq)
+
+
