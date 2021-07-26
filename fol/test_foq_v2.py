@@ -87,7 +87,9 @@ def test_parse_formula():
         print(k, obj, obj.formula)
 
 
+# we don't need this any more
 def test_parse_grounded_formula():
+
     for k, v in beta_query_v2.items():
         gv = random_p_ground(random_e_ground(v))
         obj = parse_formula(v)
