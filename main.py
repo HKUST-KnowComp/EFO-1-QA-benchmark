@@ -59,11 +59,22 @@ def train_step(model, opt, iterator):
     opt.zero_grad()
     data = next(iterator)
     emb_list, answer_list = [], []
+    union_emb_list, union_answer_list = [], []
     for key in data:
-        emb_list.append(data[key]['emb'])
-        answer_list.extend(data[key]['answer_set'])
-    all_embedding = torch.cat(emb_list, dim=0)
-    all_positive_logit, all_negative_logit, all_subsampling_weight = model.criterion(all_embedding, answer_list)
+        if 'u' in key:
+            union_emb_list.append(data[key]['emb'])
+            union_answer_list.append(data[key]['answer_set'])
+        else:
+            emb_list.append(data[key]['emb'])
+            answer_list.extend(data[key]['answer_set'])
+    pred_embedding = torch.cat(emb_list, dim=0)
+    all_positive_logit, all_negative_logit, all_subsampling_weight = model.criterion(pred_embedding, answer_list)
+    for i in range(len(union_emb_list)):
+        union_positive_logit, union_negative_logit, union_subsampling_weight = \
+            model.union_criterion(union_emb_list[i], union_answer_list[i])
+        all_positive_logit = torch.cat([all_positive_logit, union_positive_logit], dim=0)
+        all_negative_logit = torch.cat([all_negative_logit, union_negative_logit], dim=0)
+        all_subsampling_weight = torch.cat([all_subsampling_weight, union_subsampling_weight], dim=0)
     positive_loss, negative_loss = compute_final_loss(all_positive_logit, all_negative_logit, all_subsampling_weight)
     loss = (positive_loss + negative_loss)/2
     loss.backward()

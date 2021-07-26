@@ -44,8 +44,8 @@ evaluate:  # only used when valid/test in action
      - pi
      - 2u-DM
      - up-DM
-     # - 2u-DNF
-     # - up-DNF
+     - 2u-DNF
+     - up-DNF
 estimator:
   embedding: beta # one of [Transe, box, beta, dm]
   beta:
