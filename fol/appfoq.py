@@ -105,20 +105,14 @@ class AppFOQEstimator(ABC, nn.Module):
         pass
 
     @abstractmethod
-    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]):
+    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList], union: bool = False):
         pass
 
     @abstractmethod
-    def compute_all_entity_logit(self, pred_emb: torch.Tensor):
+    def compute_all_entity_logit(self, pred_emb: torch.Tensor, union: bool = False):
         pass
 
-    @abstractmethod
-    def union_criterion(self, pred_emb:torch.Tensor, answer_set: List[IntList]):
-        pass
 
-    @abstractmethod
-    def compute_union_all_entity_logit(self, pred_emb: torch.Tensor):
-        pass
 
 
 class TransEEstimator(AppFOQEstimator):
@@ -284,7 +278,7 @@ class BetaEstimator(AppFOQEstimator):
         r_neg_emb = self.get_negation_embedding(remb)
         return self.get_conjunction_embedding([lemb, r_neg_emb])
 
-    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]):
+    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList], union: bool=False):
         assert pred_emb.shape[0] == len(answer_set)
         alpha_embedding, beta_embedding = torch.chunk(pred_emb, 2, dim=-1)
         query_dist = torch.distributions.beta.Beta(alpha_embedding, beta_embedding)
@@ -292,30 +286,22 @@ class BetaEstimator(AppFOQEstimator):
             inclusion_sampling(answer_set, negative_size=self.negative_size, entity_num=self.n_entity)  # todo: negative
         answer_embedding = self.get_entity_embedding(
             torch.tensor(chosen_ans, device=self.device)).squeeze()
-        positive_logit = self.compute_logit(answer_embedding, query_dist)
+        if union:
+            positive_union_logit = self.compute_logit(answer_embedding.unsqueeze(1), query_dist)  # b*disj
+            positive_logit = torch.max(positive_union_logit, dim=1)[0]
+        else:
+            positive_logit = self.compute_logit(answer_embedding, query_dist)
         all_neg_emb = self.get_entity_embedding(torch.tensor(chosen_false_ans, device=self.device).view(-1))
         all_neg_emb = all_neg_emb.view(-1, self.negative_size, 2 * self.entity_dim)  # batch*negative*dim
-        query_dist_unsqueezed = torch.distributions.beta.Beta(alpha_embedding.unsqueeze(1), beta_embedding.unsqueeze(1))
-        negative_logit = self.compute_logit(all_neg_emb, query_dist_unsqueezed)  # b*negative
+        if union:
+            query_dist_unsqueezed = torch.distributions.beta.Beta(alpha_embedding.unsqueeze(2),
+                                                                  beta_embedding.unsqueeze(2))
+            negative_union_logit = self.compute_logit(all_neg_emb.unsqueeze(1), query_dist_unsqueezed)
+            negative_logit = torch.max(negative_union_logit, dim=1)
+        else:
+            query_dist_unsqueezed = torch.distributions.beta.Beta(alpha_embedding.unsqueeze(1), beta_embedding.unsqueeze(1))
+            negative_logit = self.compute_logit(all_neg_emb, query_dist_unsqueezed)  # b*negative
         return positive_logit, negative_logit, subsampling_weight.to(self.device)
-
-    def union_criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]):
-        assert pred_emb.shape[0] == len(answer_set)
-        alpha_embedding, beta_embedding = torch.chunk(pred_emb, 2, dim=-1)
-        query_dist = torch.distributions.beta.Beta(alpha_embedding, beta_embedding)
-        chosen_ans, chosen_false_ans, subsampling_weight = \
-            inclusion_sampling(answer_set, negative_size=self.negative_size, entity_num=self.n_entity)  # todo: negative
-        answer_embedding = self.get_entity_embedding(
-            torch.tensor(chosen_ans, device=self.device)).squeeze()
-        positive_union_logit = self.compute_logit(answer_embedding.unsqueeze(1), query_dist)  # b*disj
-        positive_logit = torch.max(positive_union_logit, dim=1)[0]
-        all_neg_emb = self.get_entity_embedding(torch.tensor(chosen_false_ans, device=self.device).view(-1))
-        all_neg_emb = all_neg_emb.view(-1, self.negative_size, 2 * self.entity_dim)  # batch*negative*dim
-        query_dist_unsqueezed = torch.distributions.beta.Beta(alpha_embedding.unsqueeze(2), beta_embedding.unsqueeze(2))
-        negative_union_logit = self.compute_logit(all_neg_emb.unsqueeze(1), query_dist_unsqueezed)
-        negative_logit = torch.max(negative_union_logit, dim=1)
-        return positive_logit, negative_logit, subsampling_weight.to(self.device)
-
 
     def compute_logit(self, entity_emb, query_dist):
         entity_alpha, entity_beta = torch.chunk(entity_emb, 2, dim=-1)
@@ -323,32 +309,22 @@ class BetaEstimator(AppFOQEstimator):
         logit = self.gamma - torch.norm(torch.distributions.kl.kl_divergence(entity_dist, query_dist), p=1, dim=-1)
         return logit
 
-    def compute_all_entity_logit(self, pred_emb: torch.Tensor) -> torch.Tensor:
+    def compute_all_entity_logit(self, pred_emb: torch.Tensor, union: bool=False) -> torch.Tensor:
         all_entities = torch.LongTensor(range(self.n_entity)).to(self.device)
         all_embedding = self.get_entity_embedding(all_entities)  # nentity*dim
-        pred_alpha, pred_beta = torch.chunk(pred_emb, 2, dim=-1)  # batch*dim
-        query_dist = torch.distributions.beta.Beta(pred_alpha.unsqueeze(1), pred_beta.unsqueeze(1))
-        batch_num = find_optimal_batch(all_embedding, query_dist=query_dist, compute_logit=self.compute_logit)
+        pred_alpha, pred_beta = torch.chunk(pred_emb, 2, dim=-1)  # batch*(disj)*dim
+        query_dist = torch.distributions.beta.Beta(pred_alpha.unsqueeze(-2), pred_beta.unsqueeze(-2))
+        batch_num = find_optimal_batch(all_embedding, query_dist=query_dist,
+                                       compute_logit=self.compute_logit, union=union)
         chunk_of_answer = torch.chunk(all_embedding, batch_num, dim=0)
         logit_list = []
         for answer_part in chunk_of_answer:
-            logit_part = self.compute_logit(answer_part.unsqueeze(dim=0), query_dist)  # batch*answer_part*dim
-            logit_list.append(logit_part)
-        all_logit = torch.cat(logit_list, dim=1)
-        return all_logit
-
-    def compute_union_all_entity_logit(self, pred_emb: torch.Tensor) -> torch.Tensor:
-        all_entities = torch.LongTensor(range(self.n_entity)).to(self.device)
-        all_embedding = self.get_entity_embedding(all_entities)  # nentity*dim
-        pred_alpha, pred_beta = torch.chunk(pred_emb, 2, dim=-1)  # batch*disj*dim
-        query_dist = torch.distributions.beta.Beta(pred_alpha.unsqueeze(2), pred_beta.unsqueeze(2))
-        batch_num = find_optimal_batch(all_embedding,
-                                       query_dist=query_dist, compute_logit=self.compute_logit, union=True)
-        chunk_of_answer = torch.chunk(all_embedding, batch_num, dim=0)
-        logit_list = []
-        for answer_part in chunk_of_answer:
-            union_part = self.compute_logit(answer_part.unsqueeze(0).unsqueeze(0), query_dist)  # b*disj*answer_part*dim
-            logit_part = torch.max(union_part, dim=1)[0]
+            if union:
+                union_part = self.compute_logit(answer_part.unsqueeze(0).unsqueeze(0),
+                                                query_dist)  # b*disj*answer_part*dim
+                logit_part = torch.max(union_part, dim=1)[0]
+            else:
+                logit_part = self.compute_logit(answer_part.unsqueeze(dim=0), query_dist)  # batch*answer_part*dim
             logit_list.append(logit_part)
         all_logit = torch.cat(logit_list, dim=1)
         return all_logit
@@ -456,7 +432,7 @@ class BoxEstimator(AppFOQEstimator):
         assert False, "box cannot handle negation"
 
     def get_disjunction_embedding(self, disj_emb: List[torch.Tensor]):
-        assert False, "box cannot handle disjunction"
+        return torch.stack(disj_emb, dim=1)
 
     def get_difference_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
         assert False, "box cannot handle negation"
@@ -471,7 +447,7 @@ class BoxEstimator(AppFOQEstimator):
         new_offset = self.offset_net(torch.stack(sub_offset_list))
         return torch.cat((new_center, new_offset), dim=-1)
 
-    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]):
+    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList], union=False):
         chosen_answer, chosen_false_answer, subsampling_weight = \
             inclusion_sampling(answer_set, negative_size=self.negative_size, entity_num=self.n_entity)
         positive_all_embedding = self.get_entity_embedding(torch.tensor(chosen_answer, device=self.device))  # b*d
@@ -479,8 +455,14 @@ class BoxEstimator(AppFOQEstimator):
         neg_embedding = self.get_entity_embedding(torch.tensor(chosen_false_answer, device=self.device).view(-1))
         neg_embedding = neg_embedding.view(-1, self.negative_size, 2*self.entity_dim)  # batch*n*dim
         negative_embedding, _ = torch.chunk(neg_embedding, 2, dim=-1)
-        positive_logit = self.compute_logit(positive_embedding, pred_emb)
-        negative_logit = self.compute_logit(negative_embedding, pred_emb.unsqueeze(1))
+        if union:
+            positive_union_logit = self.compute_logit(positive_embedding.unsqueeze(1), pred_emb)
+            positive_logit = torch.max(positive_union_logit, dim=1)[0]
+            negative_union_logit = self.compute_logit(negative_embedding.unsqueeze(1), pred_emb.unsqueeze(2))
+            negative_logit = torch.max(negative_union_logit, dim=1)[0]
+        else:
+            positive_logit = self.compute_logit(positive_embedding, pred_emb)
+            negative_logit = self.compute_logit(negative_embedding, pred_emb.unsqueeze(1))
         return positive_logit, negative_logit, subsampling_weight.to(self.device)
 
     def compute_logit(self, entity_emb, query_emb):
@@ -491,10 +473,24 @@ class BoxEstimator(AppFOQEstimator):
         logit = self.gamma - torch.norm(distance_out, p=1, dim=-1) - self.cen_reg * torch.norm(distance_in, p=1, dim=-1)
         return logit
 
-    def compute_all_entity_logit(self, pred_emb: torch.Tensor) -> torch.Tensor:
+    def compute_all_entity_logit(self, pred_emb: torch.Tensor, union=False) -> torch.Tensor:
         all_entities = torch.LongTensor(range(self.n_entity)).to(self.device)
-        all_entity_embedding = torch.chunk(all_entities, 2, dim=-1)
-        return self.compute_logit(all_entities, pred_emb)
+        all_embedding, _ = torch.chunk(self.get_entity_embedding(all_entities), 2, dim=-1)
+        pred_emb = pred_emb.unsqueeze(-2)
+        batch_num = find_optimal_batch(all_embedding, query_dist=pred_emb,
+                                       compute_logit=self.compute_logit, union=union)
+        chunk_of_answer = torch.chunk(all_embedding, batch_num, dim=0)
+        logit_list = []
+        for answer_part in chunk_of_answer:
+            if union:
+                union_part = self.compute_logit(answer_part.unsqueeze(0).unsqueeze(0),
+                                                pred_emb)  # b*disj*answer_part*dim
+                logit_part = torch.max(union_part, dim=1)[0]
+            else:
+                logit_part = self.compute_logit(answer_part.unsqueeze(dim=0), pred_emb)  # batch*answer_part*dim
+            logit_list.append(logit_part)
+        all_logit = torch.cat(logit_list, dim=1)
+        return all_logit
 
 
 def order_bounds(embedding):  # ensure lower < upper truth bound for logic embedding
@@ -702,7 +698,7 @@ class LogicEstimator(AppFOQEstimator):
         n_remb = self.get_negation_embedding(remb)
         return self.get_conjunction_embedding([lemb, n_remb])
 
-    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList]):
+    def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList], union:bool=False):
         assert pred_emb.shape[0] == len(answer_set)
         chosen_ans, chosen_false_ans, subsampling_weight = \
             negative_sampling(answer_set, negative_size=self.negative_size, entity_num=self.n_entity)
@@ -730,7 +726,7 @@ class LogicEstimator(AppFOQEstimator):
 
         return logit
 
-    def compute_all_entity_logit(self, pred_emb: torch.Tensor) -> (torch.Tensor, torch.Tensor):
+    def compute_all_entity_logit(self, pred_emb: torch.Tensor, union:bool=False) -> (torch.Tensor, torch.Tensor):
         query_entropy = None
         if self.bounded:
             lower, upper = torch.chunk(pred_emb, 2, dim=-1)
