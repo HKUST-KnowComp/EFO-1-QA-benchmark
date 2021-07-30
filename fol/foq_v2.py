@@ -653,7 +653,7 @@ class Multiple_Difference(MultipleSetQuery):
 
     def deterministic_query(self, projs):
         lquery, rqueries = self.sub_queries[0], self.sub_queries[1:]
-        ans_excluded = set.union(*(sub_query.deterministic_query(projs)) for sub_query in rqueries)
+        ans_excluded = set.union(*(sub_query.deterministic_query(projs) for sub_query in rqueries))
         ans_origin = lquery.deterministic_query(projs)
         return ans_origin - ans_excluded
 
