@@ -475,7 +475,7 @@ class Intersection(MultipleSetQuery):
                         projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
                     sub_obj_list.append(sub_objs)
             else:
-                choose_formula = random.randint(0, len(self.sub_queries))
+                choose_formula = random.randint(0, len(self.sub_queries) - 1)
                 for i in range(len(self.sub_queries)):
                     if i != choose_formula:
                         sub_objs = self.sub_queries[i].backward_sample(projs, rprojs, cumulative=cumulative)
@@ -524,7 +524,7 @@ class Union(MultipleSetQuery):
         sub_obj_list = []
         if keypoint:
             if contain:
-                choose_formula_num = random.randint(0, len(self.sub_queries))
+                choose_formula_num = random.randint(0, len(self.sub_queries) - 1)
                 for i in range(len(self.sub_queries)):
                     if i == choose_formula_num:
                         sub_objs = self.sub_queries[i].backward_sample(
@@ -638,13 +638,82 @@ class Difference(FirstOrderSetQuery):
         self.lquery.to(device)
         self.rquery.to(device)
 
+
+class Multiple_Difference(MultipleSetQuery):
+    __o__ = 'D'
+
+    def __init__(self, *queries: List[FirstOrderSetQuery]):
+        super().__init__(*queries)
+
+    def embedding_estimation(self,
+                             estimator: AppFOQEstimator,
+                             batch_indices=None):
+        embed_list = super().embedding_estimation(estimator, batch_indices)
+        return estimator.get_multiple_difference_embedding(embed_list)
+
+    def deterministic_query(self, projs):
+        lquery, rqueries = self.sub_queries[0], self.sub_queries[1:]
+        ans_excluded = set.union(*(sub_query.deterministic_query(projs)) for sub_query in rqueries)
+        ans_origin = lquery.deterministic_query(projs)
+        return ans_origin - ans_excluded
+
+    def backward_sample(self, projs, rprojs,
+                        contain: bool = True,
+                        keypoint: int = None,
+                        cumulative: bool = False, **kwargs):
+        robj_list = []
+        lquery, rqueries = self.sub_queries[0], self.sub_queries[1:]
+        if keypoint:
+            if contain:
+                lobjs = lquery.backward_sample(projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
+                for i in range(len(rqueries)):
+                    robjs = rqueries[i].backward_sample(
+                            projs, rprojs, contain=False, keypoint=keypoint, cumulative=cumulative)
+                    robj_list.append(robjs)
+            else:
+                choose_lr = random.randint(0, 1)
+                if choose_lr:  # this
+                    lobjs = lquery.backward_sample(projs, rprojs,
+                                                   contain=False, keypoint=keypoint, cumulative=cumulative)
+                    for rquery in rqueries:
+                        robjs = rquery.backward_sample(projs, rprojs, cumulative=cumulative)
+                        robj_list.append(srobjs)
+                else:
+                    choose_formula = random.randint(0, len(rqueries) - 1)
+                    lobjs = lquery.backward_sample(projs, rprojs, cumulative=cumulative)
+                    for i in range(len(rqueries)):
+                        if i == choose_formula:
+                            robjs = rqueries[i].backward_sample(projs, rprojs,
+                                                                contain=True, keypoint=keypoint, cumulative=cumulative)
+                            robj_list.append(robjs)
+                        else:
+                            robjs = rqueries[i].backward_sample(projs, rprojs, cumulative=cumulative)
+                            robj_list.append(robjs)
+        else:
+            lobjs = lquery.backward_sample(projs, rprojs, cumulative=cumulative)
+            for query in rqueries:
+                robjs = query.backward_sample(projs, rprojs, cumulative=cumulative)
+                robj_list.append(robjs)
+        return lobjs - set.union(*robj_list)
+
+    def random_query(self, projs, cumulative=False):
+        robj_list = []
+        lquery, rqueries = self.sub_queries[0], self.sub_queries[1:]
+        lobjs = lquery.random_query(projs, cumulative=cumulative)
+        for query in rqueries:
+            robjs = query.random_query(projs, cumulative=cumulative)
+            robj_list.append(robjs)
+        return lobjs - set.union(*robj_list)
+
+
 ops_dict = {
     'e': Entity,
     'n': Negation,
     'p': Projection,
     'd': Difference,
     'i': Intersection,
-    'u': Union
+    'u': Union,
+    'D': Multiple_Difference
 }
 
 
@@ -678,7 +747,7 @@ def parse_formula(fosq_formula: str) -> FirstOrderSetQuery:
             assert len(sub_range_list) == 1
         elif ops == 'd':
             assert len(sub_range_list) == 2
-        elif ops in 'ui':
+        elif ops in 'uiD':
             assert len(sub_range_list) > 1
         elif ops in '()':
             return identify_range(i+1, j-1)

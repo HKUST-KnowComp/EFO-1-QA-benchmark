@@ -984,7 +984,8 @@ class NLKEstimator(AppFOQEstimator):
     def get_disjunction_embedding(self, disj_emb: List[torch.Tensor]):
         return torch.stack(disj_emb, dim=1)
 
-    def get_Difference_embedding(self, lemb: torch.Tensor, remb: List[torch.Tensor]):
+    def get_multiple_difference_embedding(self, emb: List[torch.Tensor]):
+        lemb, remb = emb[0], emb[1:]
         lcenter, loffset, l_x = torch.split(lemb, self.entity_dim, dim=-1)
         center_list, offset_list, x_list = [], [], []
         for sub_emb in remb:
