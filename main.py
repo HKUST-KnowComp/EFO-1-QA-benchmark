@@ -10,14 +10,14 @@ from tqdm.std import trange, tqdm
 
 from fol.appfoq import compute_final_loss
 from data_helper import TaskManager
-from fol import BetaEstimator, BoxEstimator, TransEEstimator, LogicEstimator, parse_foq_formula
+from fol import BetaEstimator, BoxEstimator, TransEEstimator, LogicEstimator, NLKEstimator, parse_foq_formula
 from fol.appfoq import order_bounds
 from fol.base import beta_query
 from util import (Writer, load_graph, load_task_manager, read_from_yaml,
                   read_indexing, set_global_seed)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', default='config/default.yaml', type=str)
+parser.add_argument('--config', default='config/test-DNF.yaml', type=str)
 parser.add_argument('--prefix', default='test', type=str)
 parser.add_argument('--checkpoint_path', default=None, type=str)
 parser.add_argument('--load_step', default=0, type=int)
@@ -257,6 +257,8 @@ if __name__ == "__main__":
         model = BoxEstimator(**model_params)
     elif model_name == 'logic':
         model = LogicEstimator(**model_params)
+    elif model_name == 'NewLook':
+        model = NLKEstimator(**model_params)
     elif model_name == 'CQD':
         pass
     else:
