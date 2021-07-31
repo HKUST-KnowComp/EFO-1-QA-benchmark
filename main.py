@@ -61,7 +61,7 @@ def train_step(model, opt, iterator):
     emb_list, answer_list = [], []
     union_emb_list, union_answer_list = [], []
     for key in data:
-        if 'DNF' in key:
+        if 'u' in key:  # TODO: consider 'evaluate_union' in the future
             union_emb_list.append(data[key]['emb'])
             union_answer_list.append(data[key]['answer_set'])
         else:
@@ -99,7 +99,7 @@ def eval_step(model, eval_iterator, device, mode):
         for data in tqdm(eval_iterator):
             for key in data:
                 pred = data[key]['emb']
-                all_entity_loss = model.compute_all_entity_logit(pred, union=('DNF' in key))  # batch*nentity
+                all_entity_loss = model.compute_all_entity_logit(pred, union=('u' in key))  # batch*nentity
                 argsort = torch.argsort(all_entity_loss, dim=1, descending=True)
                 ranking = argsort.clone().to(torch.float)
                 #  create a new torch Tensor for batch_entity_range

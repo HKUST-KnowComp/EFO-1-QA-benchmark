@@ -455,7 +455,6 @@ class Intersection(MultipleSetQuery):
                              estimator: AppFOQEstimator,
                              batch_indices=None):
         embed_list = super().embedding_estimation(estimator, batch_indices)
-        # TODO: fix conjunction implementation
         return estimator.get_conjunction_embedding(embed_list)
 
     def deterministic_query(self, projs):
@@ -509,7 +508,6 @@ class Union(MultipleSetQuery):
                              estimator: AppFOQEstimator,
                              batch_indices=None):
         embed_list = super().embedding_estimation(estimator, batch_indices)
-        # TODO: fix disjunction embeddings
         return estimator.get_disjunction_embedding(embed_list)
 
     def deterministic_query(self, projs):
