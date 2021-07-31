@@ -19,6 +19,7 @@ parser.add_argument('--prefix', default='test', type=str)
 parser.add_argument('--checkpoint_path', default=None, type=str)
 parser.add_argument('--load_step', default=0, type=int)
 
+
 # from torch.utils.tensorboard import SummaryWriter
 # def train_step(model, opt, dataloader, device):
 #     iterator = iter(dataloader)
@@ -73,7 +74,7 @@ def train_step(model, opt, iterator):
         all_negative_logit = torch.cat([all_negative_logit, union_negative_logit], dim=0)
         all_subsampling_weight = torch.cat([all_subsampling_weight, union_subsampling_weight], dim=0)
     positive_loss, negative_loss = compute_final_loss(all_positive_logit, all_negative_logit, all_subsampling_weight)
-    loss = (positive_loss + negative_loss)/2
+    loss = (positive_loss + negative_loss) / 2
     loss.backward()
     opt.step()
     log = {
@@ -215,7 +216,7 @@ if __name__ == "__main__":
     print("[main] config loaded")
     pprint(configure)
     # initialize my log writer
-    case_name = f'{args.prefix}/{ args.config.split("/")[-1].split(".")[0]}'
+    case_name = f'{args.prefix}/{args.config.split("/")[-1].split(".")[0]}'
     # case_name = 'dev/default'
     writer = Writer(case_name=case_name, config=configure, log_path='log')
     # writer = SummaryWriter('./logs-debug/unused-tb')
@@ -236,9 +237,10 @@ if __name__ == "__main__":
 
     # load the data
     print("[main] loading the data")
-    data_folder = configure['data']['data_folder']
-    entity_dict, relation_dict, projection_train, reverse_projection_train, projection_valid, reverse_projection_valid,\
-    projection_test, reverse_projection_test = load_data_with_indexing(data_folder, data_folder)
+    data_folder, raw_data_folder = configure['data']['data_folder'], configure['data']['raw_data_folder']
+    entity_dict, relation_dict, projection_train, reverse_projection_train, projection_valid, \
+        reverse_projection_valid, projection_test, \
+        reverse_projection_test = load_data_with_indexing(data_folder, raw_data_folder)
     n_entity, n_relation = len(entity_dict), len(relation_dict)
 
     # get model
@@ -319,7 +321,7 @@ if __name__ == "__main__":
         lr, train_config['warm_up_steps'], init_step = load_beta_model(args.checkpoint_path, model, opt)
 
     training_logs = []
-    with trange(init_step, train_config['steps']+1) as t:
+    with trange(init_step, train_config['steps'] + 1) as t:
         for step in t:
             # basic training step
             if train_path_iterator:
@@ -349,7 +351,7 @@ if __name__ == "__main__":
                             _log_second = train_step(model, opt, train_path_iterator)
                     except StopIteration:
                         print("new epoch for other meta-query")
-                        train_other_iterator =\
+                        train_other_iterator = \
                             train_other_tm.build_iterators(model, batch_size=train_config['batch_size'])
                         _log_other = train_step(model, opt, train_other_iterator)
                         try:

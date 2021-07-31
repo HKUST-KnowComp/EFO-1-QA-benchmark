@@ -806,10 +806,10 @@ class CQDEstimator(AppFOQEstimator):
 
 
 class TwoLayerNet(nn.Module):
-    def __init__(self, dim, hidden_dim):
+    def __init__(self, dim, hidden_dim, output_dim):
         super(TwoLayerNet, self).__init__()
         self.layer1 = nn.Linear(dim, hidden_dim)
-        self.layer2 = nn.Linear(hidden_dim, dim)
+        self.layer2 = nn.Linear(hidden_dim, output_dim)
         nn.init.xavier_uniform_(self.layer1.weight)
         nn.init.xavier_uniform_(self.layer2.weight)
 
@@ -818,15 +818,15 @@ class TwoLayerNet(nn.Module):
 
 
 class NLKProjection(nn.Module):
-    def __init__(self, dim, hidden_dim, concat_dim):
+    def __init__(self, dim, hidden_dim, group_num):
         super(NLKProjection, self).__init__()
-        self.dim, self.hidden_dim, self.concat_dim = dim, hidden_dim, concat_dim
-        self.MLP1 = TwoLayerNet(dim, hidden_dim)
-        self.MLP2 = TwoLayerNet(dim, hidden_dim)
-        self.MLP3 = TwoLayerNet(concat_dim, hidden_dim)
-        self.MLP4 = TwoLayerNet(concat_dim, hidden_dim)
+        self.dim, self.hidden_dim, self.concat_dim = dim, hidden_dim, 2 * hidden_dim + group_num
+        self.MLP1 = TwoLayerNet(dim, hidden_dim, dim)
+        self.MLP2 = TwoLayerNet(dim, hidden_dim, dim)
+        self.MLP3 = TwoLayerNet(self.concat_dim, hidden_dim, dim)
+        self.MLP4 = TwoLayerNet(self.concat_dim, hidden_dim, dim)
 
-    def forward(self, origin_center, origin_offset,  x_new):
+    def forward(self, origin_center, origin_offset, x_new):
         z1 = self.MLP1(origin_center)
         z2 = self.MLP2(origin_offset)
         final_input = torch.cat([z1, z2, x_new], dim=-1)
@@ -912,7 +912,7 @@ class NLKEstimator(AppFOQEstimator):
 
     def __init__(self, n_entity, n_relation, hidden_dim,
                  gamma, entity_dim, relation_dim, center_reg, x_reg,
-                 negative_sample_size, group_number, device, projections):
+                 negative_sample_size, group_number, device):
         super().__init__()
         self.name = 'newlook'
         self.device = device
@@ -930,7 +930,7 @@ class NLKEstimator(AppFOQEstimator):
         self.x_reg = x_reg
         self.entity_dim, self.relation_dim = entity_dim, relation_dim
         self.entity_embeddings = nn.Embedding(num_embeddings=n_entity,
-                                              embedding_dim=self.entity_dim * 2)
+                                              embedding_dim=self.entity_dim)
         self.relation_embeddings = nn.Embedding(num_embeddings=n_relation,
                                                 embedding_dim=self.relation_dim)
         self.offset_embeddings = nn.Embedding(num_embeddings=n_relation, embedding_dim=self.entity_dim)
@@ -938,19 +938,22 @@ class NLKEstimator(AppFOQEstimator):
         nn.init.uniform_(tensor=self.entity_embeddings.weight, a=-embedding_range.item(), b=embedding_range.item())
         nn.init.uniform_(tensor=self.relation_embeddings.weight, a=-embedding_range.item(), b=embedding_range.item())
         nn.init.uniform_(tensor=self.offset_embeddings.weight, a=0, b=embedding_range.item())
-        self.projection_net = NLKProjection(self.entity_dim, self.hidden_dim)
+        self.projection_net = NLKProjection(self.entity_dim, self.entity_dim, self.group_number)
         self.intersection_offsetnet = NLKOffsetIntersection(self.entity_dim, self.hidden_dim)
         self.intersection_centernet = NLKCenterIntersection(self.entity_dim, self.hidden_dim)
         self.Difference_centernet = NLKDifferenceCenter(self.entity_dim, self.hidden_dim)
         self.Difference_offsetnet = NLKDifferenceOffset(self.entity_dim, self.hidden_dim)
 
         # setup group
-        self.group_alignment = torch.randint(low=0, high=group_number, size=(n_entity,), requires_grad=False)
-        self.onehot_vector = torch.zeros((n_entity, group_number), dtype=torch.int, requires_grad=False).scatter_(
-            dim=1, index=self.group_alignment.unsqueeze(1), value=1)
+        self.group_alignment = nn.Parameter(torch.randint(low=0, high=group_number, size=(n_entity,)),
+                                            requires_grad=False)
+        self.onehot_vector = nn.Parameter(torch.zeros((n_entity, group_number)).scatter_(
+            dim=1, index=self.group_alignment.unsqueeze(1), value=1), requires_grad=False)
         self.relation_adjacency = nn.Parameter(torch.zeros(n_relation, group_number, group_number), requires_grad=False)
-        for i in range(n_entity):
-            for j in range(n_relation):
+
+    def setup_relation_tensor(self, projections):
+        for i in range(self.n_entity):
+            for j in range(self.n_relation):
                 for k in projections[i][j]:
                     self.relation_adjacency[j][self.group_alignment[i]][self.group_alignment[k]] = 1
 
@@ -964,7 +967,7 @@ class NLKEstimator(AppFOQEstimator):
         assert emb.shape[0] == len(proj_ids)
         query_center, query_offset, x_query = torch.split(emb, self.entity_dim, dim=-1)
         r_center, r_offset = self.relation_embeddings(proj_ids), self.offset_embeddings(proj_ids)
-        x_new = torch.matmul(self.relation_adjancency[proj_ids], x_query.unsqueeze(-1)).squeeze()  # TODO: Indicator
+        x_new = torch.matmul(self.relation_adjacency[proj_ids], x_query.unsqueeze(-1)).squeeze()  # TODO: Indicator
         final_emb = self.projection_net(query_center + r_center, query_offset, x_new)
         return final_emb
 
@@ -1001,12 +1004,18 @@ class NLKEstimator(AppFOQEstimator):
         new_x = F.relu(l_x - torch.sum(torch.stack(x_list, dim=0), dim=0))  # TODO: This is by intuition
         return torch.cat([new_center, new_offset, new_x], dim=-1)
 
+    def get_difference_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
+        pass
+
+    def get_negation_embedding(self, emb: torch.Tensor):
+        pass
+
     def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList], union: bool = False):
         chosen_answer, chosen_false_answer, subsampling_weight = \
             inclusion_sampling(answer_set, negative_size=self.negative_size, entity_num=self.n_entity)
         positive_all_embedding = self.get_entity_embedding(torch.tensor(chosen_answer, device=self.device))  # b*d
         neg_embedding = self.get_entity_embedding(torch.tensor(chosen_false_answer, device=self.device).view(-1))
-        neg_embedding = neg_embedding.view(-1, self.negative_size, 2 * self.entity_dim)  # batch*n*dim
+        neg_embedding = neg_embedding.view(-1, self.negative_size, 2 * self.entity_dim + self.group_number)  # batch*n*dim
         if union:
             positive_union_logit = self.compute_logit(positive_all_embedding.unsqueeze(1), pred_emb)
             positive_logit = torch.max(positive_union_logit, dim=1)[0]

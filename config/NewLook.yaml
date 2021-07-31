@@ -1,9 +1,10 @@
 action: ['train','valid','test']  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: 0
+cuda: 3
 data:
   type: beta
   data_folder: data/FB15k-237-betae
+  raw_data_folder
   cpu: 10
 train:
   negative_sample_size: 128  # for each positive sample
@@ -21,11 +22,8 @@ train:
      - 3p
      - 2i
      - 3i
-     - 2in
-     - 3in
-     - inp
-     - pin
-     - pni
+     - 2D
+     - 3D
 evaluate:  # only used when valid/test in action
   batch_size: 1000
   print: true
@@ -35,17 +33,13 @@ evaluate:  # only used when valid/test in action
      - 3p
      - 2i
      - 3i
-     - 2in
-     - 3in
-     - inp
-     - pin
-     - pni
+     - 2D
+     - 3D
      - ip
      - pi
-     - 2u-DM
-     - up-DM
      - 2u-DNF
      - up-DNF
+     - Dp
 estimator:
   embedding: NewLook # one of [Transe, box, beta, dm]
   beta:
@@ -84,6 +78,9 @@ estimator:
   NewLook:
     entity_dim: 400
     relation_dim: 400
+    hidden_dim: 1600
     center_reg: 0.2
     x_reg: 0.2 # \lambda in the paper
+    gamma: 24
+    group_number: 4
 
