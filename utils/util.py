@@ -16,6 +16,7 @@ import torch
 import yaml
 
 from data_helper import Task
+from fol.sampler import read_indexing, load_data
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -235,3 +236,14 @@ def parse_ans_set(answer_set: str):
     return ans_list
 
 
+def load_data_with_indexing(pickle_datapath, rawdata_path):
+    entity_dict, relation_dict, id2ent, id2rel = read_indexing(pickle_datapath)
+    proj_none = collections.defaultdict(lambda: collections.defaultdict(set))
+    reverse_none = collections.defaultdict(lambda: collections.defaultdict(set))
+    proj_train, reverse_train = load_data(os.path.join(rawdata_path, "train.txt"),
+                                          entity_dict, relation_dict, proj_none, reverse_none)
+    proj_valid, reverse_valid = load_data(os.path.join(rawdata_path, "valid.txt"),
+                                          entity_dict, relation_dict, proj_train, reverse_train)
+    proj_test, reverse_test = load_data(os.path.join(rawdata_path, "test.txt"),
+                                        entity_dict, relation_dict, proj_valid, reverse_valid)
+    return entity_dict, relation_dict, proj_train, reverse_train, proj_valid, reverse_valid, proj_test, reverse_test

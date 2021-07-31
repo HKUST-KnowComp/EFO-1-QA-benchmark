@@ -20,8 +20,8 @@ from tqdm import tqdm
 from dataloader import (SingledirectionalOneShotIterator, TestDataset,
                         TrainDataset)
 from models import KGReasoning
-from util import (eval_tuple, flatten_query, list2tuple, parse_time,
-                  set_global_seed)
+from utils.util import (eval_tuple, flatten_query, list2tuple, parse_time,
+                        set_global_seed)
 
 """
 

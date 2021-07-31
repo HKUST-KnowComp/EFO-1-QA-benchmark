@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from util import flatten, list2tuple, tuple2list
+from utils.util import flatten, list2tuple, tuple2list
 
 
 class TestDataset(Dataset):

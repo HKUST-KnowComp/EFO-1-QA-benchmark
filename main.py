@@ -4,20 +4,17 @@ import os
 from pprint import pprint
 
 import torch
-from torch import optim
-from torch.utils.data import DataLoader, Dataset
 from tqdm.std import trange, tqdm
 
 from fol.appfoq import compute_final_loss
 from data_helper import TaskManager
-from fol import BetaEstimator, BoxEstimator, TransEEstimator, LogicEstimator, NLKEstimator, parse_foq_formula
+from fol import BetaEstimator, BoxEstimator, LogicEstimator, NLKEstimator
 from fol.appfoq import order_bounds
-from fol.base import beta_query
-from util import (Writer, load_graph, load_task_manager, read_from_yaml,
-                  read_indexing, set_global_seed)
+from utils.util import (Writer, load_data_with_indexing, load_task_manager, read_from_yaml,
+                        set_global_seed)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', default='config/test-DNF.yaml', type=str)
+parser.add_argument('--config', default='config/NewLook.yaml', type=str)
 parser.add_argument('--prefix', default='test', type=str)
 parser.add_argument('--checkpoint_path', default=None, type=str)
 parser.add_argument('--load_step', default=0, type=int)
@@ -240,10 +237,9 @@ if __name__ == "__main__":
     # load the data
     print("[main] loading the data")
     data_folder = configure['data']['data_folder']
-    entity_dict, relation_dict, id2ent, id2rel = read_indexing(data_folder)
+    entity_dict, relation_dict, projection_train, reverse_projection_train, projection_valid, reverse_projection_valid,\
+    projection_test, reverse_projection_test = load_data_with_indexing(data_folder, data_folder)
     n_entity, n_relation = len(entity_dict), len(relation_dict)
-    projection_train, reverse_train = load_graph(
-        os.path.join(data_folder, 'train.txt'), entity_dict, relation_dict)
 
     # get model
     model_name = configure['estimator']['embedding']
@@ -259,6 +255,7 @@ if __name__ == "__main__":
         model = LogicEstimator(**model_params)
     elif model_name == 'NewLook':
         model = NLKEstimator(**model_params)
+        model.setup_relation_tensor(projection_test)
     elif model_name == 'CQD':
         pass
     else:

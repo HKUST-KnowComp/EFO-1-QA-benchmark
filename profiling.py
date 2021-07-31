@@ -13,8 +13,8 @@ from data_helper import TaskManager
 from fol import BetaEstimator, BoxEstimator, TransEEstimator, LogicEstimator, parse_foq_formula
 from fol.appfoq import order_bounds
 from fol.base import beta_query
-from util import (Writer, load_graph, load_task_manager, read_from_yaml,
-                  read_indexing, set_global_seed)
+from util.utils import (Writer, load_graph, load_task_manager, read_from_yaml,
+                        read_indexing, set_global_seed)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', default='config/profiling.yaml', type=str)
