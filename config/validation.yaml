@@ -1,0 +1,23 @@
+ref:
+  nentity: 14505
+  nrelation: 474
+  hidden_dim: 500
+  gamma: 12.0
+  geo: beta
+  test_batch_size: 1
+  box_mode: null
+  use_cuda: False
+  query_name_dict: null
+  beta_mode:
+    - 1600
+    - 2
+
+our:
+  n_entity: 14505
+  n_relation: 474
+  hidden_dim: 1600
+  gamma: 12.0
+  entity_dim: 500
+  relation_dim: 500
+  num_layers: 2
+  negative_sample_size: 128
