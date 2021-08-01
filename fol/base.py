@@ -1,6 +1,8 @@
 from abc import ABC
 import random
 from collections import defaultdict
+
+
 class Formula(ABC):
     def __init__(self):
         pass
@@ -65,14 +67,19 @@ beta_query = {
     '3p': 'p(p(p(e)))',
     '2i': 'p(e)&p(e)',
     '3i': 'p(e)&p(e)&p(e)',
+    'ip': 'p(p(e)&p(e))',
+    'pi': 'p(p(e))&p(e)',
     '2in': 'p(e)-p(e)',
     '3in': 'p(e)&p(e)-p(e)',
     'inp': 'p(p(e)-p(e))',
-    'pni': 'p(p(e))-p(e)',
-    'ip': 'p(p(e)&p(e))',
-    'pi': 'p(e)&p(p(e))',
+    'pin': 'p(p(e))-p(e)',
+    'pni': 'p(e)-p(p(e))',
     '2u': 'p(e)|p(e)',
-    'up': 'p(p(e)|p(e))'
+    'up': 'p(p(e)|p(e))',
+    '2u-DNF': 'p(e)|p(e)',
+    'up-DNF': 'p(p(e)|p(e))',
+    '2u-DM': 'p(e)|p(e)',
+    'up-DM': 'p(p(e)|p(e))'
 }
 
 

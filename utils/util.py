@@ -6,11 +6,17 @@ import random
 import time
 from os.path import join
 from shutil import rmtree
+import copy
+import collections
+import pandas as pd
 
 import numpy as np
+from pandas.core.frame import DataFrame
 import torch
 import yaml
 
+from data_helper import Task
+from fol.sampler import read_indexing, load_data
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -72,11 +78,11 @@ class Writer:
 
     _log_path = join(dir_path, 'log')
 
-    def __init__(self, case_name, meta, log_path=None, postfix=True):
-        if isinstance(meta, dict):
-            self.meta = meta
+    def __init__(self, case_name, config, log_path=None, postfix=True, tb_writer=None):
+        if isinstance(config, dict):
+            self.meta = config
         else:
-            self.meta = vars(meta)
+            self.meta = vars(config)
         self.time = time.time()
         self.meta['time'] = self.time
         self.idstr = case_name
@@ -116,10 +122,12 @@ class Writer:
         with open(join(self.case_dir, name), 'wt') as f:
             json.dump(obj, f)
 
-    def save_model(self, model: torch.nn.Module, e):
-        print("saving model : ", e)
+    def save_model(self, model: torch.nn.Module, opt, step, warm_up_step, lr):
+        print("saving model : ", step)
         device = model.device
-        torch.save(model.cpu().state_dict(), self.modelf(e))
+        save_data = {'model_parameter': model.cpu().state_dict(), 'optimizer_parameter': opt.state_dict(),
+                     'warm_up_steps': warm_up_step, 'learning_rate': lr}
+        torch.save(save_data, self.modelf(step))
         model.to(device)
 
     def save_plot(self, fig, name):
@@ -144,3 +152,98 @@ def read_from_yaml(filepath):
     with open(filepath, 'r') as fd:
         data = yaml.load(fd, Loader=yaml.FullLoader)
     return data
+
+def save_model(model, optimizer, save_variable_list, args):
+    '''
+    Save the parameters of the model and the optimizer,
+    as well as some other variables such as step and learning_rate
+    '''
+
+    argparse_dict = vars(args)
+    with open(os.path.join(args.save_path, 'config.json'), 'w') as fjson:
+        json.dump(argparse_dict, fjson)
+
+    torch.save({
+        **save_variable_list,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict()},
+        os.path.join(args.save_path, 'checkpoint')
+    )
+
+
+def load_graph(input_edge_file,
+               all_entity_dict, all_relation_dict, projection_origin=None, reverse_projection_origin=None):
+    if projection_origin is None:
+        projection_origin = collections.defaultdict(lambda: collections.defaultdict(set))
+    if reverse_projection_origin is None:
+        projection_origin = collections.defaultdict(lambda: collections.defaultdict(set))
+    projections = copy.deepcopy(projection_origin)
+    reverse = copy.deepcopy(reverse_projection_origin)
+    with open(input_edge_file, 'r', errors='ignore') as infile:
+        for line in infile.readlines():
+            e1, r, e2 = line.strip().split('\t')
+            r_projection = '+' + r
+            r_reverse = '-' + r
+            if e1 in all_entity_dict and e2 in all_entity_dict and r_projection in all_relation_dict:
+                e1, r_projection, r_reverse, e2 = all_entity_dict[e1], all_relation_dict[r_projection], \
+                                                  all_relation_dict[r_reverse], all_entity_dict[e2]
+                projections[e1][r_projection].add(e2)
+                projections[e2][r_reverse].add(e1)
+                reverse[e2][r_projection].add(e1)
+                reverse[e1][r_reverse].add(e2)
+            else:
+                pass
+
+    return projections, reverse
+
+
+def read_indexing(data_path):
+    ent2id = pickle.load(open(os.path.join(data_path, "ent2id.pkl"), 'rb'))
+    rel2id = pickle.load(open(os.path.join(data_path, "rel2id.pkl"), 'rb'))
+    id2ent = pickle.load(open(os.path.join(data_path, "id2ent.pkl"), 'rb'))
+    id2rel = pickle.load(open(os.path.join(data_path, "id2rel.pkl"), 'rb'))
+    return ent2id, rel2id, id2ent, id2rel
+
+
+def load_task_manager(data_folder, mode, task_names=[]):
+    all_data = []
+    tasks = []
+    if task_names:
+        for task_name in task_names:
+            filename = os.path.join(data_folder, f'{mode}_{task_name}.csv')
+            print(f'[data] load query from file {filename}')
+            task = Task(filename, task_name)
+            tasks.append(task)
+    return tasks
+
+
+def parse_ans_set(answer_set: str):
+    ans_list = answer_set.strip().split(',')
+    if len(ans_list) > 1:
+        for i in range(len(ans_list)):
+            if i == 0:
+                ans_list[i] = int(ans_list[i][1:])
+            elif i == len(ans_list) - 1:
+                ans_list[i] = int(ans_list[i][:-1])
+            else:
+                ans_list[i] = int(ans_list[i])
+    elif len(ans_list) == 1 and ans_list[0] != 'set()':
+        ans_list[0] = int(ans_list[0][1:-1])
+    else:
+        assert ans_list[0] == 'set()'
+        ans_list = []
+
+    return ans_list
+
+
+def load_data_with_indexing(pickle_datapath, rawdata_path):
+    entity_dict, relation_dict, id2ent, id2rel = read_indexing(pickle_datapath)
+    proj_none = collections.defaultdict(lambda: collections.defaultdict(set))
+    reverse_none = collections.defaultdict(lambda: collections.defaultdict(set))
+    proj_train, reverse_train = load_data(os.path.join(rawdata_path, "train.txt"),
+                                          entity_dict, relation_dict, proj_none, reverse_none)
+    proj_valid, reverse_valid = load_data(os.path.join(rawdata_path, "valid.txt"),
+                                          entity_dict, relation_dict, proj_train, reverse_train)
+    proj_test, reverse_test = load_data(os.path.join(rawdata_path, "test.txt"),
+                                        entity_dict, relation_dict, proj_valid, reverse_valid)
+    return entity_dict, relation_dict, proj_train, reverse_train, proj_valid, reverse_valid, proj_test, reverse_test

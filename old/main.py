@@ -20,8 +20,8 @@ from tqdm import tqdm
 from dataloader import (SingledirectionalOneShotIterator, TestDataset,
                         TrainDataset)
 from models import KGReasoning
-from util import (eval_tuple, flatten_query, list2tuple, parse_time,
-                  set_global_seed)
+from utils.util import (eval_tuple, flatten_query, list2tuple, parse_time,
+                        set_global_seed)
 
 """
 
@@ -67,7 +67,7 @@ def parse_args(args=None):
                         action='store_true', help="test_overfitting")
 
     parser.add_argument('--data_path', type=str,
-                        default="data/FB15k-237-betae", help="KG data path")
+                        default="../data/FB15k-237-betae", help="KG data path")
     parser.add_argument('-n', '--negative_sample_size', default=128,
                         type=int, help="negative entities sampled per query")
     parser.add_argument('-d', '--hidden_dim', default=400,
@@ -83,14 +83,14 @@ def parse_args(args=None):
                         type=int, help="used to speed up torch.dataloader")
     parser.add_argument('-save', '--save_path', default=None, type=str,
                         help="no need to set manually, will configure automatically")
-    parser.add_argument('--max_steps', default=100000,
+    parser.add_argument('--max_steps', default=450001,
                         type=int, help="maximum iterations to train")
     parser.add_argument('--warm_up_steps', default=None, type=int,
                         help="no need to set manually, will configure automatically")
 
     parser.add_argument('--save_checkpoint_steps', default=50000,
                         type=int, help="save checkpoints every xx steps")
-    parser.add_argument('--valid_steps', default=30000, type=int,
+    parser.add_argument('--valid_steps', default=15000, type=int,
                         help="evaluate validation queries every xx steps")
     parser.add_argument('--log_steps', default=100, type=int,
                         help='train log every xx steps')
@@ -110,13 +110,13 @@ def parse_args(args=None):
                         type=int, help="how many entities we train")
     parser.add_argument('--number_of_queries', default=-1,
                         type=int, help="how many queries we use")
-    parser.add_argument('--test_tasks', default='3p.3i',
+    parser.add_argument('--test_tasks', default='1p.2p.3p.2i.3i.2in.3in.ip.pi.inp.pin.pni.2u.up',
                         type=str, help="tasks to be tested")
-    parser.add_argument('--train_tasks', default='1p.2i', type=str,
+    parser.add_argument('--train_tasks', default='1p.2p.3p.2i.3i.2in.3in.inp.pin.pni', type=str,
                         help="tasks connected by dot, refer to the BetaE paper for detailed meaning and structure of each task")
     parser.add_argument('--seed', default=0, type=int, help="random seed")
-    parser.add_argument('-betam', '--beta_mode', default="(400,1600,2)", type=str,
-                        help='(relation_dim,hidden_dim,num_layer) for BetaE relational projection')
+    parser.add_argument('-betam', '--beta_mode', default="(1600,2)", type=str,
+                        help='(hidden_dim,num_layer) for BetaE relational projection')
     parser.add_argument('-GMM', '--GMM_mode', default="(0,5)",
                         type=str, help='(use_Gaussian,topk) for GMM')
     parser.add_argument('-boxm', '--box_mode', default="(none,0.02)", type=str,
@@ -371,7 +371,6 @@ def main(args):
     else:
         writer = SummaryWriter(args.save_path)
     set_logger(args)
-
     with open('%s/stats.txt' % args.data_path) as f:
         entrel = f.readlines()
         nentity = int(entrel[0].split(' ')[-1])
@@ -390,7 +389,8 @@ def main(args):
     logging.info('#max steps: %d' % args.max_steps)
     logging.info('Evaluate unoins using: %s' % args.evaluate_union)
 
-    train_queries, train_answers, valid_queries, valid_hard_answers, valid_easy_answers, test_queries, test_hard_answers, test_easy_answers = load_data(
+    train_queries, train_answers, valid_queries, valid_hard_answers, valid_easy_answers, test_queries,\
+        test_hard_answers, test_easy_answers = load_data(
         args, train_tasks, test_tasks, args.number_of_queries, args.number_of_entities)
 
     logging.info("Training info:")

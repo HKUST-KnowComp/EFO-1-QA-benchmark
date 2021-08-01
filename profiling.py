@@ -4,21 +4,23 @@ import os
 from pprint import pprint
 
 import torch
+from torch import optim
+from torch.utils.data import DataLoader, Dataset
 from tqdm.std import trange, tqdm
 
 from fol.appfoq import compute_final_loss
 from data_helper import TaskManager
-from fol import BetaEstimator, BoxEstimator, LogicEstimator, NLKEstimator
+from fol import BetaEstimator, BoxEstimator, TransEEstimator, LogicEstimator, parse_foq_formula
 from fol.appfoq import order_bounds
-from utils.util import (Writer, load_data_with_indexing, load_task_manager, read_from_yaml,
-                        set_global_seed)
+from fol.base import beta_query
+from util.utils import (Writer, load_graph, load_task_manager, read_from_yaml,
+                        read_indexing, set_global_seed)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', default='config/NewLook.yaml', type=str)
-parser.add_argument('--prefix', default='test', type=str)
+parser.add_argument('--config', default='config/profiling.yaml', type=str)
+parser.add_argument('--prefix', default='dev', type=str)
 parser.add_argument('--checkpoint_path', default=None, type=str)
 parser.add_argument('--load_step', default=0, type=int)
-
 
 # from torch.utils.tensorboard import SummaryWriter
 # def train_step(model, opt, dataloader, device):
@@ -26,7 +28,7 @@ parser.add_argument('--load_step', default=0, type=int)
 #     # list of tuple, [0] is query, [1] ans, [2] beta_name
 #     batch_flattened_query = next(iterator)
 #     all_loss = torch.tensor(0, dtype=torch.float)
-#     opt.zero_grad()
+#     opt.zero_grad()  # TODO: parallelize query
 #     # A dict with key of beta_name, value= list of queries
 #     query_dict = collections.defaultdict(list)
 #     ans_dict = collections.defaultdict(list)
@@ -54,27 +56,20 @@ parser.add_argument('--load_step', default=0, type=int)
 
 
 def train_step(model, opt, iterator):
+    # list of tuple, [0] is query, [1] ans, [2] beta_name
     opt.zero_grad()
     data = next(iterator)
-    emb_list, answer_list = [], []
-    union_emb_list, union_answer_list = [], []
+    positive_logit_list, negative_logit_list, subsampling_weight_list = [], [], []
     for key in data:
-        if 'u' in key:  # TODO: consider 'evaluate_union' in the future
-            union_emb_list.append(data[key]['emb'])
-            union_answer_list.append(data[key]['answer_set'])
-        else:
-            emb_list.append(data[key]['emb'])
-            answer_list.extend(data[key]['answer_set'])
-    pred_embedding = torch.cat(emb_list, dim=0)
-    all_positive_logit, all_negative_logit, all_subsampling_weight = model.criterion(pred_embedding, answer_list)
-    for i in range(len(union_emb_list)):
-        union_positive_logit, union_negative_logit, union_subsampling_weight = \
-            model.criterion(union_emb_list[i], union_answer_list[i], union=True)
-        all_positive_logit = torch.cat([all_positive_logit, union_positive_logit], dim=0)
-        all_negative_logit = torch.cat([all_negative_logit, union_negative_logit], dim=0)
-        all_subsampling_weight = torch.cat([all_subsampling_weight, union_subsampling_weight], dim=0)
+        positive_logit, negative_logit, subsampling_weight = model.criterion(data[key]['emb'], data[key]['answer_set'])
+        positive_logit_list.append(positive_logit)
+        negative_logit_list.append(negative_logit)
+        subsampling_weight_list.append(subsampling_weight)
+    all_positive_logit = torch.cat(positive_logit_list, dim=0)
+    all_negative_logit = torch.cat(negative_logit_list, dim=0)
+    all_subsampling_weight = torch.cat(subsampling_weight_list, dim=0)
     positive_loss, negative_loss = compute_final_loss(all_positive_logit, all_negative_logit, all_subsampling_weight)
-    loss = (positive_loss + negative_loss) / 2
+    loss = (positive_loss + negative_loss)/2
     loss.backward()
     opt.step()
     log = {
@@ -83,11 +78,11 @@ def train_step(model, opt, iterator):
         'loss': loss.item()
     }
     if model.name == 'logic':
-        entity_embedding = model.entity_embeddings.weight.data
+        entity_embedding = model._parameters['entity_embeddings'].data
         if model.bounded:
-            model.entity_embeddings.weight.data = order_bounds(entity_embedding)
+            model._parameters['entity_embeddings'].data = order_bounds(entity_embedding)
         else:
-            model.entity_embeddings.weight.data = torch.clamp(entity_embedding, 0, 1)
+            model._parameters['entity_embeddings'].data = torch.clamp(entity_embedding, 0, 1)
     return log
 
 
@@ -97,7 +92,7 @@ def eval_step(model, eval_iterator, device, mode):
         for data in tqdm(eval_iterator):
             for key in data:
                 pred = data[key]['emb']
-                all_entity_loss = model.compute_all_entity_logit(pred, union=('u' in key))  # batch*nentity
+                all_entity_loss = model.compute_all_entity_logit(pred)  # batch*nentity
                 argsort = torch.argsort(all_entity_loss, dim=1, descending=True)
                 ranking = argsort.clone().to(torch.float)
                 #  create a new torch Tensor for batch_entity_range
@@ -150,7 +145,7 @@ def eval_step(model, eval_iterator, device, mode):
             for metric in logs[key].keys():
                 if metric != 'num_queries':
                     logs[key][metric] /= logs[key]['num_queries']
-    torch.cuda.empty_cache()
+        print(logs)
     return logs
 
 
@@ -184,27 +179,14 @@ def save_eval(log, mode, step, writer):
         writer.append_trace(f'eval_{mode}_{t}', logt)
 
 
-def load_beta_model(checkpoint_path, model, optimizer):
+def load_model(step, checkpoint_path):
     print('Loading checkpoint %s...' % checkpoint_path)
     checkpoint = torch.load(os.path.join(
-        args.checkpoint_path, 'checkpoint'))
-    init_step = checkpoint['step']
-    model.load_state_dict(checkpoint['model_state_dict'])
-    current_learning_rate = checkpoint['current_learning_rate']
-    warm_up_steps = checkpoint['warm_up_steps']
-    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-    return current_learning_rate, warm_up_steps, init_step
-
-
-def load_model(step, checkpoint_path, model, opt):
-    print('Loading checkpoint %s...' % checkpoint_path)
-    checkpoint = torch.load(os.path.join(
-        checkpoint_path, f'{step}.ckpt'))
+        args.checkpoint_path, f'{step}.ckpt'))
     model.load_state_dict(checkpoint['model_parameter'])
     opt.load_state_dict(checkpoint['optimizer_parameter'])
     learning_rate = checkpoint['learning_rate']
     warm_up_steps = checkpoint['warm_up_steps']
-    return learning_rate, warm_up_steps
 
 
 if __name__ == "__main__":
@@ -216,7 +198,7 @@ if __name__ == "__main__":
     print("[main] config loaded")
     pprint(configure)
     # initialize my log writer
-    case_name = f'{args.prefix}/{args.config.split("/")[-1].split(".")[0]}'
+    case_name = f'{args.prefix}/{ args.config.split("/")[-1].split(".")[0]}'
     # case_name = 'dev/default'
     writer = Writer(case_name=case_name, config=configure, log_path='log')
     # writer = SummaryWriter('./logs-debug/unused-tb')
@@ -237,11 +219,11 @@ if __name__ == "__main__":
 
     # load the data
     print("[main] loading the data")
-    data_folder, raw_data_folder = configure['data']['data_folder'], configure['data']['raw_data_folder']
-    entity_dict, relation_dict, projection_train, reverse_projection_train, projection_valid, \
-        reverse_projection_valid, projection_test, \
-        reverse_projection_test = load_data_with_indexing(data_folder, raw_data_folder)
+    data_folder = configure['data']['data_folder']
+    entity_dict, relation_dict, id2ent, id2rel = read_indexing(data_folder)
     n_entity, n_relation = len(entity_dict), len(relation_dict)
+    projection_train, reverse_train = load_graph(
+        os.path.join(data_folder, 'train.txt'), entity_dict, relation_dict)
 
     # get model
     model_name = configure['estimator']['embedding']
@@ -255,9 +237,6 @@ if __name__ == "__main__":
         model = BoxEstimator(**model_params)
     elif model_name == 'logic':
         model = LogicEstimator(**model_params)
-    elif model_name == 'NewLook':
-        model = NLKEstimator(**model_params)
-        model.setup_relation_tensor(projection_test)
     elif model_name == 'CQD':
         pass
     else:
@@ -312,16 +291,16 @@ if __name__ == "__main__":
         test_tm = None
 
     lr = train_config['learning_rate']
-    opt = torch.optim.Adam(
-        filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
+    opt = torch.optim.Adam(model.parameters(), lr=lr)
     init_step = 1
     # exit()
 
     if args.checkpoint_path is not None:
-        lr, train_config['warm_up_steps'], init_step = load_beta_model(args.checkpoint_path, model, opt)
+        load_model(args.load_step, args.checkpoint_path)
+        init_step = args.load_step
 
     training_logs = []
-    with trange(init_step, train_config['steps'] + 1) as t:
+    with trange(init_step, train_config['steps']+1) as t:
         for step in t:
             # basic training step
             if train_path_iterator:
@@ -351,7 +330,7 @@ if __name__ == "__main__":
                             _log_second = train_step(model, opt, train_path_iterator)
                     except StopIteration:
                         print("new epoch for other meta-query")
-                        train_other_iterator = \
+                        train_other_iterator =\
                             train_other_tm.build_iterators(model, batch_size=train_config['batch_size'])
                         _log_other = train_step(model, opt, train_other_iterator)
                         try:
@@ -372,21 +351,21 @@ if __name__ == "__main__":
                     training_logs = []
                     writer.append_trace('train', _log)
 
-            if step % train_config['evaluate_every_steps'] == 0 or step == train_config['steps']:
-                if train_iterator:
-                    train_iterator = train_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
-                    _log = eval_step(model, train_iterator, device, mode='train')
-                    save_eval(_log, 'train', step, writer)
+            # if step % train_config['evaluate_every_steps'] == 0 or step == train_config['evaluate_every_steps']:
+            #     if train_iterator:
+            #         train_iterator = train_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
+            #         _log = eval_step(model, train_iterator, device, mode='train')
+            #         save_eval(_log, 'train', step, writer)
 
-                if valid_iterator:
-                    valid_iterator = valid_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
-                    _log = eval_step(model, valid_iterator, device, mode='valid')
-                    save_eval(_log, 'valid', step, writer)
+            #     if valid_iterator:
+            #         valid_iterator = valid_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
+            #         _log = eval_step(model, valid_iterator, device, mode='valid')
+            #         save_eval(_log, 'valid', step, writer)
 
-                if test_iterator:
-                    test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
-                    _log = eval_step(model, test_iterator, device, mode='test')
-                    save_eval(_log, 'test', step, writer)
+            #     if test_iterator:
+            #         test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
+            #         _log = eval_step(model, test_iterator, device, mode='test')
+            #         save_eval(_log, 'test', step, writer)
 
-            if step % train_config['save_every_steps'] == 0:
-                writer.save_model(model, opt, step, train_config['warm_up_steps'], lr)
+            # if step % train_config['save_every_steps'] == 0:
+            #     writer.save_model(model, opt, step, train_config['warm_up_steps'], lr)

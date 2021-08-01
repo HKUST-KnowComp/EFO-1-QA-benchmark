@@ -21,11 +21,6 @@ train:
      - 3p
      - 2i
      - 3i
-     - 2in
-     - 3in
-     - inp
-     - pin
-     - pni
 evaluate:  # only used when valid/test in action
   batch_size: 1000
   print: true
@@ -35,32 +30,25 @@ evaluate:  # only used when valid/test in action
      - 3p
      - 2i
      - 3i
-     - 2in
-     - 3in
-     - inp
-     - pin
-     - pni
      - ip
      - pi
      - 2u-DM
      - up-DM
-     - 2u-DNF
-     - up-DNF
 estimator:
-  embedding: beta # one of [Transe, box, beta, dm]
+  embedding: box # one of [Transe, box, beta, dm]
   beta:
     entity_dim: 400
     relation_dim: 400
     hidden_dim: 1600
     num_layers: 2
-    # evaluate_union: DM # one of [DM, DNF] after parsing it can be omitted
+    evaluate_union: DM # one of [DM, DNF]
     gamma: 60
   box:
     entity_dim: 400
     relation_dim: 400
-    offset_activation: None
+    offset_activation: relu
     center_reg: 0.02
-    gamma: 60
+    gamma: 24
   dm:
     entity_dim: 2
     relation_dim: 2
@@ -81,9 +69,4 @@ estimator:
     entity_dim: 1000 # actually 2000
     relation_dim: 1000
     norm_type: product
-  NewLook:
-    entity_dim: 400
-    relation_dim: 400
-    center_reg: 0.2
-    x_reg: 0.2 # \lambda in the paper
 

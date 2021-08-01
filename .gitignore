@@ -1,9 +1,11 @@
-logs/
+log/
 *__pycache__*
-data/
+data
 *.zip
 *.sh
 .DS_Store
+.ipynb_checkpoints
+tmp
 
 *.csv
 *.svg

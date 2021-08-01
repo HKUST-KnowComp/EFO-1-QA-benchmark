@@ -1,6 +1,6 @@
 action: ['train','valid','test']  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: 0
+cuda: 1
 data:
   type: beta
   data_folder: data/FB15k-237-betae
@@ -17,15 +17,7 @@ train:
   checkpoint_every: 10000
   meta_queries:
      - 1p
-     - 2p
-     - 3p
      - 2i
-     - 3i
-     - 2in
-     - 3in
-     - inp
-     - pin
-     - pni
 evaluate:  # only used when valid/test in action
   batch_size: 1000
   print: true
@@ -44,8 +36,6 @@ evaluate:  # only used when valid/test in action
      - pi
      - 2u-DM
      - up-DM
-     - 2u-DNF
-     - up-DNF
 estimator:
   embedding: beta # one of [Transe, box, beta, dm]
   beta:
@@ -53,7 +43,7 @@ estimator:
     relation_dim: 400
     hidden_dim: 1600
     num_layers: 2
-    # evaluate_union: DM # one of [DM, DNF] after parsing it can be omitted
+    evaluate_union: DM # one of [DM, DNF]
     gamma: 60
   box:
     entity_dim: 400
@@ -66,24 +56,3 @@ estimator:
     relation_dim: 2
     hidden_dim: 1600
     num_layers: 2
-  logic:
-    entity_dim: 400
-    relation_dim: 400
-    hidden_dim: 1600
-    num_layers: 2
-    evaluate_union: DM
-    gamma: 0.375
-    t_norm: luk
-    bounded: 1
-    use_att: 1
-    use_gtrans: 0
-  cqd:
-    entity_dim: 1000 # actually 2000
-    relation_dim: 1000
-    norm_type: product
-  NewLook:
-    entity_dim: 400
-    relation_dim: 400
-    center_reg: 0.2
-    x_reg: 0.2 # \lambda in the paper
-
