@@ -10,7 +10,7 @@ from fol.appfoq import compute_final_loss
 from data_helper import TaskManager
 from fol import BetaEstimator, BoxEstimator, LogicEstimator, NLKEstimator
 from fol.appfoq import order_bounds
-from utils.util import (Writer, load_data_with_indexing, load_task_manager, read_from_yaml,
+from utils.util import (Writer, load_rawdata_with_indexing, load_task_manager, read_from_yaml,
                         set_global_seed)
 
 parser = argparse.ArgumentParser()
@@ -240,7 +240,7 @@ if __name__ == "__main__":
     data_folder, raw_data_folder = configure['data']['data_folder'], configure['data']['raw_data_folder']
     entity_dict, relation_dict, projection_train, reverse_projection_train, projection_valid, \
         reverse_projection_valid, projection_test, \
-        reverse_projection_test = load_data_with_indexing(data_folder, raw_data_folder)
+        reverse_projection_test = load_rawdata_with_indexing(data_folder, raw_data_folder)
     n_entity, n_relation = len(entity_dict), len(relation_dict)
 
     # get model

@@ -2,7 +2,7 @@ from fol.sampler import *
 from fol.foq_v2 import parse_formula
 from fol.test_foq_v2 import beta_query_v2
 import pandas as pd
-from utils.util import load_data_with_indexing
+from utils.util import load_rawdata_with_indexing
 
 
 def sampling_stored(query_list, store_fold, num_queries, projs, rprojs, projs_hard, rprojs_hard, mode,
@@ -44,7 +44,7 @@ if __name__ == "__main__":
     data_path = 'data/FB15k-237-betae'
     rawdata_path = 'datasets_knowledge_embedding/FB15k-237'
     ent2id, rel2id, projection_train, reverse_projection_train, projection_valid, reverse_projection_valid, \
-    projection_test, reverse_projection_test = load_data_with_indexing(data_path, rawdata_path)
+    projection_test, reverse_projection_test = load_rawdata_with_indexing(data_path, rawdata_path)
     NewLook_Query = ['2D', '3D', 'Dp']
     sampling_stored(NewLook_Query, data_path, 149689, None, None,
                     projection_train, reverse_projection_train, 'train', True)
