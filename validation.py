@@ -52,7 +52,7 @@ def ref_train_step(beta_train_queries: Dict[str, Set],
     return log
 
 
-def our_train_step(batch_data, model: BetaEstimator, optimizer) -> Dict:
+def our_train_step(batch_data, formula, model: BetaEstimator, optimizer) -> Dict:
     pass
 
 

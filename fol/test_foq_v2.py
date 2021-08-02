@@ -8,7 +8,7 @@ sys.path.append(osp.dirname(osp.dirname(__file__)))
 
 from fol.appfoq import TransEEstimator
 from fol.foq_v2 import parse_formula
-from fol.sampler import load_data, read_indexing
+from utils.util import read_indexing, load_graph
 
 
 def random_e_ground(foq_formula):
@@ -37,49 +37,6 @@ def complete_ground(foq_formula):
         except:
             break
     return foq_formula
-
-
-beta_query = {
-    '1p': 'p(e)',
-    '2p': 'p(p(e))',
-    '3p': 'p(p(p(e)))',
-    '2i': 'p(e)&p(e)',
-    '3i': 'p(e)&p(e)&p(e)',
-    'ip': 'p(p(e)&p(e))',
-    'pi': 'p(p(e))&p(e)',
-    '2in': 'p(e)-p(e)',
-    '3in': 'p(e)&p(e)-p(e)',
-    'inp': 'p(p(e)-p(e))',
-    'pin': 'p(p(e))-p(e)',
-    'pni': 'p(e)-p(p(e))',
-    '2u': 'p(e)|p(e)',
-    'up': 'p(p(e)|p(e))'
-}
-
-
-beta_query_v2 = {
-    '1p': '(p,(e))',
-    '2p': '(p,(p,(e)))',
-    '3p': '(p,(p,(p,(e))))',
-    '2i': '(i,(p,(e)),(p,(e)))',
-    '3i': '(i,(p,(e)),(p,(e)),(p,(e)))',
-    'ip': '(p,(i,(p,(e)),(p,(e))))',
-    'pi': '(i,(p,(p,(e))),(p,(e)))',
-    '2in': '(i,(p,(e)),(n,(p,(e))))',
-    '3in': '(i,(p,(e)),(p,(e)),(n,(p,(e))))',
-    'inp': '(p,(i,(p,(e)),(n,(p,(e)))))',
-    'pin': '(i,(p,(p,(e))),(n,(p,(e))))',
-    'pni': '(i,(n,(p,(p,(e)))),(p,(e)))',
-    '2u': '(u,(p,(e)),(p,(e)))',
-    'up': '(p,(u,(p,(e)),(p,(e))))',
-    '2u-DNF': '(u,(p,(e)),(p,(e)))',
-    'up-DNF': '(u,(p,(p,(e))),(p,(p,(e))))',
-    '2u-DM': '(n,(i,(n,(p,(e))),(n,(p,(e)))))',
-    'up-DM': '(p,(n,(i,(n,(p,(e))),(n,(p,(e))))))',
-    '2D': '(D, (p,(e)), (p,(e)))',
-    '3D': '(D, (p,(e)), (p,(e)), (p,(e)))',
-    'Dp': '(p, (D, (p,(e)), (p,(e))))',
-}
 
 
 def test_parse_formula():
@@ -136,7 +93,7 @@ def test_sample():
     for i in all_entity_dict.values():
         projection_none[i] = collections.defaultdict(set)
         reverse_proection_none[i] = collections.defaultdict(set)
-    projection_train, reverse_projection_train = load_data('../datasets_knowledge_embedding/FB15k-237/train.txt',
+    projection_train, reverse_projection_train = load_graph('../datasets_knowledge_embedding/FB15k-237/train.txt',
                                                            all_entity_dict, all_relation_dict, projection_none,
                                                            reverse_proection_none)
     for name in beta_query_v2:
@@ -162,7 +119,7 @@ def test_backward_sample():
     for i in all_entity_dict.values():
         projection_none[i] = collections.defaultdict(set)
         reverse_proection_none[i] = collections.defaultdict(set)
-    projection_train, reverse_projection_train = load_data('../datasets_knowledge_embedding/FB15k-237/train.txt',
+    projection_train, reverse_projection_train = load_graph('../datasets_knowledge_embedding/FB15k-237/train.txt',
                                                            all_entity_dict, all_relation_dict, projection_none,
                                                            reverse_proection_none)
     for name in beta_query_v2:

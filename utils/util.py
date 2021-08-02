@@ -1,24 +1,51 @@
+import collections
+import copy
 import hashlib
 import json
 import os
 import pickle
 import random
 import time
+from collections import defaultdict
 from os.path import join
 from shutil import rmtree
-import copy
-import collections
-import pandas as pd
 
 import numpy as np
-from pandas.core.frame import DataFrame
 import torch
 import yaml
-
 from data_helper import Task
-from fol.sampler import read_indexing, load_data
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
+
+
+def load_graph(input_edge_file,
+               projection_origin=defaultdict(lambda: defaultdict(set)),
+               reverse_origin=defaultdict(lambda: defaultdict(set))):
+
+    projections = copy.deepcopy(projection_origin)
+    reverse = copy.deepcopy(reverse_origin)
+    with open(input_edge_file, 'r', errors='ignore') as infile:
+        for line in infile.readlines():
+            e1, r, e2 = line.strip().split('\t')
+            e1 = int(e1)
+            e2 = int(e2)
+            r = int(r)
+            projections[e1][r].add(e2)
+            reverse[e2][r].add(e1)
+
+    return projections, reverse
+
+
+def read_indexing(data_path):
+    ent2id = pickle.load(
+        open(os.path.join(data_path, "ent2id.pkl"), 'rb'))
+    rel2id = pickle.load(
+        open(os.path.join(data_path, "rel2id.pkl"), 'rb'))
+    id2ent = pickle.load(
+        open(os.path.join(data_path, "id2ent.pkl"), 'rb'))
+    id2rel = pickle.load(
+        open(os.path.join(data_path, "id2rel.pkl"), 'rb'))
+    return ent2id, rel2id, id2ent, id2rel
 
 
 def list2tuple(l):
@@ -153,6 +180,7 @@ def read_from_yaml(filepath):
         data = yaml.load(fd, Loader=yaml.FullLoader)
     return data
 
+
 def save_model(model, optimizer, save_variable_list, args):
     '''
     Save the parameters of the model and the optimizer,
@@ -171,30 +199,30 @@ def save_model(model, optimizer, save_variable_list, args):
     )
 
 
-def load_graph(input_edge_file,
-               all_entity_dict, all_relation_dict, projection_origin=None, reverse_projection_origin=None):
-    if projection_origin is None:
-        projection_origin = collections.defaultdict(lambda: collections.defaultdict(set))
-    if reverse_projection_origin is None:
-        projection_origin = collections.defaultdict(lambda: collections.defaultdict(set))
-    projections = copy.deepcopy(projection_origin)
-    reverse = copy.deepcopy(reverse_projection_origin)
-    with open(input_edge_file, 'r', errors='ignore') as infile:
-        for line in infile.readlines():
-            e1, r, e2 = line.strip().split('\t')
-            r_projection = '+' + r
-            r_reverse = '-' + r
-            if e1 in all_entity_dict and e2 in all_entity_dict and r_projection in all_relation_dict:
-                e1, r_projection, r_reverse, e2 = all_entity_dict[e1], all_relation_dict[r_projection], \
-                                                  all_relation_dict[r_reverse], all_entity_dict[e2]
-                projections[e1][r_projection].add(e2)
-                projections[e2][r_reverse].add(e1)
-                reverse[e2][r_projection].add(e1)
-                reverse[e1][r_reverse].add(e2)
-            else:
-                pass
+# def load_graph(input_edge_file,
+#                all_entity_dict, all_relation_dict, projection_origin=None, reverse_projection_origin=None):
+#     if projection_origin is None:
+#         projection_origin = collections.defaultdict(lambda: collections.defaultdict(set))
+#     if reverse_projection_origin is None:
+#         projection_origin = collections.defaultdict(lambda: collections.defaultdict(set))
+#     projections = copy.deepcopy(projection_origin)
+#     reverse = copy.deepcopy(reverse_projection_origin)
+#     with open(input_edge_file, 'r', errors='ignore') as infile:
+#         for line in infile.readlines():
+#             e1, r, e2 = line.strip().split('\t')
+#             r_projection = '+' + r
+#             r_reverse = '-' + r
+#             if e1 in all_entity_dict and e2 in all_entity_dict and r_projection in all_relation_dict:
+#                 e1, r_projection, r_reverse, e2 = all_entity_dict[e1], all_relation_dict[r_projection], \
+#                                                   all_relation_dict[r_reverse], all_entity_dict[e2]
+#                 projections[e1][r_projection].add(e2)
+#                 projections[e2][r_reverse].add(e1)
+#                 reverse[e2][r_projection].add(e1)
+#                 reverse[e1][r_reverse].add(e2)
+#             else:
+#                 pass
 
-    return projections, reverse
+#     return projections, reverse
 
 
 def read_indexing(data_path):
@@ -236,14 +264,20 @@ def parse_ans_set(answer_set: str):
     return ans_list
 
 
-def load_data_with_indexing(pickle_datapath, rawdata_path):
-    entity_dict, relation_dict, id2ent, id2rel = read_indexing(pickle_datapath)
-    proj_none = collections.defaultdict(lambda: collections.defaultdict(set))
-    reverse_none = collections.defaultdict(lambda: collections.defaultdict(set))
-    proj_train, reverse_train = load_data(os.path.join(rawdata_path, "train.txt"),
-                                          entity_dict, relation_dict, proj_none, reverse_none)
-    proj_valid, reverse_valid = load_data(os.path.join(rawdata_path, "valid.txt"),
-                                          entity_dict, relation_dict, proj_train, reverse_train)
-    proj_test, reverse_test = load_data(os.path.join(rawdata_path, "test.txt"),
-                                        entity_dict, relation_dict, proj_valid, reverse_valid)
-    return entity_dict, relation_dict, proj_train, reverse_train, proj_valid, reverse_valid, proj_test, reverse_test
+def load_data_with_indexing(data_path):
+    entity_dict, relation_dict, id2ent, id2rel = read_indexing(data_path)
+    proj_none = defaultdict(lambda: defaultdict(set))
+    reverse_none = defaultdict(lambda: defaultdict(set))
+    proj_train, reverse_train = load_graph(join(data_path, "train.txt"),
+                                           proj_none,
+                                           reverse_none)
+    proj_valid, reverse_valid = load_graph(join(data_path, "valid.txt"),
+                                           proj_train,
+                                           reverse_train)
+    proj_test, reverse_test = load_graph(join(data_path, "test.txt"),
+                                         proj_valid,
+                                         reverse_valid)
+    return (entity_dict, relation_dict,
+            proj_train, reverse_train,
+            proj_valid, reverse_valid,
+            proj_test, reverse_test)
