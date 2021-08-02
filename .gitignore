@@ -1,4 +1,4 @@
-log/
+logs/
 *__pycache__*
 data
 *.zip
