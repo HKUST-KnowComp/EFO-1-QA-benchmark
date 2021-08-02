@@ -4,7 +4,6 @@ cuda: 3
 data:
   type: beta
   data_folder: data/FB15k-237-betae
-  raw_data_folder
   cpu: 10
 train:
   negative_sample_size: 128  # for each positive sample
@@ -82,5 +81,5 @@ estimator:
     center_reg: 0.2
     x_reg: 0.2 # \lambda in the paper
     gamma: 24
-    group_number: 4
+    group_number: 200
 

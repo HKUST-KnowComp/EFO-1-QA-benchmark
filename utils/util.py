@@ -75,7 +75,6 @@ def flatten_query(queries):
 
 
 class Writer:
-
     _log_path = join(dir_path, 'log')
 
     def __init__(self, case_name, config, log_path=None, postfix=True, tb_writer=None):
@@ -89,7 +88,7 @@ class Writer:
         self.column_name = {}
         if postfix:
             self.idstr += time.strftime("%y%m%d.%H:%M:%S", time.localtime()) + \
-                    hashlib.sha1(str(self.meta).encode('UTF-8')).hexdigest()[:8]
+                          hashlib.sha1(str(self.meta).encode('UTF-8')).hexdigest()[:8]
 
         self.log_path = log_path if log_path else self._log_path
         if os.path.exists(self.case_dir):
@@ -152,6 +151,7 @@ def read_from_yaml(filepath):
     with open(filepath, 'r') as fd:
         data = yaml.load(fd, Loader=yaml.FullLoader)
     return data
+
 
 def save_model(model, optimizer, save_variable_list, args):
     '''
@@ -239,7 +239,11 @@ def read_indexed_graph(input_edge_file, projection_origin=None, reverse_projecti
 
 
 def load_indexed_graph(input_folder):
+    with open('%s/stats.txt' % input_folder) as f:
+        entrel = f.readlines()
+        n_entity = int(entrel[0].split(' ')[-1])
+        n_relation = int(entrel[1].split(' ')[-1])
     projs_train, rprojs_train = read_indexed_graph(os.path.join(input_folder, 'train.txt'))
     projs_valid, rprojs_valid = read_indexed_graph(os.path.join(input_folder, 'valid.txt'), projs_train, rprojs_train)
     projs_test, rprojs_test = read_indexed_graph(os.path.join(input_folder, 'test.txt'), projs_valid, rprojs_valid)
-    return projs_train, rprojs_train, projs_valid, rprojs_valid, projs_test, rprojs_test
+    return n_entity, n_relation, projs_train ,rprojs_train, projs_valid, rprojs_valid, projs_test, rprojs_test
