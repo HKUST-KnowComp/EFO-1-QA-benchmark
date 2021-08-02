@@ -1,0 +1,4 @@
+INFO:root:begin transfer beta data
+INFO:root:beta data folder data/FB15k-237-betae
+INFO:root:target data folder data/FB15k-237-foq
+INFO:root:handling ('e', ('r',)), (1p) with formula (p,(e))
