@@ -137,6 +137,14 @@ def our_train_step(batch_train_queries,
     }
     return log
     
+def recursive_getattr(obj, k):
+    attr_list = k.split('.')
+    _obj = obj
+    for attr in attr_list:
+        _obj = getattr(_obj, attr)
+    return _obj
+
+
 def check_model_sync(ref_model, our_model):
     ref_state_dict = ref_model.state_dict()
     our_state_dict = our_model.state_dict()
@@ -144,15 +152,15 @@ def check_model_sync(ref_model, our_model):
     grad_diff_keys = []
     for k in ref_state_dict:
         tensor_ref = ref_state_dict[k]
-        grad_ref = tensor_ref.grad
+        grad_ref = recursive_getattr(ref_model, k).grad
         tensor_our = our_state_dict[k]
-        grad_our = tensor_our.grad
+        grad_our = recursive_getattr(our_model, k).grad
         if not (tensor_our == tensor_ref).all():
             tensor_diff_keys.append(k)
         
         if grad_our is not None and not (grad_our == grad_ref).all():
             grad_diff_keys.append(k)
-    return tensor_diff_keys, grad_diff_keys    
+    return tensor_diff_keys, grad_diff_keys 
         
     
 
