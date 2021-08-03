@@ -255,7 +255,7 @@ if __name__ == "__main__":
         model = LogicEstimator(**model_params)
     elif model_name == 'NewLook':
         model = NLKEstimator(**model_params)
-        model.setup_relation_tensor(projection_test)
+        model.setup_relation_tensor(projection_train)
     elif model_name == 'CQD':
         pass
     else:
