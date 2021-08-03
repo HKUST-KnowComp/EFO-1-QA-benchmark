@@ -201,10 +201,11 @@ def transform_json_query(query, meta_formula, option=None):
         e1, e2, r1, r2, r3 = query[0][0][0], query[0][1][0], query[0][0][1][0], query[0][1][1][0], query[1][0]
         dobject1 = {"o": "e", "a": [e1]}
         dobject1 = {"o": "p", "a": [[r1], dobject1]}
+        dobject1 = {"o": "p", "a": [[r3], dobject1]}
         dobject2 = {"o": "e", "a": [e2]}
         dobject2 = {"o": "p", "a": [[r2], dobject2]}
+        dobject2 = {"o": "p", "a": [[r3], dobject2]}
         dobject = {"o": "u", "a": [dobject1, dobject2]}
-        dobject = {"o": "p", "a": [[r3], dobject]}
     elif meta_formula == '2u-DM':
         e1, e2, r1, r2 = query[0][0][0], query[0][1][0], query[0][0][1][0], query[0][1][1][0]
         dobject1 = {"o": "e", "a": [e1]}
@@ -231,9 +232,13 @@ def transform_json_query(query, meta_formula, option=None):
     return json.dumps(dobject)
 
 def store_json_query_with_check(
-        queries, easy_answers, hard_answers, store_fold, projection_easy, projection_hard, mode):
+        queries, easy_answers, hard_answers, 
+        store_fold, projection_easy, projection_hard, 
+        mode, beta_names=None):
     for beta_structure in queries.keys():
         beta_name = query_name_dict[beta_structure]
+        if beta_names is not None and beta_name not in beta_names:
+            continue
         meta_formula_v2 = beta_query_v2[beta_name]
 
         logging.info(f"handling {beta_structure}, ({beta_name})"
@@ -369,18 +374,21 @@ if __name__ == "__main__":
                                     store_path,
                                     proj_none,
                                     proj_train,
-                                    mode='train')
+                                    mode='train',
+                                    beta_names=["up-DNF"])
         store_json_query_with_check(valid_queries,
                                     valid_easy_ans,
                                     valid_hard_ans,
                                     store_path,
                                     proj_train,
                                     proj_valid,
-                                    mode='valid')
+                                    mode='valid',
+                                    beta_names=["up-DNF"])
         store_json_query_with_check(test_queries,
                                     test_easy_ans,
                                     test_hard_ans,
                                     store_path,
                                     proj_valid,
                                     proj_test,
-                                    mode='test')
+                                    mode='test',
+                                    beta_names=["up-DNF"])
