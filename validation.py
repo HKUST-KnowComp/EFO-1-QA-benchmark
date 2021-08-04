@@ -14,8 +14,8 @@ import json
 import yaml
 from torch.utils.data.dataloader import DataLoader
 import torch
+import numpy as np
 from torch.distributions.beta import Beta
-from torch.distributions.kl import kl_divergence
 
 from fol.appfoq import BetaEstimator4V
 from fol.foq_v2 import parse_formula
@@ -119,24 +119,44 @@ def our_train_step(batch_train_queries,
         negative_embedding = model.get_entity_embedding(
             negative_sample.view(-1)).view(
                 -1, model.negative_size, 2 * model.entity_dim)
-        negative_logit = model.compute_logit(negative_embedding, 
+        negative_logit = model.compute_logit(negative_embedding,
                                              pred_dist_unsqueezed)
         negative_logits.append(negative_logit)
-    positive_logits = torch.cat(positive_logits) 
+    positive_logits = torch.cat(positive_logits)
     negative_logits = torch.cat(negative_logits)
-    pos_loss, neg_loss = compute_final_loss(positive_logits, negative_logits, 
+    pos_loss, neg_loss = compute_final_loss(positive_logits, negative_logits,
                                             subsampling_weight)
     loss = pos_loss + neg_loss
     loss /= 2
+
+    def logging_grad_fn(grad_fn, val, level=0):
+        if grad_fn is None: return
+        logging.info(f"our grad_fn stack {'-'*level} | {str(grad_fn)} | {val}")
+        for next_grad_fn_obj, next_val in grad_fn.next_functions:
+            logging_grad_fn(next_grad_fn_obj, next_val, level + 1)
+    logging_grad_fn(loss.grad_fn, 0)
+
     loss.backward()
-    optimizer.step()
     log = {
         'positive_sample_loss': pos_loss.item(),
         'negative_sample_loss': neg_loss.item(),
+        'positive_logits': positive_logits.detach().cpu().numpy(),
+        'negative_logits': negative_logits.detach().cpu().numpy(),
+        'all_alpha_embeddings': pred_alpha.detach().cpu().numpy(),
+        'all_beta_embeddings': pred_beta.detach().cpu().numpy(),
+        'positive_embedding': positive_embedding.detach().cpu().numpy(),
+        'negative_embedding': negative_embedding.detach().cpu().numpy(),
         'loss': loss.item(),
     }
-    return log
     
+
+    forward_state_dict = model.state_dict()
+    for k in forward_state_dict:
+        log[f"forward_{k}"] = forward_state_dict[k].detach().cpu().numpy()
+
+    optimizer.step()
+    return log
+
 def recursive_getattr(obj, k):
     attr_list = k.split('.')
     _obj = obj
@@ -145,7 +165,7 @@ def recursive_getattr(obj, k):
     return _obj
 
 
-def check_model_sync(ref_model, our_model):
+def backward_model_check(ref_model, our_model):
     ref_state_dict = ref_model.state_dict()
     our_state_dict = our_model.state_dict()
     tensor_diff_keys = []
@@ -157,12 +177,12 @@ def check_model_sync(ref_model, our_model):
         grad_our = recursive_getattr(our_model, k).grad
         if not (tensor_our == tensor_ref).all():
             tensor_diff_keys.append(k)
-        
+
         if grad_our is not None and not (grad_our == grad_ref).all():
             grad_diff_keys.append(k)
-    return tensor_diff_keys, grad_diff_keys 
-        
-    
+    return tensor_diff_keys, grad_diff_keys
+
+
 
 # def ref_eval_step(batch_data, model) -> Dict:
     # pass
@@ -186,7 +206,7 @@ if __name__ == "__main__":
     our_model = BetaEstimator4V(**our_model_config)
     # model syncronization
     our_model.load_state_dict(ref_model.state_dict())
-    check_model_sync(ref_model, our_model)
+    backward_model_check(ref_model, our_model)
     ref_opt = torch.optim.Adam(ref_model.parameters(), lr=args.lr)
     our_opt = torch.optim.Adam(our_model.parameters(), lr=args.lr)
     with open(f"{args.dataset_folder}/stats.txt", 'rt') as f:
@@ -221,20 +241,23 @@ if __name__ == "__main__":
         positive_sample = ref_log['positive_sample']
         negative_sample = ref_log['negative_sample']
         subsampling_weight = ref_log['subsampling_weight']
-        
+
         our_log = our_train_step(batch_train_queries,
                                  positive_sample,
                                  negative_sample,
                                  subsampling_weight,
                                  our_model,
                                  our_opt)
-        
+
         for k in our_log:
-            assert our_log[k] == ref_log[k]
+            if isinstance(our_log[k], np.ndarray):
+                assert (our_log[k] == ref_log[k]).any()
+            else:
+                assert our_log[k] == ref_log[k]
             logging.info(f"step {i}, {k} = {our_log[k]} is validated for ref and our model")
-        
-        tdk, gdk = check_model_sync(ref_model, our_model)
-        
+
+        tdk, gdk = backward_model_check(ref_model, our_model)
+
         if len(tdk) != 0 or len(gdk) != 0:
             for k in tdk:
                 logging.error(f"step {i} tensor value {k} differs")
@@ -242,5 +265,4 @@ if __name__ == "__main__":
                 logging.error(f"step {i} gradient value {k} differs")
         else:
             logging.info(f"step {i}, tensors and gradients of two models are the same")
-            
-        
+
