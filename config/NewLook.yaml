@@ -79,7 +79,7 @@ estimator:
     relation_dim: 400
     hidden_dim: 1600
     center_reg: 0.2
-    x_reg: 0.2 # \lambda in the paper
+    x_reg: 0.02 # \lambda in the paper
     gamma: 24
     group_number: 200
 
