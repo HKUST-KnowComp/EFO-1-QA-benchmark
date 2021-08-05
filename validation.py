@@ -5,6 +5,7 @@ comparing the BetaE model during optimization procedure.
 
 
 import argparse
+from collections import OrderedDict
 import logging
 import pickle
 from os.path import join
@@ -14,8 +15,12 @@ import json
 import yaml
 from torch.utils.data.dataloader import DataLoader
 import torch
+from torch.autograd import backward, grad
 import numpy as np
 from torch.distributions.beta import Beta
+import torch.nn.functional as F
+
+torch.set_printoptions(precision=20)
 
 from fol.appfoq import BetaEstimator4V
 from fol.foq_v2 import parse_formula
@@ -63,6 +68,34 @@ query_name_dict = {('e', ('r',)): '1p',
                    ((('e', ('r', 'n')), ('e', ('r', 'n'))), ('n',)): '2u-DM',
                    ((('e', ('r', 'n')), ('e', ('r', 'n'))), ('n', 'r')): 'up-DM'
                    }
+
+
+class TensorCollector:
+    def __init__(self, forward_hook, backward_hook):
+        self.tensor_dict = OrderedDict()  # ensure the registration follows the calling order
+        self.grad_dict = OrderedDict()
+        self.fhook = forward_hook
+        self.bhook = backward_hook
+        self.loss = None
+
+    def __setitem__(self, name: str, value: torch.Tensor) -> None:
+        value.retain_grad()
+        self.fhook(value)
+        self.tensor_dict[name] = value
+        value.register_hook(self.bhook)
+
+    def __getitem__(self, name: str) -> torch.Tensor:
+        return self.tensor_dict[name], self.grad_dict[name]
+
+    def set_loss(self, loss):
+        self.loss = loss
+        backward(self.loss, retain_graph=True)
+        for k in self.tensor_dict:
+            self.grad_dict[k] = self.tensor_dict[k].grad
+
+    def get_tensors(self):
+        for k in self.tensor_dict:
+            yield self.__getitem__(k)
 
 
 def ref_train_step(beta_train_queries: List[Tuple[str, Tuple]],
@@ -122,21 +155,54 @@ def our_train_step(batch_train_queries,
         negative_logit = model.compute_logit(negative_embedding,
                                              pred_dist_unsqueezed)
         negative_logits.append(negative_logit)
+
+    def add_tensor_hooks(tensor: torch.Tensor, name:str):
+        def hook_func(tensor: torch.Tensor):
+            logging.info(f"our backward grad {name} {tensor=}")
+        tensor.retain_grad()
+        logging.info(f"our forward {name} {tensor=}")
+        tensor.register_hook(hook_func)
+    
     positive_logits = torch.cat(positive_logits)
+    add_tensor_hooks(positive_logits, "positive_logits")
+
     negative_logits = torch.cat(negative_logits)
-    pos_loss, neg_loss = compute_final_loss(positive_logits, negative_logits,
-                                            subsampling_weight)
+    add_tensor_hooks(negative_logits, "negative_logits")
+
+    positive_score = F.logsigmoid(positive_logits)
+    negative_score = F.logsigmoid(-negative_logits)
+    negative_score = torch.mean(negative_score, dim=1)
+    pos_loss = -(positive_score * subsampling_weight).sum()
+    neg_loss = -(negative_score * subsampling_weight).sum()
+    pos_loss /= subsampling_weight.sum()
+    add_tensor_hooks(positive_score, "positive_score")
+
+    neg_loss /= subsampling_weight.sum()
+    add_tensor_hooks(negative_score, "negative_score")
+
+    add_tensor_hooks(pos_loss, "pos_loss")
+    add_tensor_hooks(neg_loss, "neg_loss")
+
     loss = pos_loss + neg_loss
     loss /= 2
 
-    def logging_grad_fn(grad_fn, val, level=0):
-        if grad_fn is None: return
-        logging.info(f"our grad_fn stack {'-'*level} | {str(grad_fn)} | {val}")
-        for next_grad_fn_obj, next_val in grad_fn.next_functions:
-            logging_grad_fn(next_grad_fn_obj, next_val, level + 1)
-    logging_grad_fn(loss.grad_fn, 0)
+    def logging_computational_graph(loss):
+        with open("logs/our_grad_stack", 'wt') as f:
+            def _logging_grad_fn(grad_fn, level=0):
+                if grad_fn is None:
+                    return
+                f.write(f"{'-'*level}{grad_fn.__class__}\n")
+                sorted_next_functions = sorted(
+                    [obj for obj, _ in grad_fn.next_functions],
+                    key=lambda o: str(o.__class__)
+                )
+                for next_grad_fn_obj in sorted_next_functions:
+                    _logging_grad_fn(next_grad_fn_obj, level + 1)
 
-    loss.backward()
+            _logging_grad_fn(loss.grad_fn, 0)
+    logging_computational_graph(pos_loss)
+
+    loss.backward(retain_graph=True)
     log = {
         'positive_sample_loss': pos_loss.item(),
         'negative_sample_loss': neg_loss.item(),
@@ -148,7 +214,7 @@ def our_train_step(batch_train_queries,
         'negative_embedding': negative_embedding.detach().cpu().numpy(),
         'loss': loss.item(),
     }
-    
+
 
     forward_state_dict = model.state_dict()
     for k in forward_state_dict:
@@ -248,13 +314,14 @@ if __name__ == "__main__":
                                  subsampling_weight,
                                  our_model,
                                  our_opt)
-
         for k in our_log:
             if isinstance(our_log[k], np.ndarray):
                 assert (our_log[k] == ref_log[k]).any()
+                logging.info(f"step {i}, {k} is validated for ref and our model")
+               
             else:
                 assert our_log[k] == ref_log[k]
-            logging.info(f"step {i}, {k} = {our_log[k]} is validated for ref and our model")
+                logging.info(f"step {i}, {k} = {our_log[k]} is validated for ref and our model")
 
         tdk, gdk = backward_model_check(ref_model, our_model)
 

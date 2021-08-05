@@ -68,7 +68,7 @@ def inclusion_sampling(answer_set: List[IntList], negative_size: int, entity_num
 
 
 def compute_final_loss(positive_logit, negative_logit, subsampling_weight):
-    positive_score = F.logsigmoid(positive_logit)
+    positive_score = F.logsigmoid(positive_logit).squeeze(dim=1)
     negative_score = F.logsigmoid(-negative_logit)
     negative_score = torch.mean(negative_score, dim=1)
     positive_loss = -(positive_score * subsampling_weight).sum()
@@ -332,7 +332,7 @@ class BetaEstimator(AppFOQEstimator):
             logit_list.append(logit_part)
         all_logit = torch.cat(logit_list, dim=1)
         return all_logit
-        
+
 
 class BetaEstimator4V(AppFOQEstimator):
     """Beta embedding for verification
@@ -380,17 +380,29 @@ class BetaEstimator4V(AppFOQEstimator):
                                              self.projection_regularizer,
                                              num_layers)
 
-    def get_entity_embedding(self, entity_ids: torch.LongTensor):
-        emb = self.entity_embedding[entity_ids, :]
+    def get_entity_embedding(self, entity_ids: torch.LongTensor, 
+                             **kwargs):
+        # emb = self.entity_embedding[entity_ids, :]
+        emb = torch.index_select(
+            self.entity_embedding,
+            dim=0,
+            index=entity_ids.view(-1)
+        ).view(list(entity_ids.shape) + [self.entity_dim * 2])
         return self.entity_regularizer(emb)
 
-    def get_projection_embedding(self, proj_ids: torch.LongTensor, emb):
+    def get_projection_embedding(self, proj_ids: torch.LongTensor, emb, 
+                                 **kwargs):
         assert emb.shape[0] == len(proj_ids)
-        rel_emb = self.relation_embedding[proj_ids, :]
+        rel_emb = torch.index_select(
+            self.relation_embedding,
+            dim=0,
+            index=proj_ids.view(-1)).view(
+                list(proj_ids.shape) + [self.relation_dim])
         pro_emb = self.projection_net(emb, rel_emb)
         return pro_emb
 
-    def get_conjunction_embedding(self, conj_emb: List[torch.Tensor]):
+    def get_conjunction_embedding(self, conj_emb: List[torch.Tensor], 
+                                  **kwargs):
         sub_alpha_list, sub_beta_list = [], []
         for sub_emb in conj_emb:
             sub_alpha, sub_beta = torch.chunk(sub_emb, 2, dim=-1)
@@ -402,14 +414,16 @@ class BetaEstimator4V(AppFOQEstimator):
         embedding = torch.cat([new_alpha, new_beta], dim=-1)
         return embedding
 
-    def get_disjunction_embedding(self, disj_emb: List[torch.Tensor]):
+    def get_disjunction_embedding(self, disj_emb: List[torch.Tensor], 
+                                  **kwargs):
         union_emb = torch.stack(disj_emb, dim=1)  # datch*disj*d
         return union_emb
 
-    def get_negation_embedding(self, emb: torch.Tensor):
+    def get_negation_embedding(self, emb: torch.Tensor, **kwargs):
         return 1. / emb
 
-    def get_difference_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):  # a-b = a and(-b)
+    def get_difference_embedding(self, lemb: torch.Tensor, remb: torch.Tensor, 
+                                 **kwargs):  # a-b = a and(-b)
         r_neg_emb = self.get_negation_embedding(remb)
         return self.get_conjunction_embedding([lemb, r_neg_emb])
 
