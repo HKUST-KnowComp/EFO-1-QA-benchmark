@@ -32,8 +32,8 @@ evaluate:  # only used when valid/test in action
      - 3i
      - ip
      - pi
-     - 2u-DM
-     - up-DM
+     - 2u-DNF
+     - up-DNF
 estimator:
   embedding: box # one of [Transe, box, beta, dm]
   beta:
@@ -46,7 +46,7 @@ estimator:
   box:
     entity_dim: 400
     relation_dim: 400
-    offset_activation: relu
+    offset_activation: none
     center_reg: 0.02
     gamma: 24
   dm:
