@@ -650,9 +650,10 @@ class LogicEstimator(AppFOQEstimator):
         if self.bounded:
             lower = torch.rand((n_entity, self.entity_dim))
             upper = lower + torch.rand((n_entity, self.entity_dim)) * (1 - lower)
-            self.entity_embeddings = nn.Embedding.from_pretrained(torch.cat([lower, upper], dim=-1))
+            self.entity_embeddings = nn.Embedding.from_pretrained(torch.cat([lower, upper], dim=-1), freeze=False)
         else:
-            self.entity_embeddings = nn.Embedding.from_pretrained(torch.rand((n_entity, self.entity_dim * 2)))
+            self.entity_embeddings = nn.Embedding.from_pretrained(torch.rand((n_entity, self.entity_dim * 2)),
+                                                                  freeze=False)
         self.relation_embeddings = nn.Embedding(num_embeddings=n_relation,
                                                 embedding_dim=self.relation_dim)
         embedding_range = torch.tensor([(self.gamma + self.epsilon) / entity_dim]).to(self.device)
