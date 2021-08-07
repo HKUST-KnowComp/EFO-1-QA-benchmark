@@ -655,7 +655,7 @@ class LogicEstimator(AppFOQEstimator):
             self.entity_embeddings = nn.Embedding.from_pretrained(torch.rand((n_entity, self.entity_dim * 2)))
         self.relation_embeddings = nn.Embedding(num_embeddings=n_relation,
                                                 embedding_dim=self.relation_dim)
-        embedding_range = torch.tensor([(self.gamma + self.epsilon) / hidden_dim]).to(self.device)
+        embedding_range = torch.tensor([(self.gamma + self.epsilon) / entity_dim]).to(self.device)
         nn.init.uniform_(tensor=self.relation_embeddings.weight, a=-embedding_range.item(), b=embedding_range.item())
 
         self.center_net = LogicIntersection(self.entity_dim, t_norm, bounded, use_att, use_gtrans)
@@ -694,7 +694,7 @@ class LogicEstimator(AppFOQEstimator):
     def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList], union: bool = False):
         assert pred_emb.shape[0] == len(answer_set)
         chosen_ans, chosen_false_ans, subsampling_weight = \
-            negative_sampling(answer_set, negative_size=self.negative_size, entity_num=self.n_entity)
+            inclusion_sampling(answer_set, negative_size=self.negative_size, entity_num=self.n_entity)
         answer_embedding = self.get_entity_embedding(
             torch.tensor(chosen_ans, device=self.device)).squeeze()
         neg_embedding = self.get_entity_embedding(torch.tensor(chosen_false_ans, device=self.device).view(-1))  # n*dim

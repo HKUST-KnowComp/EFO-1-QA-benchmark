@@ -375,7 +375,7 @@ if __name__ == "__main__":
                                     proj_none,
                                     proj_train,
                                     mode='train',
-                                    beta_names=["up-DNF"])
+                                    beta_names=None)
         store_json_query_with_check(valid_queries,
                                     valid_easy_ans,
                                     valid_hard_ans,
@@ -383,7 +383,7 @@ if __name__ == "__main__":
                                     proj_train,
                                     proj_valid,
                                     mode='valid',
-                                    beta_names=["up-DNF"])
+                                    beta_names=None)
         store_json_query_with_check(test_queries,
                                     test_easy_ans,
                                     test_hard_ans,
@@ -391,4 +391,4 @@ if __name__ == "__main__":
                                     proj_valid,
                                     proj_test,
                                     mode='test',
-                                    beta_names=["up-DNF"])
+                                    beta_names=None)

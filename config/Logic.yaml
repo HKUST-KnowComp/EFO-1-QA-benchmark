@@ -1,6 +1,6 @@
 action: ['train','valid','test']  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: 3
+cuda: 2
 data:
   type: beta
   data_folder: data/FB15k-237-betae
