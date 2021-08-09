@@ -68,7 +68,7 @@ def inclusion_sampling(answer_set: List[IntList], negative_size: int, entity_num
 
 
 def compute_final_loss(positive_logit, negative_logit, subsampling_weight):
-    positive_score = F.logsigmoid(positive_logit)
+    positive_score = F.logsigmoid(positive_logit).squeeze(dim=1)   # note this is b*1 by beta
     negative_score = F.logsigmoid(-negative_logit)
     negative_score = torch.mean(negative_score, dim=1)
     positive_loss = -(positive_score * subsampling_weight).sum()
