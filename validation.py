@@ -228,8 +228,8 @@ if __name__ == "__main__":
     ref_opt = torch.optim.Adam(ref_model.parameters(), lr=args.lr)
     our_opt = torch.optim.Adam(our_model.parameters(), lr=args.lr)
 
-    ref_tensor_collector = TensorCollector()
-    our_tensor_collector = TensorCollector()
+    rtc = TensorCollector()
+    otc = TensorCollector()
 
     with open(f"{args.dataset_folder}/stats.txt", 'rt') as f:
         entrel = f.readlines()
@@ -253,7 +253,7 @@ if __name__ == "__main__":
                                  nentity,
                                  nrelation,
                                  negative_sample_size=128,
-                                 tc=ref_tensor_collector)
+                                 tc=rtc)
 
         positive_sample = ref_log['positive_sample']
         negative_sample = ref_log['negative_sample']
@@ -265,12 +265,12 @@ if __name__ == "__main__":
                                  subsampling_weight,
                                  our_model,
                                  our_opt,
-                                 tc=our_tensor_collector)
+                                 tc=otc)
 
         bad_tensor = []
         bad_gradient = []
-        for no, to, go in our_tensor_collector.iterator():
-            nr, tr, gr = ref_tensor_collector[no]
+        for no, to, go in otc.iterator():
+            nr, tr, gr = rtc[no]
             if not (to == tr).all():
                 bad_tensor.append(no)
                 logging.error(f"step {i} tensor values {no} differ")
