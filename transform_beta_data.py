@@ -98,7 +98,6 @@ def transform_json_query(query, meta_formula, option=None):
         dobject = {"o": "e", "a": [e1]}
         dobject = {"o": "p", "a": [[r1], dobject]}
         dobject = {"o": "p", "a": [[r2], dobject]}
-        new_query = json.dumps(dobject)
     elif meta_formula == '3p':
         e1, r1, r2, r3 = query[0], query[1][0], query[1][1], query[1][2]
         dobject = {"o": "e", "a": [e1]}

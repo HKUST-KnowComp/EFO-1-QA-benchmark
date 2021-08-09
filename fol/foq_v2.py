@@ -97,7 +97,8 @@ class FirstOrderSetQuery(ABC):
         pass
 
     @abstractmethod
-    def embedding_estimation(self, estimator: AppFOQEstimator, batch_indices):
+    def embedding_estimation(self, estimator: AppFOQEstimator, batch_indices, 
+                             **kwargs):
         pass
 
     @abstractmethod
@@ -153,14 +154,15 @@ class Entity(FirstOrderSetQuery):
 
     def embedding_estimation(self,
                              estimator: AppFOQEstimator,
-                             batch_indices=None):
+                             batch_indices=None, 
+                             **kwargs):
         if self.tentities is None:
             self.tentities = torch.tensor(self.entities).to(self.device)
         if batch_indices:
             ent = self.tentities[torch.tensor(batch_indices)]
         else:
             ent = self.tentities
-        return estimator.get_entity_embedding(ent)
+        return estimator.get_entity_embedding(ent, **kwargs)
 
     def lift(self):
         self.entities = []
@@ -233,9 +235,11 @@ class Negation(FirstOrderSetQuery):
 
     def embedding_estimation(self,
                              estimator: AppFOQEstimator,
-                             batch_indices=None):
-        operand_emb = self.query.embedding_estimation(estimator, batch_indices)
-        return estimator.get_negation_embedding(operand_emb)
+                             batch_indices=None, **kwargs):
+        operand_emb = self.query.embedding_estimation(estimator,
+                                                      batch_indices,
+                                                      **kwargs)
+        return estimator.get_negation_embedding(operand_emb, **kwargs)
 
     def lift(self):
         self.query.lift()
@@ -293,7 +297,8 @@ class Projection(FirstOrderSetQuery):
 
     def embedding_estimation(self,
                              estimator: AppFOQEstimator,
-                             batch_indices=None):
+                             batch_indices=None,
+                             **kwargs):
         if self.trelations is None:
             self.trelations = torch.tensor(self.relations).to(self.device)
         if batch_indices:
@@ -301,9 +306,11 @@ class Projection(FirstOrderSetQuery):
         else:
             rel = self.trelations
         operand_emb = self.query.embedding_estimation(estimator,
-                                                          batch_indices)
+                                                      batch_indices,
+                                                      **kwargs)
         return estimator.get_projection_embedding(rel,
-                                                  operand_emb)
+                                                  operand_emb,
+                                                  **kwargs)
 
     def lift(self):
         self.relations = []
@@ -427,8 +434,9 @@ class MultipleSetQuery(FirstOrderSetQuery):
 
     def embedding_estimation(self,
                              estimator: AppFOQEstimator,
-                             batch_indices=None):
-        return [q.embedding_estimation(estimator, batch_indices)
+                             batch_indices=None,
+                             **kwargs):
+        return [q.embedding_estimation(estimator, batch_indices, **kwargs)
                 for q in self.sub_queries]
 
     def lift(self):
@@ -453,9 +461,12 @@ class Intersection(MultipleSetQuery):
 
     def embedding_estimation(self,
                              estimator: AppFOQEstimator,
-                             batch_indices=None):
-        embed_list = super().embedding_estimation(estimator, batch_indices)
-        return estimator.get_conjunction_embedding(embed_list)
+                             batch_indices=None,
+                             **kwargs):
+        embed_list = super().embedding_estimation(estimator,
+                                                  batch_indices,
+                                                  **kwargs)
+        return estimator.get_conjunction_embedding(embed_list, **kwargs)
 
     def deterministic_query(self, projs):
         return set.intersection(
@@ -506,9 +517,12 @@ class Union(MultipleSetQuery):
 
     def embedding_estimation(self,
                              estimator: AppFOQEstimator,
-                             batch_indices=None):
-        embed_list = super().embedding_estimation(estimator, batch_indices)
-        return estimator.get_disjunction_embedding(embed_list)
+                             batch_indices=None,
+                             **kwargs):
+        embed_list = super().embedding_estimation(estimator,
+                                                  batch_indices,
+                                                  **kwargs)
+        return estimator.get_disjunction_embedding(embed_list, **kwargs)
 
     def deterministic_query(self, projs):
         return set.union(
@@ -578,9 +592,14 @@ class Difference(FirstOrderSetQuery):
 
     def embedding_estimation(self,
                              estimator: AppFOQEstimator,
-                             batch_indices=None):
-        lemb, remb = super().embedding_estimation(estimator, batch_indices)
-        return estimator.get_difference_embedding(lemb, remb)
+                             batch_indices=None, **kwargs):
+        lemb = self.lquery.embedding_estimation(estimator,
+                                                batch_indices,
+                                                **kwargs)
+        remb = self.rquery.embedding_estimation(estimator,
+                                                batch_indices,
+                                                **kwargs)
+        return estimator.get_difference_embedding(lemb, remb, **kwargs)
 
     def deterministic_query(self, projs):
         l_result = self.lquery.deterministic_query(projs)
@@ -645,9 +664,11 @@ class Multiple_Difference(MultipleSetQuery):
 
     def embedding_estimation(self,
                              estimator: AppFOQEstimator,
-                             batch_indices=None):
-        embed_list = super().embedding_estimation(estimator, batch_indices)
-        return estimator.get_multiple_difference_embedding(embed_list)
+                             batch_indices=None, **kwargs):
+        embed_list = super().embedding_estimation(estimator,
+                                                  batch_indices,
+                                                  **kwargs)
+        return estimator.get_multiple_difference_embedding(embed_list, **kwargs)
 
     def deterministic_query(self, projs):
         lquery, rqueries = self.sub_queries[0], self.sub_queries[1:]
