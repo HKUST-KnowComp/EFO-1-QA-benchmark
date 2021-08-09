@@ -1,6 +1,6 @@
 action: ['train','valid','test']  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: 3
+cuda: 2
 data:
   type: beta
   data_folder: data/FB15k-237-betae
@@ -42,6 +42,8 @@ evaluate:  # only used when valid/test in action
      - pni
      - ip
      - pi
+     - 2u-DNF
+     - up-DNF
      - 2u-DM
      - up-DM
 estimator:
@@ -69,7 +71,6 @@ estimator:
     relation_dim: 400
     hidden_dim: 1600
     num_layers: 2
-    evaluate_union: DM
     gamma: 0.375
     t_norm: luk
     bounded: 1
