@@ -1,9 +1,9 @@
 action: ['train','valid','test']  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: 2
+cuda: 1
 data:
   type: beta
-  data_folder: data/FB15k-foq
+  data_folder: data/NELL-foq
   cpu: 10
 train:
   negative_sample_size: 128  # for each positive sample

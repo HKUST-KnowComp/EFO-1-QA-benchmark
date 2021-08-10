@@ -702,7 +702,7 @@ class LogicEstimator(AppFOQEstimator):
             negative_logit = torch.max(negative_union_logit, dim=1)[0]
         else:
             positive_logit = self.compute_logit(answer_embedding, pred_emb)
-            negative_logit = self.compute_logit(neg_embedding, pred_emb.unsqueeze(dim=1))  # b*negative
+            negative_logit = self.compute_logit(neg_embedding, pred_emb)  # b*negative
         return positive_logit, negative_logit, subsampling_weight.to(self.device)
 
     def compute_logit(self, entity_embedding, query_embedding):

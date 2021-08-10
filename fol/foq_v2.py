@@ -675,7 +675,7 @@ class Multiple_Difference(MultipleSetQuery):
                                                    contain=False, keypoint=keypoint, cumulative=cumulative)
                     for rquery in rqueries:
                         robjs = rquery.backward_sample(projs, rprojs, cumulative=cumulative)
-                        robj_list.append(srobjs)
+                        robj_list.append(robjs)
                 else:
                     choose_formula = random.randint(0, len(rqueries) - 1)
                     lobjs = lquery.backward_sample(projs, rprojs, cumulative=cumulative)

@@ -4,9 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import collections
 import numpy as np
-from fol.base import beta_query
-from fol.foq import parse_foq_formula
-graph_path = '../download_log/'
+from fol import beta_query_v2, parse_formula
 
 beta_step = [15000*i for i in range(1, 21)] + [360000, 420000, 450000]
 beta_valid_step = [15000*i for i in range(1, 21)] + [360000, 420000]
@@ -27,13 +25,13 @@ def print_loss(path):
     plt.show()
 
 
-def log_all_metrics(path, step, mode, averaged_meta_formula=beta_query.values()):
+def log_all_metrics(path, step, mode, log_meta_formula=beta_query_v2.values()):
     log = collections.defaultdict(lambda: collections.defaultdict(float))
 
-    for meta_formula in beta_query.values():
+    for meta_formula in log_meta_formula:
         # if meta_formula != 'p(e)|p(e)' and meta_formula != 'p(p(e)|p(e))':
-        foq_instance = parse_foq_formula(meta_formula)
-        foq_formula = foq_instance.meta_formula
+        foq_instance = parse_formula(meta_formula)
+        foq_formula = foq_instance.formula
         data_file = os.path.join(path, f'eval_{mode}_{foq_formula}.csv')
         df = pd.read_csv(data_file)
         step_range = np.asarray(df['step'])
@@ -42,7 +40,7 @@ def log_all_metrics(path, step, mode, averaged_meta_formula=beta_query.values())
             if metric != 'step':
                 log[metric][foq_formula] = df[metric][step_index].values[0]
     averaged_metric = {}
-    averaged_my_formula = [parse_foq_formula(formula).meta_formula for formula in averaged_meta_formula]
+    averaged_my_formula = [parse_formula(formula).formula for formula in log_meta_formula]
     for metric in log:
         averaged_metric[metric] = \
             sum([log[metric][foq_formula] for foq_formula in averaged_my_formula])/len(averaged_my_formula)
@@ -52,7 +50,7 @@ def log_all_metrics(path, step, mode, averaged_meta_formula=beta_query.values())
     print(averaged_metric)
 
 
-def read_beta_log(path, mode='test', chosen_step=None, averaged_meta_formula=beta_query.values()):
+def read_beta_log(path, mode='test', chosen_step=None, averaged_meta_formula=beta_query_v2.values()):
     train_log = collections.defaultdict(lambda: collections.defaultdict(float))
     valid_log = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(float)))
     test_log = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(float)))
@@ -79,23 +77,23 @@ def read_beta_log(path, mode='test', chosen_step=None, averaged_meta_formula=bet
             elif line[29:35] == 'Valid ':
                 info = line[35:].split(' ')
                 beta_name, metric, step, score = info[0], info[1], eval(info[4][:-1]), eval(info[5])
-                if beta_name in beta_query:
-                    foq_instance = parse_foq_formula(beta_query[beta_name])
-                    foq_formula = foq_instance.meta_formula
+                if beta_name in beta_query_v2:
+                    foq_instance = parse_formula(beta_query_v2[beta_name])
+                    foq_formula = foq_instance.formula
                     valid_log[step][metric][foq_formula] = score
                     beta_valid[foq_formula][metric].append(score)
             elif line[29:34] == 'Test ' and line[34:38] != 'info':
                 info = line[34:].split(' ')
                 beta_name, metric, step, score = info[0], info[1], eval(info[4][:-1]), eval(info[5])
-                if beta_name in beta_query:
-                    foq_instance = parse_foq_formula(beta_query[beta_name])
-                    foq_formula = foq_instance.meta_formula
+                if beta_name in beta_query_v2:
+                    foq_instance = parse_formula(beta_query_v2[beta_name])
+                    foq_formula = foq_instance.formula
                     test_log[step][metric][foq_formula] = score
                     beta_test[foq_formula][metric].append(score)
     train_data = pd.DataFrame.from_dict(train_log)
     train_data.to_csv(os.path.join(path, 'beta_train.csv'))
     # print(pd.DataFrame.from_dict(valid_log[chosen_step]))
-    for step in f'{mode}_log':
+    for step in eval(f'{mode}_log'):
         valid_data = pd.DataFrame.from_dict(valid_log[step])
         valid_data.to_csv(os.path.join(path, f'beta_valid_{step}.csv'))
         test_data = pd.DataFrame.from_dict(test_log[step])
@@ -105,7 +103,7 @@ def read_beta_log(path, mode='test', chosen_step=None, averaged_meta_formula=bet
     else:
         print(test_data)
     averaged_metric = {}
-    averaged_my_formula = [parse_foq_formula(formula).meta_formula for formula in averaged_meta_formula]
+    averaged_my_formula = [parse_formula(formula).formula for formula in averaged_meta_formula]
     for metric in test_log[15000]:
         if chosen_step is not None:
             averaged_metric[metric] = sum([test_log[chosen_step][metric][foq_formula]
@@ -118,8 +116,8 @@ def plot_comparison(beta_log, my_log, all_formula):
     # metric in ['MRR', 'HITS1', 'HITS3', 'HITS10']:
     for metric in ['MRR']:
         for meta_formula in all_formula:
-            foq_instance = parse_foq_formula(beta_query[meta_formula])
-            foq_formula = foq_instance.meta_formula
+            foq_instance = parse_formula(beta_query_v2[meta_formula])
+            foq_formula = foq_instance.formula
             beta_score = np.asarray(beta_log[foq_formula][metric])
             my_score = np.asarray(my_log[foq_formula][metric])
             n = len(my_score)
@@ -138,8 +136,8 @@ def comparison(path, all_meta_formula):
     beta_train, beta_valid, beta_test = read_beta_log(path)
     for mode in ['valid', 'test']:
         for meta_formula in all_meta_formula:
-            foq_instance = parse_foq_formula(beta_query[meta_formula])
-            foq_formula = foq_instance.meta_formula
+            foq_instance = parse_formula(beta_query_v2[meta_formula])
+            foq_formula = foq_instance.formula
             df = pd.read_csv(os.path.join(path, f'eval_{mode}_{foq_formula}.csv'))
             for metric in df.columns:
                 if metric != 'step' and metric != 'num_queries':
@@ -163,17 +161,27 @@ def comparison(path, all_meta_formula):
 
 
 
-
+box_query_v2 = {
+    '1p': '(p,(e))',
+    '2p': '(p,(p,(e)))',
+    '3p': '(p,(p,(p,(e))))',
+    '2i': '(i,(p,(e)),(p,(e)))',
+    '3i': '(i,(p,(e)),(p,(e)),(p,(e)))',
+    'ip': '(p,(i,(p,(e)),(p,(e))))',
+    'pi': '(i,(p,(p,(e))),(p,(e)))',
+    '2u-DNF': '(u,(p,(e)),(p,(e)))',
+    'up-DNF': '(u,(p,(p,(e))),(p,(p,(e))))',
+}
 
 
 # print_loss(graph_path)
-beta_except_3i = [beta_query[formula] for formula in beta_query.keys() if formula != '3i' and formula != '3in']
-test_step = 300000
-test_path = "/home/hyin/DiscreteMeasureReasoning/log/dev/default_except3i210706.11:07:0086b2bdb6/"
+test_step = 450000
+test_path = "/home/hyin/DiscreteMeasureReasoning/log/newdev/Logic210807.16:53:39ea381cb0/"
 # test_path = "/home/hyin/DiscreteMeasureReasoning/log/dev/default210705.14:43:26fba267b0/"
-log_all_metrics(test_path, test_step, 'test', beta_except_3i)
+log_all_metrics(test_path, test_step, 'test', log_meta_formula=box_query_v2.values())
 # train_all, valid_all, test_all = read_beta_log('../download_log/full/')
-train_part, valid_part, test_part = read_beta_log(test_path, 'test', test_step, beta_except_3i)
+train_part, valid_part, test_part = read_beta_log(test_path, 'test', test_step,
+                                                  averaged_meta_formula=box_query_v2.values())
 
 
 #comparison('../download_log/1p.2p.2i/', ['1p', '2p', '2i'])

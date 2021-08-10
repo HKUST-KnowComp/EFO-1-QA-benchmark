@@ -280,7 +280,7 @@ def store_json_query_with_check(
         df = pd.DataFrame(data=my_train_data)
         storation_path = join(store_fold, f"{mode}_{beta_name}.csv")
         logging.info(f"{len(df)} queries is obtained")
-        df.to_csv(storation_path, index=False, sep="\t")
+        df.to_csv(storation_path, index=False)
 
 """
 def store_query_with_check(queries, easy_answers, hard_answers, store_fold, projection_easy, projection_hard, mode):
