@@ -59,6 +59,7 @@ Formula = TUnion[Tuple[str, ...], Tuple['Formula', ...]]
 
 class FirstOrderSetQuery(ABC):
     def __init__(self):
+        self.latent_embedding = None
         pass
 
     @property
@@ -97,8 +98,21 @@ class FirstOrderSetQuery(ABC):
         pass
 
     @abstractmethod
-    def embedding_estimation(self, estimator: AppFOQEstimator, batch_indices, 
+    def embedding_estimation(self, estimator: AppFOQEstimator, batch_indices,
                              **kwargs):
+        pass
+
+    @abstractmethod
+    def _embedding_optimization(self, estimator: AppFOQEstimator,
+                                batch_indices, **kwargs):
+        """
+        This function is called for internal usage
+        it first initializes the latent embeddings of eqch fosq instance
+        then computes the loss function
+        For entity query, the loss is None,
+        For entity query, the loss is not None
+        For projection, we have the t norm
+        """
         pass
 
     @abstractmethod
@@ -122,6 +136,20 @@ class FirstOrderSetQuery(ABC):
     def to(self, device):
         pass
 
+
+def embedding_estimation_with_optimization(fosq: FirstOrderSetQuery,
+                                           estimator,
+                                           optimizer_name="SGD",
+                                           num_steps=10,
+                                           optimizer_args={"lr": 1}):
+    for i in range(10):
+        loss, parameters = fosq._embedding_optimization(estimator)
+        optimizer = getattr(torch.optim, optimizer_name)(
+            parameters, **optimizer_args)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+    return fosq.latent_embedding
 
 class Entity(FirstOrderSetQuery):
     """ A singleton set of entities
@@ -154,7 +182,7 @@ class Entity(FirstOrderSetQuery):
 
     def embedding_estimation(self,
                              estimator: AppFOQEstimator,
-                             batch_indices=None, 
+                             batch_indices=None,
                              **kwargs):
         if self.tentities is None:
             self.tentities = torch.tensor(self.entities).to(self.device)
@@ -163,6 +191,15 @@ class Entity(FirstOrderSetQuery):
         else:
             ent = self.tentities
         return estimator.get_entity_embedding(ent, **kwargs)
+    
+    def _embedding_optimization(self, 
+                                estimator: AppFOQEstimator, 
+                                batch_indices=None, 
+                                **kwargs):
+        self.latent_embedding = self.embedding_estimation(
+            estimator=estimator,
+            batch_indices=batch_indices)
+        return None, [], 
 
     def lift(self):
         self.entities = []

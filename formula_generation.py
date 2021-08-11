@@ -3,8 +3,12 @@ from collections import defaultdict
 import pandas as pd
 from pandas.core.reshape.concat import concat
 
-from fol.foq_v2 import (DeMorgan_rule, binary_formula_iterator, concate_iu_chains, parse_formula,
-                        projection_sink, union_bubble)
+from fol.foq_v2 import (DeMorgan_rule,
+                        binary_formula_iterator,
+                        concate_iu_chains,
+                        parse_formula,
+                        projection_sink,
+                        union_bubble)
 
 
 def convert_log_to_csv(logfile):
@@ -26,6 +30,7 @@ if __name__ == "__main__":
                         level=logging.INFO)
     total_count = 0
     reductions = defaultdict(set)
+
     for k in range(1, 5):
         it = binary_formula_iterator(depth=3, num_anchor_nodes=k)
         for i, f in enumerate(it):
@@ -48,6 +53,8 @@ if __name__ == "__main__":
             query = concate_iu_chains(query)
             compact_dnf = query.formula
             reductions['compact_dnf'].add(dnf)
+            
+            query = concate_iu_chains(query)
 
             total_count += 1
             logging.info("record:"
