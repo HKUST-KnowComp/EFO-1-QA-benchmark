@@ -1,5 +1,4 @@
 from utils.util import load_graph
-from KGReasoning.main import load_data
 import logging
 from collections import defaultdict
 import pandas as pd
@@ -26,6 +25,7 @@ def convert_log_to_csv(logfile):
                 for k, v in zip(schema.split('\t'), data.split('\t')):
                     data_dict[k.strip()].append(v.strip())
     df = pd.DataFrame(data_dict)
+    df = df.drop_duplicates(subset=['original'])
     df.to_csv(logfile.replace('.log', '.csv'), index=False)
     for c in df.columns:
         logging.info(f"{len(df[c].unique())} {c} unique formulas found")
@@ -45,8 +45,8 @@ def convert_to_dnf(query):
 def normal_forms_generation(formula):
     result = {}
     query = parse_formula(formula)
-    proj, rproj = load_graph()
-    query.backward_sample()
+    # proj, rproj = load_graph()
+    # query.backward_sample()
     result["original"] = query.formula
     query = DeMorgan_replacement(parse_formula(formula))
     result["DeMorgan"] = query.formula
@@ -78,6 +78,8 @@ if __name__ == "__main__":
         it = binary_formula_iterator(depth=3, num_anchor_nodes=k)
         for i, f in enumerate(it):
             res = normal_forms_generation(f)
+            res['formula_id'] = f"type{total_count:04d}"
+            
             keys = list(res.keys())
             title_str = "\t".join(keys)
             formula_str = "\t".join(res[k] for k in keys)
