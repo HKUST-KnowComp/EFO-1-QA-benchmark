@@ -406,7 +406,7 @@ class MultipleSetQuery(FirstOrderSetQuery):
         dobject = {
             'o': self.__o__,
             'a': [
-                json.loads(subq.dumps) for subq in self.sub_queries
+                sorted(json.loads(subq.dumps) for subq in self.sub_queries)
             ]
         }
         return json.dumps(dobject)
@@ -642,6 +642,23 @@ class Multiple_Difference(MultipleSetQuery):
 
     def __init__(self, *queries: List[FirstOrderSetQuery]):
         super().__init__(*queries)
+
+    @property
+    def formula(self):
+        return "({},{})".format(
+            self.__o__,
+            ",".join(subq.formula for subq in self.sub_queries)
+        )
+    
+    @property
+    def dumps(self):
+        dobject = {
+            'o': self.__o__,
+            'a': [
+                json.loads(subq.dumps) for subq in self.sub_queries
+            ]
+        }
+        return json.dumps(dobject)
 
     def embedding_estimation(self,
                              estimator: AppFOQEstimator,

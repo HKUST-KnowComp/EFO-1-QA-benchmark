@@ -5,7 +5,7 @@ import json
 from os import path as osp
 
 sys.path.append(osp.dirname(osp.dirname(__file__)))
-
+from fol import  beta_query_v2
 from fol.appfoq import TransEEstimator
 from fol.foq_v2 import parse_formula
 from utils.util import read_indexing, load_graph

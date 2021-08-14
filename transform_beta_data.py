@@ -231,6 +231,7 @@ def transform_json_query(query, meta_formula, option=None):
         raise NotImplementedError
     return json.dumps(dobject)
 
+
 def store_json_query_with_check(
         queries, easy_answers, hard_answers, 
         store_fold, projection_easy, projection_hard, 

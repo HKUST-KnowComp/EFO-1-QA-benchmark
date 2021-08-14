@@ -14,8 +14,8 @@ from utils.util import (Writer, load_data_with_indexing, load_task_manager, read
                         set_global_seed)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', default='config/Logic.yaml', type=str)
-parser.add_argument('--prefix', default='newdev', type=str)
+parser.add_argument('--config', default='config/minimal_test.yaml', type=str)
+parser.add_argument('--prefix', default='test', type=str)
 parser.add_argument('--checkpoint_path', default=None, type=str)
 parser.add_argument('--load_step', default=0, type=int)
 
@@ -150,7 +150,7 @@ def eval_step(model, eval_iterator, device, mode):
             for metric in logs[key].keys():
                 if metric != 'num_queries':
                     logs[key][metric] /= logs[key]['num_queries']
-    torch.cuda.empty_cache()
+    # torch.cuda.empty_cache()
     return logs
 
 
@@ -315,9 +315,12 @@ if __name__ == "__main__":
         filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
     init_step = 1
     # exit()
-
     if args.checkpoint_path is not None:
-        lr, train_config['warm_up_steps'], init_step = load_beta_model(args.checkpoint_path, model, opt)
+        if args.load_step != 0:
+            lr, train_config['warm_up_steps'] = load_model(args.load_step, args.checkpoint_path, model, opt)
+            init_step = args.load_step
+        else:
+            lr, train_config['warm_up_steps'], init_step = load_beta_model(args.checkpoint_path, model, opt)
 
     training_logs = []
     with trange(init_step, train_config['steps'] + 1) as t:

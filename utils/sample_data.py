@@ -1,8 +1,8 @@
-from fol.sampler import *
-from fol.foq_v2 import parse_formula
-from fol.test_foq_v2 import beta_query_v2
+import collections
+import os
 import pandas as pd
-from utils.util import load_rawdata_with_indexing
+from fol import parse_formula, beta_query_v2
+from utils.util import load_data_with_indexing
 
 
 def sampling_stored(query_list, store_fold, num_queries, projs, rprojs, projs_hard, rprojs_hard, mode,
@@ -41,16 +41,16 @@ def sampling_stored(query_list, store_fold, num_queries, projs, rprojs, projs_ha
 
 
 if __name__ == "__main__":
-    data_path = 'data/FB15k-237-betae'
-    rawdata_path = 'datasets_knowledge_embedding/FB15k-237'
+    data_path = 'data/FB15k-foq'
+    read_data_path = 'data/FB15k-betae'
     ent2id, rel2id, projection_train, reverse_projection_train, projection_valid, reverse_projection_valid, \
-    projection_test, reverse_projection_test = load_rawdata_with_indexing(data_path, rawdata_path)
+    projection_test, reverse_projection_test = load_data_with_indexing(read_data_path)
     NewLook_Query = ['2D', '3D', 'Dp']
-    sampling_stored(NewLook_Query, data_path, 149689, None, None,
+    sampling_stored(NewLook_Query, data_path, 273710, None, None,
                     projection_train, reverse_projection_train, 'train', True)
-    sampling_stored(NewLook_Query, data_path, 5000, projection_train, reverse_projection_train, projection_valid,
+    sampling_stored(NewLook_Query, data_path, 27371, projection_train, reverse_projection_train, projection_valid,
                     reverse_projection_valid, 'valid', True)
-    sampling_stored(NewLook_Query, data_path, 5000, projection_valid, reverse_projection_valid, projection_test,
+    sampling_stored(NewLook_Query, data_path, 27371, projection_valid, reverse_projection_valid, projection_test,
                     reverse_projection_test, 'test', True)
 
 
