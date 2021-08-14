@@ -7,7 +7,6 @@ ref:
   test_batch_size: 1
   box_mode: null
   use_cuda: False
-  query_name_dict: null
   beta_mode:
     - 1600
     - 2
@@ -21,3 +20,4 @@ our:
   relation_dim: 500
   num_layers: 2
   negative_sample_size: 128
+  device: cpu
