@@ -56,9 +56,9 @@ if __name__ == "__main__":
         out_folder = osp.join("data", "benchmark", kg_name)
         os.makedirs(out_folder, exist_ok=True)
         data = defaultdict(list)
-        for i, row in tqdm(df.iterrows()):
+        for i, row in tqdm(df.iterrows(), total=len(df)):
             fid = row.formula_id
-            for i in tqdm(range(10000), leave=False, desc=row.original + fid):
+            for i in tqdm(range(100), leave=False, desc=row.original + fid):
                 query_id = f"{fid}-sample{i:04d}"
                 data['query_id'].append(query_id)
                 easy_answers, hard_answers, results = sample_by_row(

@@ -1102,32 +1102,35 @@ def concate_iu_chains(fosq: FirstOrderSetQuery) -> FirstOrderSetQuery:
         return concate_iu_chains(_fosq)
 
 
-def to_D(query):
-    if query.__o__ == "i":
+def to_D(fosq):
+    if fosq.__o__ == "i":
         negated = []
         not_negated = []
-        for subq in query.sub_queries:
+        for subq in fosq.sub_queries:
             if subq.__o__ == 'n':
                 negated.append(to_D(subq))
             else:
                 not_negated.append(to_D(subq))
+        if len(negated) == 0:
+            fosq.sub_queries = not_negated
+            return fosq
         if len(not_negated) > 1:
             first_query = Intersection(*not_negated)
         else:
             first_query = not_negated[0]
         rest_query = [q.query for q in negated]
         multi_diff_query = [first_query] + rest_query
-        query = Multiple_Difference(*multi_diff_query)
-        return query
-    elif query.__o__ == "u":
-        sub_queries = [to_D(q) for q in query.sub_queries]
-        query.sub_queries = sub_queries
-        return query
-    elif query.__o__ in 'pn':
-        query.query = to_D(query.query)
-        return query
-    elif query.__o__ == 'e':
-        return query
+        fosq = Multiple_Difference(*multi_diff_query)
+        return fosq
+    elif fosq.__o__ == "u":
+        sub_queries = [to_D(q) for q in fosq.sub_queries]
+        fosq.sub_queries = sub_queries
+        return fosq
+    elif fosq.__o__ in 'pn':
+        fosq.query = to_D(fosq.query)
+        return fosq
+    elif fosq.__o__ == 'e':
+        return fosq
     else:
         raise NotImplementedError
 
