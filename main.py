@@ -14,8 +14,8 @@ from utils.util import (Writer, load_data_with_indexing, load_task_manager, read
                         set_global_seed)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', default='config/minimal_test.yaml', type=str)
-parser.add_argument('--prefix', default='test', type=str)
+parser.add_argument('--config', default='config/Query2Box_p.yaml', type=str)
+parser.add_argument('--prefix', default='p_generalize', type=str)
 parser.add_argument('--checkpoint_path', default=None, type=str)
 parser.add_argument('--load_step', default=0, type=int)
 
@@ -276,10 +276,16 @@ if __name__ == "__main__":
             configure['data']['data_folder'], 'train', task_names=beta_path_tasks)
         other_tasks = load_task_manager(
             configure['data']['data_folder'], 'train', task_names=beta_other_tasks)
-        train_path_tm = TaskManager('train', path_tasks, device)
-        train_other_tm = TaskManager('train', other_tasks, device)
-        train_path_iterator = train_path_tm.build_iterators(model, batch_size=train_config['batch_size'])
-        train_other_iterator = train_other_tm.build_iterators(model, batch_size=train_config['batch_size'])
+        if len(beta_path_tasks) > 0:
+            train_path_tm = TaskManager('train', path_tasks, device)
+            train_path_iterator = train_path_tm.build_iterators(model, batch_size=train_config['batch_size'])
+        else:
+            train_path_tm, train_path_iterator = None, None
+        if len(beta_other_tasks) > 0:
+            train_other_tm = TaskManager('train', other_tasks, device)
+            train_other_iterator = train_other_tm.build_iterators(model, batch_size=train_config['batch_size'])
+        else:
+            train_other_tm, train_other_iterator = None, None
         all_tasks = load_task_manager(
             configure['data']['data_folder'], 'train', task_names=train_config['meta_queries'])
         train_tm = TaskManager('train', all_tasks, device)
@@ -326,15 +332,15 @@ if __name__ == "__main__":
     with trange(init_step, train_config['steps'] + 1) as t:
         for step in t:
             # basic training step
+            if step >= train_config['warm_up_steps']:
+                lr /= 5
+                # logging
+                opt = torch.optim.Adam(
+                    filter(lambda p: p.requires_grad, model.parameters()),
+                    lr=lr
+                )
+                train_config['warm_up_steps'] *= 1.5
             if train_path_iterator:
-                if step >= train_config['warm_up_steps']:
-                    lr /= 5
-                    # logging
-                    opt = torch.optim.Adam(
-                        filter(lambda p: p.requires_grad, model.parameters()),
-                        lr=lr
-                    )
-                    train_config['warm_up_steps'] *= 1.5
                 try:
                     _log = train_step(model, opt, train_path_iterator)
                 except StopIteration:
@@ -363,22 +369,24 @@ if __name__ == "__main__":
                             train_path_iterator = train_path_tm.build_iterators(model,
                                                                                 batch_size=train_config['batch_size'])
                             _log_second = train_step(model, opt, train_path_iterator)
-                for key in _log:
-                    _log[key] = (_log[key] + _log_other[key] + _log_second[key]) / 3
-                t.set_postfix(_log_second)
-                training_logs.append(_log_second)
-                _log['step'] = step
+                    for key in _log:
+                        _log[f'all_{key}'] = (_log[key] + _log_other[key]) / 2
+                t.set_postfix(_log)
+                training_logs.append(_log)
                 if step % train_config['log_every_steps'] == 0:
                     for metric in training_logs[0].keys():
                         _log[metric] = sum(log[metric] for log in training_logs) / len(training_logs)
+                    _log['step'] = step
                     training_logs = []
                     writer.append_trace('train', _log)
 
             if step % train_config['evaluate_every_steps'] == 0 or step == train_config['steps']:
+                '''
                 if train_iterator:
                     train_iterator = train_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
                     _log = eval_step(model, train_iterator, device, mode='train')
                     save_eval(_log, 'train', step, writer)
+                '''
 
                 if valid_iterator:
                     valid_iterator = valid_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
