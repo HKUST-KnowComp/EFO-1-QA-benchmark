@@ -41,6 +41,17 @@ def sample_by_row(row, easy_proj, easy_rproj, hard_proj):
     return list(easy_answers), list(hard_answers), results
 
 
+def sample_by_row_final(row, easy_proj, easy_rproj, hard_proj):
+    while True:
+        query_instance = parse_formula(row.original)
+        easy_answers = query_instance.backward_sample(easy_proj, easy_rproj)
+        full_answers = query_instance.deterministic_query(hard_proj)
+        hard_answers = full_answers.difference(easy_answers)
+        results = normal_forms_transformation(query_instance)
+        if 0 < len(hard_answers) <= 100:
+            break
+    return list(easy_answers), list(hard_answers), results
+
 if __name__ == "__main__":
     df = pd.read_csv("logs/formula_generation.csv")
     beta_data_folders = ["data/FB15k-237-betae",
@@ -58,10 +69,10 @@ if __name__ == "__main__":
         data = defaultdict(list)
         for i, row in tqdm(df.iterrows(), total=len(df)):
             fid = row.formula_id
-            for i in tqdm(range(100), leave=False, desc=row.original + fid):
+            for i in tqdm(range(10000), leave=False, desc=row.original + fid):
                 query_id = f"{fid}-sample{i:04d}"
                 data['query_id'].append(query_id)
-                easy_answers, hard_answers, results = sample_by_row(
+                easy_answers, hard_answers, results = sample_by_row_final(
                     row, proj_train, reverse_train, proj_test)
                 data['easy_answers'].append(easy_answers)
                 data['hard_answers'].append(hard_answers)
