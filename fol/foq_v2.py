@@ -714,7 +714,7 @@ class Multiple_Difference(MultipleSetQuery):
 
     def deterministic_query(self, projs):
         lquery, rqueries = self.sub_queries[0], self.sub_queries[1:]
-        ans_excluded = set.union(*(sub_query.deterministic_query(projs) for sub_query in rqueries))
+        ans_excluded = set.union(*[sub_query.deterministic_query(projs) for sub_query in rqueries])
         ans_origin = lquery.deterministic_query(projs)
         return ans_origin - ans_excluded
 
@@ -1031,10 +1031,22 @@ def union_bubble(fosq: FirstOrderSetQuery) -> FirstOrderSetQuery:
     """
     if fosq.__o__ == 'e':
         return fosq
-    elif fosq.__o__ in 'pn':
+    elif fosq.__o__ == 'n':
         fosq.query = union_bubble(fosq.query)
         return fosq
-
+    elif fosq.__o__ == 'p':
+        sub_query = fosq.query
+        if sub_query.__o__ == 'u':
+            # the projection should be applid to those queries
+            sub_queries = []
+            for ssq in sub_query.sub_queries:
+                p = copy_query(fosq)
+                p.query = ssq
+                sub_queries.append(p)
+            return Union(*sub_queries)
+        else:
+            fosq.query = union_bubble(sub_query)
+            return fosq
     elif fosq.__o__ == 'i':
         fosq.sub_queries = [union_bubble(q) for q in fosq.sub_queries]
 

@@ -35,16 +35,18 @@ def convert_log_to_csv(logfile):
 
 
 def convert_to_dnf(query):
-    query = transformation(query, projection_sink)
-    query = transformation(query, negation_sink)
-    query = transformation(query, union_bubble)
-    query = transformation(query, concate_n_chains)
+    # query = transformation(query, projection_sink)
+    def dnf_step(query):
+        return union_bubble(concate_n_chains(negation_sink(query)))
+    
+    query = transformation(query, dnf_step)
     return query
 
 
 def normal_forms_generation(formula):
     result = {}
     query = parse_formula(formula)
+    formula = query.formula
     # proj, rproj = load_graph()
     # query.backward_sample()
     result["original"] = query.formula
