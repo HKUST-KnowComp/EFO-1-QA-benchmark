@@ -2,6 +2,7 @@ from collections import defaultdict
 import os.path as osp
 import os
 import logging
+from multiprocessing import Pool
 
 from tqdm import tqdm
 import pandas as pd
@@ -66,18 +67,37 @@ if __name__ == "__main__":
         kg_name = osp.basename(data_path).replace("-betae", "")
         out_folder = osp.join("data", "benchmark", kg_name)
         os.makedirs(out_folder, exist_ok=True)
-        data = defaultdict(list)
+
         for i, row in tqdm(df.iterrows(), total=len(df)):
             fid = row.formula_id
-            for i in tqdm(range(10000), leave=False, desc=row.original + fid):
-                query_id = f"{fid}-sample{i:04d}"
-                data['query_id'].append(query_id)
+            data = defaultdict(list)
+            def sampler_func(i):
+                row_data = {}
+                row_data['query_id'] = f"{fid}-sample{i:04d}"
                 easy_answers, hard_answers, results = sample_by_row_final(
                     row, proj_train, reverse_train, proj_test)
-                data['easy_answers'].append(easy_answers)
-                data['hard_answers'].append(hard_answers)
+                row_data['easy_answers'] = easy_answers
+                row_data['hard_answers'] = hard_answers
                 for k in results:
-                    data[k].append(results[k].dumps)
-        pd.DataFrame(data).to_csv(osp.join(out_folder, "data.csv"))
+                    row_data[k] = results[k].dumps
+                return row_data
+     
+            with Pool(12) as p:
+                gets = p.map(sampler_func, list(range(10000)))
+                for row_data in gets:
+                    for k in row_data:
+                        data[k].append(row_data[k])
+
+            pd.DataFrame(data).to_csv(osp.join(out_folder, f"data-{fid}.csv"), index=False)
+#           for i in tqdm(range(10000), leave=False, desc=row.original + fid):
+#               query_id = f"{fid}-sample{i:04d}"
+#               data['query_id'].append(query_id)
+#               easy_answers, hard_answers, results = sample_by_row_final(
+#                   row, proj_train, reverse_train, proj_test)
+#               data['easy_answers'].append(easy_answers)
+#               data['hard_answers'].append(hard_answers)
+#               for k in results:
+#                   data[k].append(results[k].dumps)
+
                 
         
