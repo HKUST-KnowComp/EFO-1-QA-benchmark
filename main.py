@@ -7,7 +7,7 @@ import torch
 from tqdm.std import trange, tqdm
 
 from fol.appfoq import compute_final_loss
-from data_helper import TaskManager, Benchmark_TaskManager
+from data_helper import TaskManager, BenchmarkTaskManager
 from fol import BetaEstimator, BoxEstimator, LogicEstimator, NLKEstimator
 from fol.appfoq import order_bounds
 from utils.util import (Writer, load_data_with_indexing, load_task_manager, read_from_yaml,
@@ -316,11 +316,11 @@ if __name__ == "__main__":
             test_iterator = None
             test_tm = None
     elif configure['data']['type'] == 'benchmark':
-        test_tm_list= []
+        test_tm_list = []
         if 'test' in configure['action']:
-            id_list = train_config['meta_queries']
+            id_list = configure['evaluate']['meta_queries']
             for query_id in id_list:
-                test_tm = Benchmark_TaskManager(query_id, device)
+                test_tm = BenchmarkTaskManager(data_folder, query_id, device)
                 test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
                 test_tm_list.append(test_tm)
     else:
@@ -412,8 +412,10 @@ if __name__ == "__main__":
                         _log = eval_step(model, test_iterator, device, mode='test')
                         save_eval(_log, 'test', step, writer)
                 elif configure['data']['type'] == 'benchmark':
-                    for test
-
+                    for test_tm in test_tm_list:
+                        test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
+                        _log = eval_step(model, test_iterator, device, mode='test')
+                        save_eval(_log, 'test', step, writer)
 
             if step % train_config['save_every_steps'] == 0:
                 writer.save_model(model, opt, step, train_config['warm_up_steps'], lr)
