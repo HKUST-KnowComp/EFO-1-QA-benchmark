@@ -266,7 +266,7 @@ class BetaEstimator(AppFOQEstimator):
             sub_beta_list.append(sub_beta)
         all_alpha = torch.stack(sub_alpha_list)  # conj*b*dim
         all_beta = torch.stack(sub_beta_list)
-        new_alpha, new_beta = self.intersection_net(all_alpha, all_beta)
+        new_alpha, new_beta = self.center_net(all_alpha, all_beta)
         embedding = torch.cat([new_alpha, new_beta], dim=-1)
         return embedding
 
