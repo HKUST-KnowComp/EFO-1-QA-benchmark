@@ -53,8 +53,9 @@ def sample_by_row_final(row, easy_proj, easy_rproj, hard_proj):
             break
     return list(easy_answers), list(hard_answers), results
 
+
 if __name__ == "__main__":
-    df = pd.read_csv("logs/formula_generation.csv")
+    df = pd.read_csv("logs/generated_formula_anchor_node=3.csv")
     beta_data_folders = ["data/FB15k-237-betae",
                          "data/FB15k-betae",
                          "data/NELL-betae"]
