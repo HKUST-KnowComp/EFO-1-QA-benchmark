@@ -4,6 +4,7 @@ from itertools import product
 from abc import ABC, abstractmethod
 from typing import List, Tuple, TypedDict
 from typing import Union as TUnion
+from numpy.core.arrayprint import SubArrayFormat
 
 import torch
 
@@ -59,6 +60,7 @@ Formula = TUnion[Tuple[str, ...], Tuple['Formula', ...]]
 
 class FirstOrderSetQuery(ABC):
     def __init__(self):
+        self.latent_embedding = None
         pass
 
     @property
@@ -97,8 +99,21 @@ class FirstOrderSetQuery(ABC):
         pass
 
     @abstractmethod
-    def embedding_estimation(self, estimator: AppFOQEstimator, batch_indices, 
+    def embedding_estimation(self, estimator: AppFOQEstimator, batch_indices,
                              **kwargs):
+        pass
+
+    # @abstractmethod
+    def _embedding_optimization(self, estimator: AppFOQEstimator,
+                                batch_indices, **kwargs):
+        """
+        This function is called for internal usage
+        it first initializes the latent embeddings of eqch fosq instance
+        then computes the loss function
+        For entity query, the loss is None,
+        For entity query, the loss is not None
+        For projection, we have the t norm
+        """
         pass
 
     @abstractmethod
@@ -122,6 +137,20 @@ class FirstOrderSetQuery(ABC):
     def to(self, device):
         pass
 
+
+def embedding_estimation_with_optimization(fosq: FirstOrderSetQuery,
+                                           estimator,
+                                           optimizer_name="SGD",
+                                           num_steps=10,
+                                           optimizer_args={"lr": 1}):
+    for i in range(10):
+        loss, parameters = fosq._embedding_optimization(estimator)
+        optimizer = getattr(torch.optim, optimizer_name)(
+            parameters, **optimizer_args)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+    return fosq.latent_embedding
 
 class Entity(FirstOrderSetQuery):
     """ A singleton set of entities
@@ -154,7 +183,7 @@ class Entity(FirstOrderSetQuery):
 
     def embedding_estimation(self,
                              estimator: AppFOQEstimator,
-                             batch_indices=None, 
+                             batch_indices=None,
                              **kwargs):
         if self.tentities is None:
             self.tentities = torch.tensor(self.entities).to(self.device)
@@ -163,6 +192,15 @@ class Entity(FirstOrderSetQuery):
         else:
             ent = self.tentities
         return estimator.get_entity_embedding(ent, **kwargs)
+    
+    def _embedding_optimization(self, 
+                                estimator: AppFOQEstimator, 
+                                batch_indices=None, 
+                                **kwargs):
+        self.latent_embedding = self.embedding_estimation(
+            estimator=estimator,
+            batch_indices=batch_indices)
+        return None, [], 
 
     def lift(self):
         self.entities = []
@@ -420,8 +458,12 @@ class MultipleSetQuery(FirstOrderSetQuery):
 
     @property
     def formula(self):
+        if len(self.sub_queries) > 2:
+            symb = self.__o__.upper()
+        else:
+            symb = self.__o__
         return "({},{})".format(
-            self.__o__,
+            symb,
             ",".join(sorted(subq.formula for subq in self.sub_queries))
         )
 
@@ -689,7 +731,7 @@ class Multiple_Difference(MultipleSetQuery):
 
     def deterministic_query(self, projs):
         lquery, rqueries = self.sub_queries[0], self.sub_queries[1:]
-        ans_excluded = set.union(*(sub_query.deterministic_query(projs) for sub_query in rqueries))
+        ans_excluded = set.union(*[sub_query.deterministic_query(projs) for sub_query in rqueries])
         ans_origin = lquery.deterministic_query(projs)
         return ans_origin - ans_excluded
 
@@ -746,9 +788,11 @@ ops_dict = {
     'e': Entity,
     'n': Negation,
     'p': Projection,
-    'd': Difference,
     'i': Intersection,
+    'I': Intersection,
     'u': Union,
+    'U': Union,
+    'd': Difference,
     'D': Multiple_Difference
 }
 
@@ -783,7 +827,7 @@ def parse_formula(fosq_formula: str) -> FirstOrderSetQuery:
             assert len(sub_range_list) == 1
         elif ops == 'd':
             assert len(sub_range_list) == 2
-        elif ops in 'uiD':
+        elif ops in 'uiIUD':
             assert len(sub_range_list) > 1
         elif ops in '()':
             return identify_range(i+1, j-1)
@@ -820,9 +864,10 @@ def parse_formula(fosq_formula: str) -> FirstOrderSetQuery:
 op_candidates_dict = {
     "p": "epiu",
     "n": "piu",
-    "i": {1: "pniu", 2: "pniu"},
-    "u": {1: "piu", 2: "piu"}
+    "i": {1: "piue", 2: "pniue"},
+    "u": {1: "piue", 2: "piue"}
 }
+
 
 def binary_formula_iterator(depth=5,
                             num_anchor_nodes=4,
@@ -881,10 +926,13 @@ def copy_query(q: FirstOrderSetQuery, deep=False) -> FirstOrderSetQuery:
         if deep:
             _q.query = copy_query(q.query, deep)
         return _q
-    elif op in 'ui':
+    elif op in 'uiD':
         _q = ops_dict[op]()
         if deep:
             _q.sub_queries = [copy_query(sq, deep) for sq in q.sub_queries]
+        return _q
+    elif op == 'd':
+        _q = Difference(lq=copy_query(q.lq, deep), rq=copy_query(q.rq, deep))
         return _q
     else:
         raise NotImplementedError
@@ -914,23 +962,9 @@ def projection_sink(fosq: FirstOrderSetQuery,
                             for q in fosq.sub_queries]
         return fosq
 
-"""
-    if fosq.__o__ == 'e':
 
-    elif fosq.__o__ == 'p':
-
-    elif fosq.__o__ == 'n':
-
-    elif fosq.__o__ == 'i':
-
-    elif fosq.__o__ == 'u':
-
-    else:
-"""
-
-
-def DeMorgan_rule(fosq: FirstOrderSetQuery) -> FirstOrderSetQuery:
-    """ Move the negation down of itersection and union.
+def negation_sink(fosq: FirstOrderSetQuery) -> FirstOrderSetQuery:
+    """ Move the negation down of itersection and union. (negation sink)
         n -> i -> fosq should be converted to u -> n -> fosq
         n -> u -> fosq should be converted to i -> n -> fosq
     """
@@ -944,23 +978,65 @@ def DeMorgan_rule(fosq: FirstOrderSetQuery) -> FirstOrderSetQuery:
         if sub_q.__o__ == 'i':
             sub_sub_qs = sub_q.sub_queries
             _fosq = Union(
-                *[Negation(q=DeMorgan_rule(q)) for q in sub_sub_qs]
+                *[Negation(q=negation_sink(q)) for q in sub_sub_qs]
             )
         elif sub_q.__o__ == 'u':
             sub_sub_qs = sub_q.sub_queries
             _fosq = Intersection(
-                *[Negation(q=DeMorgan_rule(q)) for q in sub_sub_qs]
+                *[Negation(q=negation_sink(q)) for q in sub_sub_qs]
             )
         else:
             _fosq = fosq
         return _fosq
 
     elif fosq.__o__ in 'iu':
-        fosq.sub_queries = [DeMorgan_rule(q) for q in fosq.sub_queries]
+        fosq.sub_queries = [negation_sink(q) for q in fosq.sub_queries]
         return fosq
     else:
         raise NotImplementedError
 
+
+def concate_n_chains(query: FirstOrderSetQuery) -> FirstOrderSetQuery:
+    if query.__o__ == 'n':
+        sub_query = query.query
+        if sub_query.__o__ == 'n':
+            query = sub_query.query
+        query.query = concate_n_chains(query.query)
+        return query
+    elif query.__o__ in 'ui':
+        query.sub_queries = [concate_n_chains(q) for q in query.sub_queries]
+        return query
+    elif query.__o__ == 'e':
+        return query
+    elif query.__o__ == 'p':
+        query.query = concate_n_chains(query.query)
+        return query
+    else:
+        raise NotImplementedError
+
+
+def DeMorgan_replacement(query):
+    """
+    Input query system epiun
+    Replace the u by n-i-n
+    """
+    if query.__o__ == 'u':
+        sub_queries = [DeMorgan_replacement(q) for q in query.sub_queries]
+        negated_sub_queries = [Negation(q) for q in sub_queries]
+        inter = Intersection(*negated_sub_queries)
+        out = Negation(inter)
+        return out
+    elif query.__o__ == 'i':
+        sub_queries = [DeMorgan_replacement(q) for q in query.sub_queries]
+        query.sub_queries = sub_queries
+        return query
+    elif query.__o__ == 'e':
+        return query
+    else: # n and p case
+        subq = query.query
+        query.query = DeMorgan_replacement(subq)
+        return query
+        
 
 def intersection_bubble(fosq: FirstOrderSetQuery) -> FirstOrderSetQuery:
     pass
@@ -974,10 +1050,22 @@ def union_bubble(fosq: FirstOrderSetQuery) -> FirstOrderSetQuery:
     """
     if fosq.__o__ == 'e':
         return fosq
-    elif fosq.__o__ in 'pn':
+    elif fosq.__o__ == 'n':
         fosq.query = union_bubble(fosq.query)
         return fosq
-
+    elif fosq.__o__ == 'p':
+        sub_query = fosq.query
+        if sub_query.__o__ == 'u':
+            # the projection should be applid to those queries
+            sub_queries = []
+            for ssq in sub_query.sub_queries:
+                p = copy_query(fosq)
+                p.query = ssq
+                sub_queries.append(p)
+            return Union(*sub_queries)
+        else:
+            fosq.query = union_bubble(sub_query)
+            return fosq
     elif fosq.__o__ == 'i':
         fosq.sub_queries = [union_bubble(q) for q in fosq.sub_queries]
 
@@ -1033,3 +1121,72 @@ def concate_iu_chains(fosq: FirstOrderSetQuery) -> FirstOrderSetQuery:
         return concate_iu_chains(_fosq)
 
 
+def to_D(fosq):
+    if fosq.__o__ == "i":
+        negated = []
+        not_negated = []
+        for subq in fosq.sub_queries:
+            if subq.__o__ == 'n':
+                negated.append(to_D(subq))
+            else:
+                not_negated.append(to_D(subq))
+        if len(negated) == 0:
+            fosq.sub_queries = not_negated
+            return fosq
+        if len(not_negated) > 1:
+            first_query = Intersection(*not_negated)
+        else:
+            first_query = not_negated[0]
+        rest_query = [q.query for q in negated]
+        multi_diff_query = [first_query] + rest_query
+        fosq = Multiple_Difference(*multi_diff_query)
+        return fosq
+    elif fosq.__o__ == "u":
+        sub_queries = [to_D(q) for q in fosq.sub_queries]
+        fosq.sub_queries = sub_queries
+        return fosq
+    elif fosq.__o__ in 'pn':
+        fosq.query = to_D(fosq.query)
+        return fosq
+    elif fosq.__o__ == 'e':
+        return fosq
+    else:
+        raise NotImplementedError
+
+def to_d(query):
+    """
+    Convert the i-n like difference into difference,
+    all binary operators
+    """
+    if query.__o__ == "i":
+        assert len(query.sub_queries) == 2
+        q1, q2 = query.sub_queries
+        q1, q2 = to_d(q1), to_d(q2)
+
+        if q1.__o__ == 'n' and q2.__o__ != 'n':
+            return Difference(lq=q2, rq=q1.query)
+        elif q1.__o__ != 'n' and q2.__o__ == 'n':
+            return Difference(lq=q1, rq=q2.query)
+        else:
+            query.sub_queries = [q1, q2]
+            return query
+    elif query.__o__ == "u":
+        sub_queries = [to_d(q) for q in query.sub_queries]
+        query.sub_queries = sub_queries
+        return query
+    elif query.__o__ in 'pn':
+        query.query = to_d(query.query)
+        return query
+    elif query.__o__ == 'e':
+        return query
+    else:
+        raise NotImplementedError
+
+
+def transformation(query, trans_func):
+    original_formula = query.formula
+    query = trans_func(query)
+    while query.formula != original_formula:
+        original_formula = query.formula
+        query = trans_func(query)
+    return query
