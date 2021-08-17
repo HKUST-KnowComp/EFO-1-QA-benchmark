@@ -771,9 +771,11 @@ ops_dict = {
     'e': Entity,
     'n': Negation,
     'p': Projection,
-    'd': Difference,
     'i': Intersection,
+    'I': Intersection,
     'u': Union,
+    'U': Union,
+    'd': Difference,
     'D': Multiple_Difference
 }
 
@@ -792,7 +794,7 @@ def parse_formula(fosq_formula: str) -> FirstOrderSetQuery:
             ops: operational string
             sub_range_list: a list of sub ranges
         """
-        ops = fosq_formula[i+1].lower()
+        ops = fosq_formula[i+1]
         level_stack = []
         sub_range_list = []
         for k in range(i+1, j):
@@ -808,7 +810,7 @@ def parse_formula(fosq_formula: str) -> FirstOrderSetQuery:
             assert len(sub_range_list) == 1
         elif ops == 'd':
             assert len(sub_range_list) == 2
-        elif ops in 'uiD':
+        elif ops in 'uiIUD':
             assert len(sub_range_list) > 1
         elif ops in '()':
             return identify_range(i+1, j-1)
@@ -836,7 +838,7 @@ def parse_formula(fosq_formula: str) -> FirstOrderSetQuery:
 
         if valid_sub_ranges is True:
             sub_objects = [cached_objects[r] for r in sub_range_list]
-            obj = ops_dict[ops.lower()](*sub_objects)
+            obj = ops_dict[ops](*sub_objects)
             todo_ranges.pop(-1)
             cached_objects[(i, j)] = obj
     return cached_objects[_b, _e]
@@ -845,8 +847,8 @@ def parse_formula(fosq_formula: str) -> FirstOrderSetQuery:
 op_candidates_dict = {
     "p": "epiu",
     "n": "piu",
-    "i": {1: "piu", 2: "pniu"},
-    "u": {1: "piu", 2: "piu"}
+    "i": {1: "piue", 2: "pniue"},
+    "u": {1: "piue", 2: "piue"}
 }
 
 

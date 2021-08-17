@@ -15,7 +15,7 @@ from fol.foq_v2 import (concate_n_chains, copy_query,
                         transformation)
 
 
-def convert_log_to_csv(logfile):
+def convert_log_to_csv(logfile, outfile):
     data_dict = defaultdict(list)
     with open(logfile, 'rt') as f:
         for line in f.readlines():
@@ -26,12 +26,12 @@ def convert_log_to_csv(logfile):
                     data_dict[k.strip()].append(v.strip())
     df = pd.DataFrame(data_dict)
     df = df.drop_duplicates(subset=['original'])
-    df.to_csv(logfile.replace('.log', '.csv'), index=False)
+    df.to_csv(outfile, index=False)
     for c in df.columns:
         logging.info(f"{len(df[c].unique())} {c} unique formulas found")
-    for i, row in df.iterrows():
-        if len(row) == len(set(row.tolist())):
-            print(row.tolist())
+    # for i, row in df.iterrows():
+        # if len(row) == len(set(row.tolist())):
+            # print(row.tolist())
 
 
 def convert_to_dnf(query):
@@ -70,7 +70,7 @@ if __name__ == "__main__":
     # r = normal_forms_generation(formula)
     # print(r)
 
-    logging.basicConfig(filename='logs/formula_generation.log',
+    logging.basicConfig(filename='logs/formula_generation_fixed.log',
                         filemode='wt',
                         level=logging.INFO)
     total_count = 0
@@ -87,11 +87,13 @@ if __name__ == "__main__":
             formula_str = "\t".join(res[k] for k in keys)
             total_count += 1
             logging.info(f"record:{title_str}:{formula_str}")
-            for k in keys:
-                reductions[k].add(res[k])
+            for _k in keys:
+                reductions[_k].add(res[_k])
+
+        convert_log_to_csv('logs/formula_generation_fixed.log',
+                           f'logs/generated_formula_anchor_node={k}.csv')
 
         for k, v in reductions.items():
             logging.info(f"statistics:{len(v)} {k} produced cumulatively")
     logging.info(f":statistics:{total_count} formulas are produced")
 
-    convert_log_to_csv('logs/formula_generation.log')
