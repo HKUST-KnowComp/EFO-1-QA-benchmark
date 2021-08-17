@@ -1,8 +1,8 @@
 action: ['train','valid','test']  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: 6
+cuda: 5
 data:
-  type: beta
+  type: beta   # one of ['beta', 'sampled']
   data_folder: data/FB15k-237-foq
   cpu: 10
 train:
