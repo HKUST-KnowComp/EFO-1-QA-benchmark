@@ -189,3 +189,54 @@ class TrainDataset(Dataset):
         beta_name = [_[2] for _ in flattened_queries]
         return query, ans_set, beta_name
 
+
+class Benchmark_TaskManager:
+    def __init__(self,  task_id: int, device):
+        all_formula = pd.read_csv('formula_generation.log')
+        all_normal_form = ['original', 'DeMorgan', 'DNF', 'diff', 'DNF + diff', 'DNF + MultiIU', 'DNF + MultiIUD']
+        for normal_form in all_normal_form:
+            formula = all_formula[normal_form][task_id]
+            query_instance = parse_formula(formula)
+
+
+
+        self.tasks = {t: t.task for t in task_id}
+        self.task_iterators = {}
+        partition = []
+        for t in self.tasks:
+            self.tasks[t].to(device)
+            partition.append(len(self.tasks[t]))
+        p = np.asarray(partition)
+        self.partition = p / p.sum()
+
+    def set_up_task(self):
+        pass
+
+    def build_iterators(self, estimator, batch_size):
+        self.task_iterators = {}
+        for i, tmf in enumerate(self.tasks):
+            self.tasks[tmf].setup_iteration()
+            self.task_iterators[tmf] = \
+                self.tasks[tmf].batch_estimation_iterator(
+                    estimator,
+                    int(batch_size * self.partition[i]))
+
+        while True:
+            finish = 0
+            data = defaultdict(dict)
+            for tmf in self.task_iterators:
+                try:
+                    emb, batch_id = next(self.task_iterators[tmf])
+                    data[tmf]['emb'] = emb
+                    easy_ans_sets = [self.tasks[tmf].easy_answer_set[j] for j in batch_id]
+                    data[tmf]['easy_answer_set'] = easy_ans_sets
+                    hard_ans_sets = [self.tasks[tmf].hard_answer_set[j] for j in batch_id]
+                    data[tmf]['hard_answer_set'] = hard_ans_sets
+
+                except StopIteration:
+                    finish += 1
+
+            if finish == len(self.tasks):
+                break
+
+            yield data

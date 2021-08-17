@@ -2,7 +2,7 @@ action: ['train','valid','test']  # one of [train, train+valid, train+test, vali
 seed: 0
 cuda: 7
 data:
-  type: beta
+  type: beta  # one of ['beta', 'benchmark']
   data_folder: data/NELL-foq
   cpu: 10
 train:

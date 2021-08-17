@@ -320,12 +320,13 @@ DNF_query = {
 }
 # print_loss(graph_path)
 test_step = 450000
-test_path = "/data/zwanggc/Logic210813.12:40:48de3be3ec"
-old_path = 0
+test_path = "/home/hyin/DiscreteMeasureReasoning/log/newdev/Logic-unbounded210813.22:26:062c614d51/"
+old_path = "/home/hyin/DiscreteMeasureReasoning/log/newdev/Logic-unbounded210813.21:19:26aaf6eebf/"
 # test_path = "/home/hyin/DiscreteMeasureReasoning/log/dev/default210705.14:43:26fba267b0/"
-logic_path = "/home/zwanggc/DiscreteMeasureReasoning/log/newdev/Logic210813.12:43:025b12f14c/"
+logic_path = "/data/zwanggc/Logic-unbounded210813.22:24:17607989e2/"
 #compare_loss(test_path, test_path, choose_len=3000)
-log_all_metrics(logic_path, test_step, 'test', log_meta_formula=check_query.values())
+log_all_metrics(test_path, test_step, 'test', log_meta_formula=check_query.values())
+log_all_metrics(old_path, test_step, 'test', log_meta_formula=check_query.values())
 #log_old_metrics(old_path, test_step, 'test')
 # train_all, valid_all, test_all = read_beta_log('../download_log/full/')
 # train_part, valid_part, test_part = read_logic_log(logic_path, 'test', test_step, averaged_meta_formula=DNF_query.values())

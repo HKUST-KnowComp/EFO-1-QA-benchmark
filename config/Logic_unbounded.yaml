@@ -1,6 +1,6 @@
 action: ['train','valid','test']  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: 0
+cuda: 7
 data:
   type: beta
   data_folder: data/FB15k-237-foq
@@ -73,7 +73,7 @@ estimator:
     num_layers: 2
     gamma: 0.375
     t_norm: luk
-    bounded: 1
+    bounded: 0
     use_att: 1
     use_gtrans: 0
 

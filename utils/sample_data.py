@@ -17,6 +17,9 @@ def sampling_stored(query_list, store_fold, num_queries, projs, rprojs, projs_ha
                 full_ans = query_instance.backward_sample(projs_hard, rprojs_hard, cumulative=True)
             else:
                 full_ans = query_instance.random_query(projs_hard, cumulative=True)
+            if len(full_ans) > 100:
+                query_instance.lift()
+                continue
             if mode == 'test' or mode == 'valid':
                 easy_ans = query_instance.deterministic_query(projs)
                 hard_ans = full_ans - easy_ans
@@ -41,16 +44,16 @@ def sampling_stored(query_list, store_fold, num_queries, projs, rprojs, projs_ha
 
 
 if __name__ == "__main__":
-    data_path = 'data/FB15k-foq'
-    read_data_path = 'data/FB15k-betae'
+    data_path = 'data/NELL-foq'
+    read_data_path = 'data/NELL-betae'
     ent2id, rel2id, projection_train, reverse_projection_train, projection_valid, reverse_projection_valid, \
     projection_test, reverse_projection_test = load_data_with_indexing(read_data_path)
     NewLook_Query = ['2D', '3D', 'Dp']
-    sampling_stored(NewLook_Query, data_path, 273710, None, None,
+    sampling_stored(NewLook_Query, data_path, 10798, None, None,
                     projection_train, reverse_projection_train, 'train', True)
-    sampling_stored(NewLook_Query, data_path, 27371, projection_train, reverse_projection_train, projection_valid,
+    sampling_stored(NewLook_Query, data_path, 4000, projection_train, reverse_projection_train, projection_valid,
                     reverse_projection_valid, 'valid', True)
-    sampling_stored(NewLook_Query, data_path, 27371, projection_valid, reverse_projection_valid, projection_test,
+    sampling_stored(NewLook_Query, data_path, 4000, projection_valid, reverse_projection_valid, projection_test,
                     reverse_projection_test, 'test', True)
 
 

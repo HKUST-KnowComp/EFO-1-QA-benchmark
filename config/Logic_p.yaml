@@ -1,31 +1,22 @@
 action: ['train','valid','test']  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: 0
+cuda: 5
 data:
-  type: beta
+  type: beta   # one of ['beta', 'sampled']
   data_folder: data/FB15k-237-foq
   cpu: 10
 train:
   negative_sample_size: 128  # for each positive sample
   batch_size: 512
   learning_rate: 0.0001
-  steps: 450000
-  log_every_steps: 100
-  warm_up_steps: 225000
-  evaluate_every_steps: 15000
-  save_every_steps: 10000
-  checkpoint_every: 10000
+  steps: 900000
+  log_every_steps: 200
+  warm_up_steps: 450000
+  evaluate_every_steps: 30000
+  save_every_steps: 20000
+  checkpoint_every: 20000
   meta_queries:
      - 1p
-     - 2p
-     - 3p
-     - 2i
-     - 3i
-     - 2in
-     - 3in
-     - inp
-     - pin
-     - pni
 evaluate:  # only used when valid/test in action
   batch_size: 1000
   print: true
@@ -33,19 +24,6 @@ evaluate:  # only used when valid/test in action
      - 1p
      - 2p
      - 3p
-     - 2i
-     - 3i
-     - 2in
-     - 3in
-     - inp
-     - pin
-     - pni
-     - ip
-     - pi
-     - 2u-DNF
-     - up-DNF
-     - 2u-DM
-     - up-DM
 estimator:
   embedding: logic # one of [Transe, box, beta, dm, logic]
   beta:
@@ -73,7 +51,7 @@ estimator:
     num_layers: 2
     gamma: 0.375
     t_norm: luk
-    bounded: 1
+    bounded: 0
     use_att: 1
     use_gtrans: 0
 
