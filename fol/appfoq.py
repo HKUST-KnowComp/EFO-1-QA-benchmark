@@ -356,9 +356,9 @@ class BetaEstimator4V(AppFOQEstimator):
         self.entity_embedding = nn.Parameter(torch.zeros(n_entity, self.entity_dim * 2))
         self.relation_embedding = nn.Parameter(torch.zeros(n_relation, self.relation_dim))
         self.embedding_range = nn.Parameter(
-            torch.tensor([(self.gamma.item() + self.epsilon) / entity_dim]),
+            torch.Tensor([(self.gamma.item() + self.epsilon) / entity_dim]),
             requires_grad=False
-            ).to(self.device)
+            )
         # nn.init.uniform_(tensor=self.entity_embeddings.weight, a=-self.embedding_range.item(), b=self.embedding_range.item())
         # nn.init.uniform_(tensor=self.relation_embeddings.weight, a=-self.embedding_range.item(), b=self.embedding_range.item())
         nn.init.uniform_(tensor=self.entity_embedding, a=-self.embedding_range.item(), b=self.embedding_range.item())
@@ -404,7 +404,7 @@ class BetaEstimator4V(AppFOQEstimator):
             sub_beta_list.append(sub_beta)
         all_alpha = torch.stack(sub_alpha_list)  # conj*b*dim
         all_beta = torch.stack(sub_beta_list)
-        new_alpha, new_beta = self.intersection_net(all_alpha, all_beta)
+        new_alpha, new_beta = self.center_net(all_alpha, all_beta)
         embedding = torch.cat([new_alpha, new_beta], dim=-1)
         return embedding
 

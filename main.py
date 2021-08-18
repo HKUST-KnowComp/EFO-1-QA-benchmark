@@ -7,17 +7,17 @@ import torch
 from tqdm.std import trange, tqdm
 
 from fol.appfoq import compute_final_loss
-from data_helper import TaskManager, BenchmarkTaskManager
-from fol import BetaEstimator, BoxEstimator, LogicEstimator, NLKEstimator
+from data_helper import TaskManager, BenchmarkTaskManager, all_normal_form
+from fol import BetaEstimator, BoxEstimator, LogicEstimator, NLKEstimator, BetaEstimator4V
 from fol.appfoq import order_bounds
 from utils.util import (Writer, load_data_with_indexing, load_task_manager, read_from_yaml,
                         set_global_seed)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', default='config/benchmark_box.yaml', type=str)
+parser.add_argument('--config', default='config/benchmark_beta_test.yaml', type=str)
 parser.add_argument('--prefix', default='benchmark_test', type=str)
-parser.add_argument('--checkpoint_path', default="/home/zwanggc/DiscreteMeasureReasoning/ckpt/Box/", type=str)
-parser.add_argument('--load_step', default=450000, type=int)
+parser.add_argument('--checkpoint_path', default="/home/zwanggc/DiscreteMeasureReasoning/ckpt/Beta-KGR", type=str)
+parser.add_argument('--load_step', default=0, type=int)
 
 
 # from torch.utils.tensorboard import SummaryWriter
@@ -91,7 +91,7 @@ def train_step(model, opt, iterator):
     return log
 
 
-def eval_step(model, eval_iterator, device, mode):
+def eval_step(model, eval_iterator, device, mode, allowed_easy_ans=False):
     logs = collections.defaultdict(lambda: collections.defaultdict(float))
     with torch.no_grad():
         for data in tqdm(eval_iterator):
@@ -114,8 +114,13 @@ def eval_step(model, eval_iterator, device, mode):
                         easy_ans = []
                         hard_ans = data[key]['answer_set'][i]
                     else:
-                        easy_ans = data[key]['easy_answer_set'][i]
-                        hard_ans = data[key]['hard_answer_set'][i]
+                        if allowed_easy_ans:
+                            easy_ans = []
+                            hard_ans = list(set(data[key]['hard_answer_set'][i]).union
+                                            (set(data[key]['easy_answer_set'][i])))
+                        else:
+                            easy_ans = data[key]['easy_answer_set'][i]
+                            hard_ans = data[key]['hard_answer_set'][i]
 
                     num_hard = len(hard_ans)
                     num_easy = len(easy_ans)
@@ -184,6 +189,14 @@ def save_eval(log, mode, step, writer):
         writer.append_trace(f'eval_{mode}_{t}', logt)
 
 
+def save_benchmark(log, writer, taskmanger: BenchmarkTaskManager):
+    form_log = collections.defaultdict(lambda: collections.defaultdict(float))
+    for normal_form in all_normal_form:
+        formula = taskmanger.form2formula[normal_form]
+        form_log[normal_form] = log[formula]
+    writer.save_dataframe(form_log, f'eval_type{taskmanger.id_str}.csv')
+
+
 def load_beta_model(checkpoint_path, model, optimizer):
     print('Loading checkpoint %s...' % checkpoint_path)
     checkpoint = torch.load(os.path.join(
@@ -216,10 +229,15 @@ if __name__ == "__main__":
     print("[main] config loaded")
     pprint(configure)
     # initialize my log writer
-    case_name = f'{args.prefix}/{args.config.split("/")[-1].split(".")[0]}'
-    # case_name = 'dev/default'
-    writer = Writer(case_name=case_name, config=configure, log_path='log')
-    # writer = SummaryWriter('./logs-debug/unused-tb')
+    if configure['data']['type'] == 'beta':
+        case_name = f'{args.prefix}/{args.config.split("/")[-1].split(".")[0]}'
+        # case_name = 'dev/default'
+        writer = Writer(case_name=case_name, config=configure, log_path='log')
+        # writer = SummaryWriter('./logs-debug/unused-tb')
+    else:
+        case_name = f'{args.prefix}/{args.checkpoint_path.split("/")[-1]}'
+        writer = Writer(case_name=case_name, config=configure, log_path='benchmark_log')
+
 
     # initialize environments
     set_global_seed(configure.get('seed', 0))
@@ -249,7 +267,7 @@ if __name__ == "__main__":
     model_params['negative_sample_size'] = train_config['negative_sample_size']
     model_params['device'] = device
     if model_name == 'beta':
-        model = BetaEstimator(**model_params)
+        model = BetaEstimator4V(**model_params)
     elif model_name == 'box':
         model = BoxEstimator(**model_params)
     elif model_name == 'logic':
@@ -323,6 +341,7 @@ if __name__ == "__main__":
                 test_tm = BenchmarkTaskManager(data_folder, query_id, device)
                 test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
                 test_tm_list.append(test_tm)
+            train_path_iterator = None
     else:
         assert False, 'Not valid data type!'
 
@@ -415,7 +434,12 @@ if __name__ == "__main__":
                     for test_tm in test_tm_list:
                         test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
                         _log = eval_step(model, test_iterator, device, mode='test')
-                        save_eval(_log, 'test', step, writer)
+                        test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
+                        _log_easy = eval_step(model, test_iterator, device, mode='test', allowed_easy_ans=True)
+                        for formula in _log_easy:
+                            for metrics in _log_easy[formula]:
+                                _log[formula][f'easy_{metrics}'] = _log_easy[formula][metrics]
+                        save_benchmark(_log, writer, test_tm)
 
-            if step % train_config['save_every_steps'] == 0:
+            if step % train_config['save_every_steps'] == 0 and configure['data']['type'] == 'beta':
                 writer.save_model(model, opt, step, train_config['warm_up_steps'], lr)
