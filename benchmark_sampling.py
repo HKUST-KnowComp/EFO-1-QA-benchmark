@@ -42,11 +42,11 @@ def sample_by_row(row, easy_proj, easy_rproj, hard_proj):
     return list(easy_answers), list(hard_answers), results
 
 
-def sample_by_row_final(row, easy_proj, easy_rproj, hard_proj):
+def sample_by_row_final(row, easy_proj, hard_proj, hard_rproj):
     while True:
         query_instance = parse_formula(row.original)
-        easy_answers = query_instance.backward_sample(easy_proj, easy_rproj)
-        full_answers = query_instance.deterministic_query(hard_proj)
+        full_answers = query_instance.backward_sample(hard_proj, hard_rproj)
+        easy_answers = query_instance.deterministic_query(easy_proj)
         hard_answers = full_answers.difference(easy_answers)
         results = normal_forms_transformation(query_instance)
         if 0 < len(hard_answers) <= 100:
@@ -74,20 +74,32 @@ if __name__ == "__main__":
             data = defaultdict(list)
             def sampler_func(i):
                 row_data = {}
-                row_data['query_id'] = f"{fid}-sample{i:04d}"
                 easy_answers, hard_answers, results = sample_by_row_final(
-                    row, proj_train, reverse_train, proj_test)
+                    row, proj_valid, proj_test, reverse_test)
                 row_data['easy_answers'] = easy_answers
                 row_data['hard_answers'] = hard_answers
                 for k in results:
                     row_data[k] = results[k].dumps
                 return row_data
-     
-            with Pool(12) as p:
-                gets = p.map(sampler_func, list(range(10000)))
-                for row_data in gets:
-                    for k in row_data:
-                        data[k].append(row_data[k])
+ 
+            produced_size = 0
+            sample_size = 5000
+            generated = set()
+            while produced_size < sample_size:
+                with Pool(12) as p:
+                    gets = p.map(sampler_func, list(range(sample_size - produced_size)))
+
+                    for row_data in gets:
+                        original = row_data['original']
+                        if original in generated:
+                            continue
+                        else:
+                            produced_size += 1
+                            generated.add(original)
+
+                        for k in row_data:
+                            data[k].append(row_data[k])
+                         
 
             pd.DataFrame(data).to_csv(osp.join(out_folder, f"data-{fid}.csv"), index=False)
 #           for i in tqdm(range(10000), leave=False, desc=row.original + fid):
@@ -102,3 +114,4 @@ if __name__ == "__main__":
 
                 
         
+
