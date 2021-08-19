@@ -192,12 +192,13 @@ class TrainDataset(Dataset):
 
 
 class BenchmarkTaskManager:
-    def __init__(self,  data_folder: str, task_id: int, device):
-        all_formula = pd.read_csv('data/formula_generation.csv')
+    def __init__(self,  data_folder: str, task_id: int, device, allowed_norm):
+        all_formula = pd.read_csv('data/generated_formula_anchor_node=3.csv')
         self.task_id = task_id
         self.tasks, self.form2formula = {}, {}
+        self.allowed_norm = allowed_norm
         self.all_formula = set()
-        for normal_form in all_normal_form:
+        for normal_form in allowed_norm:
             formula = all_formula[normal_form][task_id]
             self.form2formula[normal_form] = formula
             self.all_formula.add(formula)
@@ -230,7 +231,7 @@ class BenchmarkTaskManager:
             df = pd.read_csv(filename)
             self.len = len(df)
             loaded = {formula: False for formula in self.all_formula}
-            for normal_form in all_normal_form:
+            for normal_form in self.allowed_norm:
                 formula = self.form2formula[normal_form]
                 if not loaded[formula]:
                     for q in df[normal_form]:

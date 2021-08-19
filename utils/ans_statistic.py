@@ -20,13 +20,13 @@ def count_ans(csv_name: List[str]):
 
 
 if __name__ == "__main__":
-    data_path = 'data/test_benchmark/FB15k-237-foq-repeat'
+    data_path = 'data/test_benchmark/FB15k-237-valid-foq'
     p_query = ['1p', '2p', '3p']
     csv_list = []
     for task in p_query:
         csv_list.append(os.path.join(data_path, f'test_{task}.csv'))
     easy_ans_array, hard_ans_array = count_ans(csv_list)
-    print(np.mean(easy_ans_array), np.mean(hard_ans_array), np.bincount(hard_ans_array), len(hard_ans_array))
+    print(np.mean(easy_ans_array), np.mean(hard_ans_array), np.bincount(hard_ans_array), max(hard_ans_array))
 
 
 

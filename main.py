@@ -7,15 +7,15 @@ import torch
 from tqdm.std import trange, tqdm
 
 from fol.appfoq import compute_final_loss
-from data_helper import TaskManager, BenchmarkTaskManager, all_normal_form
+from data_helper import TaskManager, BenchmarkTaskManager
 from fol import BetaEstimator, BoxEstimator, LogicEstimator, NLKEstimator, BetaEstimator4V
 from fol.appfoq import order_bounds
 from utils.util import (Writer, load_data_with_indexing, load_task_manager, read_from_yaml,
                         set_global_seed)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', default='config/benchmark_beta_test.yaml', type=str)
-parser.add_argument('--prefix', default='benchmark_test', type=str)
+parser.add_argument('--config', default='config/benchmark_beta.yaml', type=str)
+parser.add_argument('--prefix', default='benchmark_beta', type=str)
 parser.add_argument('--checkpoint_path', default="/home/zwanggc/DiscreteMeasureReasoning/ckpt/Beta-KGR", type=str)
 parser.add_argument('--load_step', default=0, type=int)
 
@@ -191,7 +191,7 @@ def save_eval(log, mode, step, writer):
 
 def save_benchmark(log, writer, taskmanger: BenchmarkTaskManager):
     form_log = collections.defaultdict(lambda: collections.defaultdict(float))
-    for normal_form in all_normal_form:
+    for normal_form in taskmanger.allowed_norm:
         formula = taskmanger.form2formula[normal_form]
         form_log[normal_form] = log[formula]
     writer.save_dataframe(form_log, f'eval_type{taskmanger.id_str}.csv')
@@ -268,13 +268,17 @@ if __name__ == "__main__":
     model_params['device'] = device
     if model_name == 'beta':
         model = BetaEstimator4V(**model_params)
+        allowed_norm = ['DeMorgan', 'DNF', 'DNF+diff', 'DNF+MultiIU']
     elif model_name == 'box':
         model = BoxEstimator(**model_params)
+        allowed_norm = ['DNF', 'DNF+MultiIU']
     elif model_name == 'logic':
         model = LogicEstimator(**model_params)
+        allowed_norm = ['DeMorgan', 'DNF', 'DNF+diff', 'DNF+MultiIU']
     elif model_name == 'NewLook':
         model = NLKEstimator(**model_params)
         model.setup_relation_tensor(projection_train)
+        allowed_norm = ['DNF+diff', 'DNF+MultiIUD']
     elif model_name == 'CQD':
         pass
     else:
@@ -336,11 +340,15 @@ if __name__ == "__main__":
     elif configure['data']['type'] == 'benchmark':
         test_tm_list = []
         if 'test' in configure['action']:
-            id_list = configure['evaluate']['meta_queries']
-            for query_id in id_list:
-                test_tm = BenchmarkTaskManager(data_folder, query_id, device)
-                test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
-                test_tm_list.append(test_tm)
+            lower_id, upper_id = configure['evaluate']['meta_queries']
+            for query_id in range(lower_id, upper_id):
+                id_str = str(query_id)
+                id_str = '0' * (4 - len(id_str)) + id_str
+                filename = os.path.join(data_folder, f'data-type{id_str}.csv')
+                if os.path.exists(filename):
+                    test_tm = BenchmarkTaskManager(data_folder, query_id, device, allowed_norm)
+                    test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
+                    test_tm_list.append(test_tm)
             train_path_iterator = None
     else:
         assert False, 'Not valid data type!'
@@ -434,12 +442,14 @@ if __name__ == "__main__":
                     for test_tm in test_tm_list:
                         test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
                         _log = eval_step(model, test_iterator, device, mode='test')
+                        '''
                         test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
                         _log_easy = eval_step(model, test_iterator, device, mode='test', allowed_easy_ans=True)
                         for formula in _log_easy:
                             for metrics in _log_easy[formula]:
                                 _log[formula][f'easy_{metrics}'] = _log_easy[formula][metrics]
+                        '''
                         save_benchmark(_log, writer, test_tm)
 
-            if step % train_config['save_every_steps'] == 0 and configure['data']['type'] == 'beta':
+            if step % train_config['save_every_steps'] == 0 and train_path_iterator:
                 writer.save_model(model, opt, step, train_config['warm_up_steps'], lr)

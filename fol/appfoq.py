@@ -1153,7 +1153,7 @@ class NLKEstimator(AppFOQEstimator):
         return torch.cat([new_center, new_offset, new_x], dim=-1)
 
     def get_difference_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
-        pass
+        return self.get_multiple_difference_embedding([lemb, remb])
 
     def get_negation_embedding(self, emb: torch.Tensor):
         pass

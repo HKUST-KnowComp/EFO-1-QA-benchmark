@@ -16,15 +16,13 @@ train:
   save_every_steps: 10000
   checkpoint_every: 10000
   meta_queries:
-     - 0
 
 evaluate:  # only used when valid/test in action
   batch_size: 1000
   print: true
-  meta_queries:
+  meta_queries:    #  a lower/upper in the benchmark setting
      - 0
-     - 1
-     - 2
+     - 464
 estimator:
   embedding: beta # one of [Transe, box, beta, dm]
   beta:
