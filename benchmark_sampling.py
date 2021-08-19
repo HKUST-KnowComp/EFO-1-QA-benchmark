@@ -67,7 +67,7 @@ if __name__ == "__main__":
 
         kg_name = osp.basename(data_path).replace("-betae", "")
         out_folder = osp.join("data", "benchmark", kg_name)
-        rmtree(out_folder)
+        if osp.exists(out_folder): rmtree(out_folder)
         os.makedirs(out_folder, exist_ok=True)
 
         for i, row in tqdm(df.iterrows(), total=len(df)):
