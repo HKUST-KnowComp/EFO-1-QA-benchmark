@@ -451,7 +451,8 @@ class MultipleSetQuery(FirstOrderSetQuery):
         dobject = {
             'o': self.__o__,
             'a': [
-                sorted(json.loads(subq.dumps) for subq in self.sub_queries)
+                json.loads(subq.dumps) for subq in
+                sorted(self.sub_queries, key=lambda q: q.formula)
             ]
         }
         return json.dumps(dobject)
