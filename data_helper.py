@@ -198,16 +198,17 @@ class BenchmarkTaskManager:
         self.tasks, self.form2formula = {}, {}
         self.allowed_norm = allowed_norm
         self.all_formula = set()
+        id_str = str(task_id)
+        self.id_str = '0' * (4 - len(id_str)) + id_str
+        filename = os.path.join(data_folder, f'data-type{self.id_str}.csv')
+        real_index = all_formula.loc[all_formula['formula_id'] == f'type{self.id_str}'].index[0]  # index != formula id
         for normal_form in allowed_norm:
-            formula = all_formula[normal_form][task_id]
+            formula = all_formula[normal_form][real_index]
             self.form2formula[normal_form] = formula
             self.all_formula.add(formula)
         for formula in self.all_formula:
             query_instance = parse_formula(formula)
             self.tasks[formula] = BenchmarkTask(query_instance)
-        id_str = str(task_id)
-        self.id_str = '0' * (4 - len(id_str)) + id_str
-        filename = os.path.join(data_folder, f'data-type{self.id_str}.csv')
         print(f'[data] load query from file {filename}')
         self._load(filename)
         self.task_iterators = {}
