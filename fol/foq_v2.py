@@ -244,6 +244,8 @@ class Entity(FirstOrderSetQuery):
         self.device = device
         if self.tentities is None:
             self.tentities = torch.tensor(self.entities).to(device)
+        else:
+            self.tentities = self.tentities.to(device)
         print(f'move variable object in {id(self)} to device {device}')
 
 
@@ -438,6 +440,8 @@ class Projection(FirstOrderSetQuery):
         self.device = device
         if self.trelations is None:
             self.trelations = torch.tensor(self.relations).to(device)
+        else:
+            self.trelations = self.trelations.to(device)
         print(f'move projection object in {id(self)} to device {device}')
         self.query.to(device)
 

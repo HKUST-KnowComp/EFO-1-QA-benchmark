@@ -225,7 +225,7 @@ class BenchmarkTaskManager:
                     query_instance = data[formula]
                     try:
                         query_instance.to(model.device)
-                        pred_emb = query_instance.embedding_estimation(estimator=model, batch_indices=[0, 1])
+                        pred_emb = query_instance.embedding_estimation(estimator=model, batch_indices=[0, 1, 2, 3])
                         assert pred_emb.ndim == 2 + ('u' in formula or 'U' in formula)
                         self.allowed_formula.add(formula)
                     except (AssertionError, RuntimeError):
@@ -255,7 +255,7 @@ class BenchmarkTaskManager:
                     data[formula] = query_instance
                     query_instance.to(model.device)
                     try:
-                        pred_emb = query_instance.embedding_estimation(estimator=model, batch_indices=[0, 1])
+                        pred_emb = query_instance.embedding_estimation(estimator=model, batch_indices=[0, 1, 2, 3])
                         assert pred_emb.ndim == 2 + ('u' in formula or 'U' in formula)
                         self.allowed_formula.add(formula)
                     except (AssertionError, RuntimeError):
