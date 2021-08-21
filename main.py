@@ -14,10 +14,10 @@ from utils.util import (Writer, load_data_with_indexing, load_task_manager, read
                         set_global_seed)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', default='config/benchmark_beta.yaml', type=str)
-parser.add_argument('--prefix', default='benchmark_test', type=str)
-parser.add_argument('--checkpoint_path', default="/home/zwanggc/DiscreteMeasureReasoning/ckpt/Beta-KGR-full", type=str)
-parser.add_argument('--load_step', default=0, type=int)
+parser.add_argument('--config', default='config/benchmark_box.yaml', type=str)
+parser.add_argument('--prefix', default='benchmark_box', type=str)
+parser.add_argument('--checkpoint_path', default="/home/zwanggc/DiscreteMeasureReasoning/ckpt/FB15k-237/Box_full", type=str)
+parser.add_argument('--load_step', default=450000, type=int)
 
 
 # from torch.utils.tensorboard import SummaryWriter
@@ -135,6 +135,8 @@ def eval_step(model, eval_iterator, device, mode, allowed_easy_ans=False):
                     else:
                         answer_list = torch.arange(
                             num_hard + num_easy).to(torch.float)
+                    logs[key]['retrieval_accuracy'] += torch.mean(
+                        (cur_ranking <= (num_hard+num_easy)).to(torch.float)).item()
                     cur_ranking = cur_ranking - answer_list + 1
                     # filtered setting: +1 for start at 0, -answer_list for ignore other answers
 
@@ -193,7 +195,8 @@ def save_benchmark(log, writer, taskmanger: BenchmarkTaskManager):
     form_log = collections.defaultdict(lambda: collections.defaultdict(float))
     for normal_form in all_normal_form:
         formula = taskmanger.form2formula[normal_form]
-        form_log[normal_form] = log[formula]
+        if formula in log:
+            form_log[normal_form] = log[formula]
     writer.save_dataframe(form_log, f'eval_type{taskmanger.id_str}.csv')
 
 

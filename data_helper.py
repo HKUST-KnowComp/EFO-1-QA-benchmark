@@ -224,10 +224,11 @@ class BenchmarkTaskManager:
                 for formula in self.all_formula:
                     query_instance = data[formula]
                     try:
+                        query_instance.to(model.device)
                         pred_emb = query_instance.embedding_estimation(estimator=model, batch_indices=[0, 1])
-                        assert pred_emb.dim == 2 + ('u' in formula or 'U' in formula)
+                        assert pred_emb.ndim == 2 + ('u' in formula or 'U' in formula)
                         self.allowed_formula.add(formula)
-                    except AssertionError:
+                    except (AssertionError, RuntimeError):
                         pass
                     if formula in self.allowed_formula:
                         self.tasks[formula] = BenchmarkTask(data[formula])
@@ -236,23 +237,6 @@ class BenchmarkTaskManager:
             df = pd.read_csv(filename)
             self.len = len(df)
             loaded = {formula: False for formula in self.all_formula}
-            all_instance = {}
-            for normal_form in all_normal_form:
-                formula = self.form2formula[normal_form]
-                if not loaded[formula]:
-                    query_instance = parse_formula(formula)
-                    for q in df[normal_form]:
-                        query_instance.additive_ground(json.loads(q))
-                    try:
-                        pred_emb = query_instance.embedding_estimation(estimator=model, batch_indices=[0, 1])
-                        assert pred_emb.dim == 2 + ('u' in formula or 'U' in formula)
-                        self.allowed_formula.add(formula)
-                    except AssertionError:
-                        pass
-                    if formula in self.allowed_formula:
-                        self.tasks[formula] = BenchmarkTask(query_instance)
-                    loaded[formula] = True
-                    all_instance[formula] = query_instance
             if 'easy_answers' in df.columns:
                 self.easy_answer_set = df.easy_answers.map(
                     lambda x: list(eval(x))).tolist()
@@ -262,8 +246,23 @@ class BenchmarkTaskManager:
                     lambda x: list(eval(x))).tolist()
                 assert self.len == len(self.hard_answer_set)
             data = {'easy_answer_set': self.easy_answer_set, 'hard_answer_set': self.hard_answer_set}
-            for formula in self.all_formula:
-                data[formula] = all_instance[formula]
+            for normal_form in all_normal_form:
+                formula = self.form2formula[normal_form]
+                if not loaded[formula]:
+                    query_instance = parse_formula(formula)
+                    for q in df[normal_form]:
+                        query_instance.additive_ground(json.loads(q))
+                    data[formula] = query_instance
+                    query_instance.to(model.device)
+                    try:
+                        pred_emb = query_instance.embedding_estimation(estimator=model, batch_indices=[0, 1])
+                        assert pred_emb.ndim == 2 + ('u' in formula or 'U' in formula)
+                        self.allowed_formula.add(formula)
+                    except (AssertionError, RuntimeError):
+                        pass
+                    if formula in self.allowed_formula:
+                        self.tasks[formula] = BenchmarkTask(query_instance)
+                    loaded[formula] = True
             try:
                 os.makedirs(os.path.dirname(dense), exist_ok=True)
                 print(f"save to {dense}")
