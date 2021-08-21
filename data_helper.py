@@ -13,7 +13,7 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 
 from fol import parse_foq_formula, parse_formula, beta_query_v2
-all_normal_form = ['original', 'DeMorgan', 'DNF', 'diff', 'DNF+diff', 'DNF+MultiIU', 'DNF+MultiIUD']
+all_normal_form = ['original', 'DeMorgan', 'DeMorgan+MultiI', 'DNF', 'diff', 'DNF+diff', 'DNF+MultiIU', 'DNF+MultiIUD']
 
 
 class Task:
@@ -192,31 +192,27 @@ class TrainDataset(Dataset):
 
 
 class BenchmarkTaskManager:
-    def __init__(self,  data_folder: str, task_id: int, device, allowed_norm):
+    def __init__(self,  data_folder: str, task_id: int, device, model):
         all_formula = pd.read_csv('data/generated_formula_anchor_node=3.csv')
         self.task_id = task_id
         self.tasks, self.form2formula = {}, {}
-        self.allowed_norm = allowed_norm
-        self.all_formula = set()
+        self.all_formula, self.allowed_formula = set(), set()
         id_str = str(task_id)
         self.id_str = '0' * (4 - len(id_str)) + id_str
         filename = os.path.join(data_folder, f'data-type{self.id_str}.csv')
         real_index = all_formula.loc[all_formula['formula_id'] == f'type{self.id_str}'].index[0]  # index != formula id
-        for normal_form in allowed_norm:
+        for normal_form in all_normal_form:
             formula = all_formula[normal_form][real_index]
             self.form2formula[normal_form] = formula
             self.all_formula.add(formula)
-        for formula in self.all_formula:
-            query_instance = parse_formula(formula)
-            self.tasks[formula] = BenchmarkTask(query_instance)
         print(f'[data] load query from file {filename}')
-        self._load(filename)
+        self._load(filename, model)
         self.task_iterators = {}
         for t in self.tasks:
             self.tasks[t].set_up(device, self.len)
         self.partition = [1 / len(self.tasks) for i in range(len(self.tasks))]
 
-    def _load(self, filename):
+    def _load(self, filename, model):
         dense = filename.replace('data', 'tmp').replace('csv', 'pickle')
         if os.path.exists(dense):
             print("load from existed files")
@@ -226,18 +222,37 @@ class BenchmarkTaskManager:
                 self.hard_answer_set = data['hard_answer_set']
                 self.len = len(self.easy_answer_set)
                 for formula in self.all_formula:
-                    self.tasks[formula].query_instance = data[formula]
+                    query_instance = data[formula]
+                    try:
+                        pred_emb = query_instance.embedding_estimation(estimator=model, batch_indices=[0, 1])
+                        assert pred_emb.dim == 2 + ('u' in formula or 'U' in formula)
+                        self.allowed_formula.add(formula)
+                    except AssertionError:
+                        pass
+                    if formula in self.allowed_formula:
+                        self.tasks[formula] = BenchmarkTask(data[formula])
                     assert len(data[formula]) == self.len
         else:
             df = pd.read_csv(filename)
             self.len = len(df)
             loaded = {formula: False for formula in self.all_formula}
-            for normal_form in self.allowed_norm:
+            all_instance = {}
+            for normal_form in all_normal_form:
                 formula = self.form2formula[normal_form]
                 if not loaded[formula]:
+                    query_instance = parse_formula(formula)
                     for q in df[normal_form]:
-                        self.tasks[formula].query_instance.additive_ground(json.loads(q))
+                        query_instance.additive_ground(json.loads(q))
+                    try:
+                        pred_emb = query_instance.embedding_estimation(estimator=model, batch_indices=[0, 1])
+                        assert pred_emb.dim == 2 + ('u' in formula or 'U' in formula)
+                        self.allowed_formula.add(formula)
+                    except AssertionError:
+                        pass
+                    if formula in self.allowed_formula:
+                        self.tasks[formula] = BenchmarkTask(query_instance)
                     loaded[formula] = True
+                    all_instance[formula] = query_instance
             if 'easy_answers' in df.columns:
                 self.easy_answer_set = df.easy_answers.map(
                     lambda x: list(eval(x))).tolist()
@@ -248,7 +263,7 @@ class BenchmarkTaskManager:
                 assert self.len == len(self.hard_answer_set)
             data = {'easy_answer_set': self.easy_answer_set, 'hard_answer_set': self.hard_answer_set}
             for formula in self.all_formula:
-                data[formula] = self.tasks[formula].query_instance
+                data[formula] = all_instance[formula]
             try:
                 os.makedirs(os.path.dirname(dense), exist_ok=True)
                 print(f"save to {dense}")
