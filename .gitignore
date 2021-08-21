@@ -12,6 +12,7 @@ tmp
 *.pdf
 *.eps
 submission/
+~*
 
 .vscode
 .idea

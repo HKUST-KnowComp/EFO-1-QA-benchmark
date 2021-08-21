@@ -19,6 +19,7 @@ def normal_forms_transformation(query):
     # query.backward_sample()
     result["original"] = query
     result["DeMorgan"] = DeMorgan_replacement(copy_query(result["original"], True))
+    result['DeMorgan+MultiI'] = concate_iu_chains(copy_query(result["DeMorgan"], True))
     result["DNF"] = convert_to_dnf(copy_query(result["original"], True))
     result["diff"] = to_d(copy_query(result["original"], True))
     result["DNF+diff"] = to_d(copy_query(result["DNF"], True))
