@@ -1,3 +1,4 @@
+from itertools import count
 from utils.util import load_graph
 import logging
 from collections import defaultdict
@@ -38,20 +39,38 @@ def convert_to_dnf(query):
     # query = transformation(query, projection_sink)
     def dnf_step(query):
         return union_bubble(concate_n_chains(negation_sink(query)))
-    
+
     query = transformation(query, dnf_step)
     return query
+
+
+def count_query_depth(query):
+    if query.__o__ == 'e':
+        return 0
+    elif query.__o__ in 'uiUID':
+        return max(count_query_depth(q) for q in query.sub_queries)
+    elif query.__o__ == 'p':
+        return count_query_depth(query.query) + 1
+    elif query.__o__ == 'n':
+        return count_query_depth(query.query)
+    elif query.__o__ == 'd':
+        return max(count_query_depth(query.lquery), count_query_depth(query.rquery))
+    else:
+        raise NotImplementedError
 
 
 def normal_forms_generation(formula):
     result = {}
     query = parse_formula(formula)
+    result['original_depth'] = count_query_depth(query)
     formula = query.formula
     # proj, rproj = load_graph()
     # query.backward_sample()
     result["original"] = query.formula
     query = DeMorgan_replacement(parse_formula(formula))
+    DM_MultiI = concate_iu_chains(query)
     result["DeMorgan"] = query.formula
+    result["DeMorgan"] = DM_MultiI.formula
     query_dnf = convert_to_dnf(parse_formula(formula))
     result["DNF"] = query_dnf.formula
     query = to_d(parse_formula(formula))
@@ -81,10 +100,10 @@ if __name__ == "__main__":
         for i, f in enumerate(it):
             res = normal_forms_generation(f)
             res['formula_id'] = f"type{total_count:04d}"
-            
+            res['num_anchor_nodes'] = k
             keys = list(res.keys())
             title_str = "\t".join(keys)
-            formula_str = "\t".join(res[k] for k in keys)
+            formula_str = "\t".join(str(res[k]) for k in keys)
             total_count += 1
             logging.info(f"record:{title_str}:{formula_str}")
             for _k in keys:
