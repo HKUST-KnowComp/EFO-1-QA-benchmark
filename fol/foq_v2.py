@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from typing import List, Tuple, TypedDict
 from typing import Union as TUnion
 from numpy.core.arrayprint import SubArrayFormat
-
+from collections import Counter
 import torch
 
 from fol.appfoq import AppFOQEstimator, IntList
@@ -244,6 +244,8 @@ class Entity(FirstOrderSetQuery):
         self.device = device
         if self.tentities is None:
             self.tentities = torch.tensor(self.entities).to(device)
+        else:
+            self.tentities = self.tentities.to(device)
         print(f'move variable object in {id(self)} to device {device}')
 
 
@@ -438,6 +440,8 @@ class Projection(FirstOrderSetQuery):
         self.device = device
         if self.trelations is None:
             self.trelations = torch.tensor(self.relations).to(device)
+        else:
+            self.trelations = self.trelations.to(device)
         print(f'move projection object in {id(self)} to device {device}')
         self.query.to(device)
 
@@ -451,7 +455,8 @@ class MultipleSetQuery(FirstOrderSetQuery):
         dobject = {
             'o': self.__o__,
             'a': [
-                sorted(json.loads(subq.dumps) for subq in self.sub_queries)
+                json.loads(subq.dumps) for subq in
+                sorted(self.sub_queries, key=lambda q: q.formula)
             ]
         }
         return json.dumps(dobject)
@@ -1190,3 +1195,34 @@ def transformation(query, trans_func):
         original_formula = query.formula
         query = trans_func(query)
     return query
+
+
+def count_query_depth(query):
+    if query.__o__ == 'e':
+        return 0
+    elif query.__o__ in 'uiUID':
+        return max(count_query_depth(q) for q in query.sub_queries)
+    elif query.__o__ == 'p':
+        return count_query_depth(query.query) + 1
+    elif query.__o__ == 'n':
+        return count_query_depth(query.query)
+    elif query.__o__ == 'd':
+        return max(count_query_depth(query.lquery), count_query_depth(query.rquery))
+    else:
+        raise NotImplementedError
+
+
+def count_depth(formula):
+    try:
+        query = parse_formula(formula)
+    except:
+        print(formula)
+    return count_query_depth(query)
+
+
+def count_entities(formula):
+    return Counter(formula)['e']
+
+
+def count_projections(formula):
+    return Counter(formula)['p']

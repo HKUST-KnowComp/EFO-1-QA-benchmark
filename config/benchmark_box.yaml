@@ -1,6 +1,6 @@
 action: ['test']  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: 0
+cuda: 1
 data:
   type: benchmark  # one of ['beta', 'benchmark']
   data_folder: data/benchmark/FB15k-237
@@ -16,12 +16,12 @@ train:
   save_every_steps: 10000
   checkpoint_every: 10000
   meta_queries:
-     - 0
 evaluate:  # only used when valid/test in action
   batch_size: 1000
   print: true
   meta_queries:
      - 0
+     - 464
 estimator:
   embedding: box # one of [Transe, box, beta, dm]
   beta:

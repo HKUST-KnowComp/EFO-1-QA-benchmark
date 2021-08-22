@@ -260,8 +260,19 @@ def comparison(path, all_meta_formula):
         plot_comparison(eval(f'beta_{mode}'), eval(f'my_{mode}'), ['3p', '3i'])
 
 
-
-
+def log_benchmark(folder_path, id_filename, id_list):
+    all_formula = pd.read_csv(id_filename)
+    all_log = collections.defaultdict(lambda: collections.defaultdict(float))
+    for task_id in id_list:
+        id_str = str(task_id)
+        id_str = '0' * (4 - len(id_str)) + id_str
+        single_log = pd.read_csv(os.path.join(folder_path, f'eval_type{id_str}.csv'))
+        real_index = all_formula.loc[all_formula['formula_id'] == f'type{id_str}'].index[0]
+        for metric in single_log.columns:
+            all_log[task_id][metric] = single_log[metric]
+    data_all_log = pd.DataFrame.from_dict(all_log)
+    data_all_log.to_csv(os.path.join(folder_path, 'all_formula_log.csv'))
+    return all_log
 
 
 
@@ -319,6 +330,7 @@ DNF_query = {
     'up-DNF': '(u,(p,(p,(e))),(p,(p,(e))))',
 }
 # print_loss(graph_path)
+'''
 test_step = 450000
 test_path = "/home/hyin/DiscreteMeasureReasoning/log/newdev/Logic-unbounded210813.22:26:062c614d51/"
 old_path = "/home/hyin/DiscreteMeasureReasoning/log/newdev/Logic-unbounded210813.21:19:26aaf6eebf/"
@@ -327,6 +339,10 @@ logic_path = "/data/zwanggc/Logic-unbounded210813.22:24:17607989e2/"
 #compare_loss(test_path, test_path, choose_len=3000)
 log_all_metrics(test_path, test_step, 'test', log_meta_formula=check_query.values())
 log_all_metrics(old_path, test_step, 'test', log_meta_formula=check_query.values())
+'''
+
+benchmark_path = ''
+log_benchmark(benchmark_path,'data/generated_formula_anchor_node=3.csv', list(range(0, 464)))
 #log_old_metrics(old_path, test_step, 'test')
 # train_all, valid_all, test_all = read_beta_log('../download_log/full/')
 # train_part, valid_part, test_part = read_logic_log(logic_path, 'test', test_step, averaged_meta_formula=DNF_query.values())

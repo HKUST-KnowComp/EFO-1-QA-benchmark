@@ -14,10 +14,10 @@ from utils.util import (Writer, load_data_with_indexing, load_task_manager, read
                         set_global_seed)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', default='config/benchmark_beta_test.yaml', type=str)
-parser.add_argument('--prefix', default='benchmark_test', type=str)
-parser.add_argument('--checkpoint_path', default="/home/zwanggc/DiscreteMeasureReasoning/ckpt/Beta-KGR", type=str)
-parser.add_argument('--load_step', default=0, type=int)
+parser.add_argument('--config', default='config/benchmark_NewLook.yaml', type=str)
+parser.add_argument('--prefix', default='benchmark_FB15k-237', type=str)
+parser.add_argument('--checkpoint_path', default="ckpt/FB15k-237/NLK_full", type=str)
+parser.add_argument('--load_step', default=450000, type=int)
 
 
 # from torch.utils.tensorboard import SummaryWriter
@@ -59,7 +59,7 @@ def train_step(model, opt, iterator):
     emb_list, answer_list = [], []
     union_emb_list, union_answer_list = [], []
     for key in data:
-        if 'u' in key:  # TODO: consider 'evaluate_union' in the future
+        if 'u' in key or 'U' in key:  # TODO: consider 'evaluate_union' in the future
             union_emb_list.append(data[key]['emb'])
             union_answer_list.append(data[key]['answer_set'])
         else:
@@ -97,8 +97,8 @@ def eval_step(model, eval_iterator, device, mode, allowed_easy_ans=False):
         for data in tqdm(eval_iterator):
             for key in data:
                 pred = data[key]['emb']
-                all_entity_loss = model.compute_all_entity_logit(pred, union=('u' in key))  # batch*nentity
-                argsort = torch.argsort(all_entity_loss, dim=1, descending=True)
+                all_logit = model.compute_all_entity_logit(pred, union=('u' in key or 'U' in key))  # batch*nentity
+                argsort = torch.argsort(all_logit, dim=1, descending=True)
                 ranking = argsort.clone().to(torch.float)
                 #  create a new torch Tensor for batch_entity_range
                 if device != torch.device('cpu'):
@@ -109,7 +109,7 @@ def eval_step(model, eval_iterator, device, mode, allowed_easy_ans=False):
                     ranking = ranking.scatter_(
                         1, argsort, torch.arange(model.n_entity).to(torch.float).repeat(argsort.shape[0], 1))
                 # achieve the ranking of all entities
-                for i in range(all_entity_loss.shape[0]):
+                for i in range(all_logit.shape[0]):
                     if mode == 'train':
                         easy_ans = []
                         hard_ans = data[key]['answer_set'][i]
@@ -135,6 +135,7 @@ def eval_step(model, eval_iterator, device, mode, allowed_easy_ans=False):
                     else:
                         answer_list = torch.arange(
                             num_hard + num_easy).to(torch.float)
+
                     cur_ranking = cur_ranking - answer_list + 1
                     # filtered setting: +1 for start at 0, -answer_list for ignore other answers
 
@@ -145,11 +146,15 @@ def eval_step(model, eval_iterator, device, mode, allowed_easy_ans=False):
                     h3 = torch.mean((cur_ranking <= 3).to(torch.float)).item()
                     h10 = torch.mean(
                         (cur_ranking <= 10).to(torch.float)).item()
+                    add_hard_list = torch.arange(num_hard).to(torch.float).to(device)
+                    hard_ranking = cur_ranking + add_hard_list  # for all hard answer, consider other hard answer
+                    logs[key]['retrieval_accuracy'] += torch.mean(
+                        (hard_ranking <= num_hard).to(torch.float)).item()
                     logs[key]['MRR'] += mrr
                     logs[key]['HITS1'] += h1
                     logs[key]['HITS3'] += h3
                     logs[key]['HITS10'] += h10
-                num_query = all_entity_loss.shape[0]
+                num_query = all_logit.shape[0]
                 logs[key]['num_queries'] += num_query
         for key in logs.keys():
             for metric in logs[key].keys():
@@ -193,7 +198,8 @@ def save_benchmark(log, writer, taskmanger: BenchmarkTaskManager):
     form_log = collections.defaultdict(lambda: collections.defaultdict(float))
     for normal_form in all_normal_form:
         formula = taskmanger.form2formula[normal_form]
-        form_log[normal_form] = log[formula]
+        if formula in log:
+            form_log[normal_form] = log[formula]
     writer.save_dataframe(form_log, f'eval_type{taskmanger.id_str}.csv')
 
 
@@ -268,13 +274,17 @@ if __name__ == "__main__":
     model_params['device'] = device
     if model_name == 'beta':
         model = BetaEstimator4V(**model_params)
+        allowed_norm = ['DeMorgan', 'DNF+MultiIU']
     elif model_name == 'box':
         model = BoxEstimator(**model_params)
+        allowed_norm = ['DNF+MultiIU']
     elif model_name == 'logic':
         model = LogicEstimator(**model_params)
+        allowed_norm = ['DeMorgan', 'DNF+MultiIU']
     elif model_name == 'NewLook':
         model = NLKEstimator(**model_params)
         model.setup_relation_tensor(projection_train)
+        allowed_norm = ['DNF+MultiIUD']
     elif model_name == 'CQD':
         pass
     else:
@@ -336,11 +346,21 @@ if __name__ == "__main__":
     elif configure['data']['type'] == 'benchmark':
         test_tm_list = []
         if 'test' in configure['action']:
-            id_list = configure['evaluate']['meta_queries']
-            for query_id in id_list:
-                test_tm = BenchmarkTaskManager(data_folder, query_id, device)
-                test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
-                test_tm_list.append(test_tm)
+            lower_id, upper_id = configure['evaluate']['meta_queries']
+            for query_id in range(lower_id, upper_id):
+                id_str = str(query_id)
+                id_str = '0' * (4 - len(id_str)) + id_str
+                filename = os.path.join(data_folder, f'data-type{id_str}.csv')
+                if os.path.exists(filename):
+                    if model_name == 'box':
+                        all_formula = pd.read_csv('data/generated_formula_anchor_node=3.csv')
+                        real_index = all_formula.loc[all_formula['formula_id'] == f'type{id_str}'].index[0]
+                        original_formula = all_formula['original'][real_index]
+                        if 'n' in original_formula:
+                            continue
+                    test_tm = BenchmarkTaskManager(data_folder, query_id, device, model)
+                    test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
+                    test_tm_list.append(test_tm)
             train_path_iterator = None
     else:
         assert False, 'Not valid data type!'
@@ -434,12 +454,14 @@ if __name__ == "__main__":
                     for test_tm in test_tm_list:
                         test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
                         _log = eval_step(model, test_iterator, device, mode='test')
+                        '''
                         test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
                         _log_easy = eval_step(model, test_iterator, device, mode='test', allowed_easy_ans=True)
                         for formula in _log_easy:
                             for metrics in _log_easy[formula]:
                                 _log[formula][f'easy_{metrics}'] = _log_easy[formula][metrics]
+                        '''
                         save_benchmark(_log, writer, test_tm)
 
-            if step % train_config['save_every_steps'] == 0 and configure['data']['type'] == 'beta':
+            if step % train_config['save_every_steps'] == 0 and train_path_iterator:
                 writer.save_model(model, opt, step, train_config['warm_up_steps'], lr)

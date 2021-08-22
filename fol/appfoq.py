@@ -421,6 +421,14 @@ class BetaEstimator4V(AppFOQEstimator):
         r_neg_emb = self.get_negation_embedding(remb)
         return self.get_conjunction_embedding([lemb, r_neg_emb])
 
+    def get_multiple_difference_embedding(self, emb: List[torch.Tensor], **kwargs):
+        lemb, remb_list = emb[0], emb[1:]
+        emb_list = [lemb]
+        for remb in remb_list:
+            neg_remb = self.get_negation_embedding(remb, **kwargs)
+            emb_list.append(neg_remb)
+        return self.get_conjunction_embedding(emb_list, **kwargs)
+
     def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList], union: bool = False):
         assert pred_emb.shape[0] == len(answer_set)
         alpha_embedding, beta_embedding = torch.chunk(pred_emb, 2, dim=-1)
@@ -579,6 +587,9 @@ class BoxEstimator(AppFOQEstimator):
         return torch.stack(disj_emb, dim=1)
 
     def get_difference_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
+        assert False, "box cannot handle negation"
+
+    def get_multiple_difference_embedding(self, emb: List[torch.Tensor], **kwargs):
         assert False, "box cannot handle negation"
 
     def get_conjunction_embedding(self, conj_emb: List[torch.Tensor]):
@@ -837,6 +848,15 @@ class LogicEstimator(AppFOQEstimator):
     def get_difference_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
         n_remb = self.get_negation_embedding(remb)
         return self.get_conjunction_embedding([lemb, n_remb])
+
+    def get_multiple_difference_embedding(self, emb: List[torch.Tensor], **kwargs):
+        lemb, remb_list = emb[0], emb[1:]
+        emb_list = [lemb]
+        for remb in remb_list:
+            neg_remb = self.get_negation_embedding(remb, **kwargs)
+            emb_list.append(neg_remb)
+        return self.get_conjunction_embedding(emb_list, **kwargs)
+
 
     def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList], union: bool = False):
         assert pred_emb.shape[0] == len(answer_set)
@@ -1153,10 +1173,10 @@ class NLKEstimator(AppFOQEstimator):
         return torch.cat([new_center, new_offset, new_x], dim=-1)
 
     def get_difference_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
-        pass
+        return self.get_multiple_difference_embedding([lemb, remb])
 
     def get_negation_embedding(self, emb: torch.Tensor):
-        pass
+        assert False, "NewLook cannot handle negation"
 
     def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList], union: bool = False):
         pred_emb = pred_emb.unsqueeze(dim=-2)
