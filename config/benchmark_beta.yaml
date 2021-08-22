@@ -1,9 +1,9 @@
-action: ['train','valid','test']  # one of [train, train+valid, train+test, valid, test]
+action: ['test']  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: 7
+cuda: 0
 data:
   type: benchmark  # one of ['beta', 'benchmark']
-  data_folder: data/NELL-foq
+  data_folder: data/benchmark/FB15k-237
   cpu: 10
 train:
   negative_sample_size: 128  # for each positive sample
@@ -16,36 +16,12 @@ train:
   save_every_steps: 10000
   checkpoint_every: 10000
   meta_queries:
-     - 1p
-     - 2p
-     - 3p
-     - 2i
-     - 3i
-     - 2in
-     - 3in
-     - inp
-     - pin
-     - pni
 evaluate:  # only used when valid/test in action
   batch_size: 1000
   print: true
-  meta_queries:
-     - 1p
-     - 2p
-     - 3p
-     - 2i
-     - 3i
-     - 2in
-     - 3in
-     - inp
-     - pin
-     - pni
-     - ip
-     - pi
-     - 2u-DM
-     - up-DM
-     - 2u-DNF
-     - up-DNF
+  meta_queries:    #  a lower/upper in the benchmark setting
+     - 0
+     - 464
 estimator:
   embedding: beta # one of [Transe, box, beta, dm]
   beta:

@@ -13,7 +13,7 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 
 from fol import parse_foq_formula, parse_formula, beta_query_v2
-all_normal_form = ['original', 'DeMorgan', 'DNF', 'diff', 'DNF + diff', 'DNF + MultiIU', 'DNF + MultiIUD']
+all_normal_form = ['original', 'DeMorgan', 'DeMorgan+MultiI', 'DNF', 'diff', 'DNF+diff', 'DNF+MultiIU', 'DNF+MultiIUD']
 
 
 class Task:
@@ -192,26 +192,27 @@ class TrainDataset(Dataset):
 
 
 class BenchmarkTaskManager:
-    def __init__(self,  data_folder: str, task_id: int, device):
-        all_formula = pd.read_csv('formula_generation.log')
+    def __init__(self,  data_folder: str, task_id: int, device, model):
+        all_formula = pd.read_csv('data/generated_formula_anchor_node=3.csv')
         self.task_id = task_id
-        self.tasks = {}
+        self.tasks, self.form2formula = {}, {}
+        self.all_formula, self.allowed_formula = set(), set()
+        id_str = str(task_id)
+        self.id_str = '0' * (4 - len(id_str)) + id_str
+        filename = os.path.join(data_folder, f'data-type{self.id_str}.csv')
+        real_index = all_formula.loc[all_formula['formula_id'] == f'type{self.id_str}'].index[0]  # index != formula id
         for normal_form in all_normal_form:
-            formula = all_formula[normal_form][task_id]
-            query_instance = parse_formula(formula)
-            self.tasks[normal_form] = BenchmarkTask(query_instance)
-        filename = os.path.join(data_folder, f'date_type{task_id}.csv')
+            formula = all_formula[normal_form][real_index]
+            self.form2formula[normal_form] = formula
+            self.all_formula.add(formula)
         print(f'[data] load query from file {filename}')
-        self._load(filename)
+        self._load(filename, model)
         self.task_iterators = {}
-        partition = []
         for t in self.tasks:
-            self.tasks[t].to(device)
-            partition.append(len(self.tasks[t]))
-        p = np.asarray(partition)
-        self.partition = p / p.sum()
+            self.tasks[t].set_up(device, self.len)
+        self.partition = [1 / len(self.tasks) for i in range(len(self.tasks))]
 
-    def _load(self, filename):
+    def _load(self, filename, model):
         dense = filename.replace('data', 'tmp').replace('csv', 'pickle')
         if os.path.exists(dense):
             print("load from existed files")
@@ -219,23 +220,49 @@ class BenchmarkTaskManager:
                 data = pickle.load(f)
                 self.easy_answer_set = data['easy_answer_set']
                 self.hard_answer_set = data['hard_answer_set']
-                self.length = len(self.query_instance)
-                for normal_form in all_normal_form:
-                    pass
+                self.len = len(self.easy_answer_set)
+                for formula in self.all_formula:
+                    query_instance = data[formula]
+                    try:
+                        query_instance.to(model.device)
+                        pred_emb = query_instance.embedding_estimation(estimator=model, batch_indices=[0, 1, 2, 3])
+                        assert pred_emb.ndim == 2 + ('u' in formula or 'U' in formula)
+                        self.allowed_formula.add(formula)
+                    except (AssertionError, RuntimeError):
+                        pass
+                    if formula in self.allowed_formula:
+                        self.tasks[formula] = BenchmarkTask(data[formula])
+                    assert len(data[formula]) == self.len
         else:
             df = pd.read_csv(filename)
-            for normal_form in all_normal_form:
-                self.tasks[normal_form].query_instance.additive_ground(json.loads(df[normal_form]))
+            self.len = len(df)
+            loaded = {formula: False for formula in self.all_formula}
             if 'easy_answers' in df.columns:
-                self.easy_answer_set = df.easy_answer_set.map(
+                self.easy_answer_set = df.easy_answers.map(
                     lambda x: list(eval(x))).tolist()
-                assert len(self.query_instance) == len(self.easy_answer_set)
-
+                assert self.len == len(self.easy_answer_set)
             if 'hard_answers' in df.columns:
-                self.hard_answer_set = df.hard_answer_set.map(
+                self.hard_answer_set = df.hard_answers.map(
                     lambda x: list(eval(x))).tolist()
-                assert len(self.query_instance) == len(self.hard_answer_set)
+                assert self.len == len(self.hard_answer_set)
             data = {'easy_answer_set': self.easy_answer_set, 'hard_answer_set': self.hard_answer_set}
+            for normal_form in all_normal_form:
+                formula = self.form2formula[normal_form]
+                if not loaded[formula]:
+                    query_instance = parse_formula(formula)
+                    for q in df[normal_form]:
+                        query_instance.additive_ground(json.loads(q))
+                    data[formula] = query_instance
+                    query_instance.to(model.device)
+                    try:
+                        pred_emb = query_instance.embedding_estimation(estimator=model, batch_indices=[0, 1, 2, 3])
+                        assert pred_emb.ndim == 2 + ('u' in formula or 'U' in formula)
+                        self.allowed_formula.add(formula)
+                    except (AssertionError, RuntimeError):
+                        pass
+                    if formula in self.allowed_formula:
+                        self.tasks[formula] = BenchmarkTask(query_instance)
+                    loaded[formula] = True
             try:
                 os.makedirs(os.path.dirname(dense), exist_ok=True)
                 print(f"save to {dense}")
@@ -244,11 +271,9 @@ class BenchmarkTaskManager:
             except:
                 print(f"can't save to {dense}")
 
-
     def build_iterators(self, estimator, batch_size):
         self.task_iterators = {}
         for i, tmf in enumerate(self.tasks):
-            self.tasks[tmf].setup_iteration()
             self.task_iterators[tmf] = \
                 self.tasks[tmf].batch_estimation_iterator(
                     estimator,
@@ -261,9 +286,9 @@ class BenchmarkTaskManager:
                 try:
                     emb, batch_id = next(self.task_iterators[tmf])
                     data[tmf]['emb'] = emb
-                    easy_ans_sets = [self.tasks[tmf].easy_answer_set[j] for j in batch_id]
+                    easy_ans_sets = [self.easy_answer_set[j] for j in batch_id]
                     data[tmf]['easy_answer_set'] = easy_ans_sets
-                    hard_ans_sets = [self.tasks[tmf].hard_answer_set[j] for j in batch_id]
+                    hard_ans_sets = [self.hard_answer_set[j] for j in batch_id]
                     data[tmf]['hard_answer_set'] = hard_ans_sets
 
                 except StopIteration:
@@ -279,26 +304,21 @@ class BenchmarkTask:
     def __init__(self, query_instance):
         self.query_instance = query_instance
         self.device = None
-        self.query_instance = None
         self.answer_set = None
         self.easy_answer_set = None
         self.hard_answer_set = None
         self.i = 0
         self.length = 0
-        self.idxlist = np.random.permutation(len(self))
-        # self.idxlist = np.arange(len(self))
+        self.idxlist = np.arange(len(self))
 
-    def to(self, device):
+    def set_up(self, device, length):
+        self.length = length
         self.query_instance.to(device)
         self.device = device
-
+        self.idxlist = np.arange(len(self))
 
     def __len__(self):
         return self.length
-
-    def setup_iteration(self):
-        self.idxlist = np.random.permutation(len(self))
-        # self.idxlist = np.arange(len(self))
 
     def batch_estimation_iterator(self, estimator, batch_size):
         assert self.device == estimator.device
@@ -311,22 +331,3 @@ class BenchmarkTask:
                 batch_indices=batch_indices)
             yield batch_embedding, batch_indices
 
-    def _parse(self, df):
-        for q in tqdm(df['query']):
-            self.query_instance.additive_ground(json.loads(q))
-
-        if 'answer_set' in df.columns:
-            self.answer_set = df.answer_set.map(lambda x: list(eval(x))).tolist()
-            assert len(self.query_instance) == len(self.answer_set)
-
-        if 'easy_answer_set' in df.columns:
-            self.easy_answer_set = df.easy_answer_set.map(
-                lambda x: list(eval(x))).tolist()
-            assert len(self.query_instance) == len(self.easy_answer_set)
-
-        if 'hard_answer_set' in df.columns:
-            self.hard_answer_set = df.hard_answer_set.map(
-                lambda x: list(eval(x))).tolist()
-            assert len(self.query_instance) == len(self.hard_answer_set)
-
-        self.length = len(self.query_instance)

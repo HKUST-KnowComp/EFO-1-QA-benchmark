@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import pickle
+import pandas as pd
 import random
 import time
 from collections import defaultdict
@@ -147,6 +148,12 @@ class Writer:
             name += '.json'
         with open(join(self.case_dir, name), 'wt') as f:
             json.dump(obj, f)
+
+    def save_dataframe(self, obj, name):
+        if not name.endswith('csv'):
+            name += '.csv'
+        df = pd.DataFrame.from_dict(data=obj)
+        df.to_csv(join(self.case_dir, name))
 
     def save_model(self, model: torch.nn.Module, opt, step, warm_up_step, lr):
         print("saving model : ", step)
