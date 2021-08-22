@@ -14,9 +14,9 @@ from utils.util import (Writer, load_data_with_indexing, load_task_manager, read
                         set_global_seed)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', default='config/benchmark_NewLook.yaml', type=str)
-parser.add_argument('--prefix', default='benchmark_FB15k-237', type=str)
-parser.add_argument('--checkpoint_path', default="ckpt/FB15k-237/NLK_full", type=str)
+parser.add_argument('--config', default='config/benchmark_box.yaml', type=str)
+parser.add_argument('--prefix', default='benchmark_FB15k', type=str)
+parser.add_argument('--checkpoint_path', default="ckpt/FB15k/Box_full", type=str)
 parser.add_argument('--load_step', default=450000, type=int)
 
 
