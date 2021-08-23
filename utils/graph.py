@@ -5,12 +5,20 @@ import matplotlib.pyplot as plt
 import collections
 import numpy as np
 from fol import beta_query_v2, parse_formula, beta_query, parse_foq_formula
+from data_helper import all_normal_form
 
-beta_step = [15000*i for i in range(1, 21)] + [360000, 420000, 450000]
-beta_valid_step = [15000*i for i in range(1, 21)] + [360000, 420000]
+beta_step = [15000 * i for i in range(1, 21)] + [360000, 420000, 450000]
+beta_valid_step = [15000 * i for i in range(1, 21)] + [360000, 420000]
 
 step_dict = {i: beta_step[i] for i in range(len(beta_step))}
 inverse_step_dict = {beta_step[i]: i for i in range(len(beta_step))}
+
+all_metrics = ['MRR', 'HITS1', 'HITS3', 'HITS10', 'retrieval_accuracy']
+model_supportform_dict = {
+    'Beta': ['DeMorgan', 'DeMorgan+MultiI', 'DNF+MultiIU'],
+    'Logic': ['DeMorgan', 'DeMorgan+MultiI', 'DNF+MultiIU'],
+    'NewLook': ['DNF+MultiIUD']
+}
 
 
 def print_loss(path):
@@ -30,7 +38,7 @@ def compare_loss(path, path2, choose_len=None):
     data_2 = os.path.join(path2, 'beta_train.csv')
     df, df2 = pd.read_csv(data_file), pd.read_csv(data_2)
     loss, loss2 = np.asarray(df['loss']), np.asarray(df2['loss'])
-    step= np.asarray(df['step'])
+    step = np.asarray(df['step'])
     minlen = min(len(loss), len(loss2))
     if choose_len:
         loss = loss[:choose_len]
@@ -67,7 +75,7 @@ def log_all_metrics(path, step, mode, log_meta_formula=beta_query_v2.values()):
     averaged_my_formula = [parse_formula(formula).formula for formula in log_meta_formula]
     for metric in log:
         averaged_metric[metric] = \
-            sum([log[metric][foq_formula] for foq_formula in averaged_my_formula])/len(averaged_my_formula)
+            sum([log[metric][foq_formula] for foq_formula in averaged_my_formula]) / len(averaged_my_formula)
     all_data = pd.DataFrame.from_dict(log)
     all_data.to_csv(os.path.join(path, f'eval_{mode}_{step}_average.csv'))
     print(all_data)
@@ -92,7 +100,7 @@ def log_old_metrics(path, step, mode, log_meta_formula=beta_query.values()):
     averaged_my_formula = [parse_foq_formula(formula).meta_formula for formula in log_meta_formula]
     for metric in log:
         averaged_metric[metric] = \
-            sum([log[metric][foq_formula] for foq_formula in averaged_my_formula])/len(averaged_my_formula)
+            sum([log[metric][foq_formula] for foq_formula in averaged_my_formula]) / len(averaged_my_formula)
     all_data = pd.DataFrame.from_dict(log)
     all_data.to_csv(os.path.join(path, f'eval_{mode}_{step}_average.csv'))
     print(all_data)
@@ -110,17 +118,17 @@ def read_beta_log(path, mode='test', chosen_step=None, averaged_meta_formula=bet
         for line in f.readlines():
             if line[29:50] == 'Training average loss':
                 info = line[58:]
-                step,  score = info.split(':')
+                step, score = info.split(':')
                 step, score = eval(step), eval(score)
                 train_log['loss'][step] = score
             elif line[29:54] == 'Training average positive':
                 info = line[75:]
-                step,  score = info.split(':')
+                step, score = info.split(':')
                 step, score = eval(step), eval(score)
                 train_log['positive_loss'][step] = score
             elif line[29:54] == 'Training average negative':
                 info = line[75:]
-                step,  score = info.split(':')
+                step, score = info.split(':')
                 step, score = eval(step), eval(score)
                 train_log['negative_loss'][step] = score
             elif line[29:35] == 'Valid ':
@@ -172,17 +180,17 @@ def read_logic_log(path, mode='test', chosen_step=None, averaged_meta_formula=be
         for line in f.readlines():
             if line[29:50] == 'Training average loss':
                 info = line[58:]
-                step,  score = info.split(':')
+                step, score = info.split(':')
                 step, score = eval(step), eval(score)
                 train_log['loss'][step] = score
             elif line[29:61] == 'Training average positive_sample':
                 info = line[75:]
-                step,  score = info.split(':')
+                step, score = info.split(':')
                 step, score = eval(step), eval(score)
                 train_log['positive_loss'][step] = score
             elif line[29:61] == 'Training average negative_sample':
                 info = line[75:]
-                step,  score = info.split(':')
+                step, score = info.split(':')
                 step, score = eval(step), eval(score)
                 train_log['negative_loss'][step] = score
             elif line[29:35] == 'Valid ':
@@ -260,27 +268,120 @@ def comparison(path, all_meta_formula):
         plot_comparison(eval(f'beta_{mode}'), eval(f'my_{mode}'), ['3p', '3i'])
 
 
-def log_benchmark(folder_path, id_filename, id_list):
-    all_formula = pd.read_csv(id_filename)
-    all_log = collections.defaultdict(lambda: collections.defaultdict(float))
+def log_benchmark(folder_path, id_list):
+    all_log = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(float)))
     for task_id in id_list:
         id_str = str(task_id)
         id_str = '0' * (4 - len(id_str)) + id_str
-        single_log = pd.read_csv(os.path.join(folder_path, f'eval_type{id_str}.csv'))
-        real_index = all_formula.loc[all_formula['formula_id'] == f'type{id_str}'].index[0]
-        for metric in single_log.columns:
-            all_log[task_id][metric] = single_log[metric]
-    data_all_log = pd.DataFrame.from_dict(all_log)
-    data_all_log.to_csv(os.path.join(folder_path, 'all_formula_log.csv'))
+        # real_index = all_formula.loc[all_formula['formula_id'] == f'type{id_str}'].index[0]
+        if os.path.exists(os.path.join(folder_path, f'eval_type{id_str}.csv')):
+            single_log = pd.read_csv(os.path.join(folder_path, f'eval_type{id_str}.csv'))
+            index2metrics = single_log['Unnamed: 0']
+            for normal_form in single_log.columns:
+                if normal_form != 'Unnamed: 0':
+                    for index in range(len(single_log[normal_form])):
+                        all_log[index2metrics[index]][normal_form][task_id] = single_log[normal_form][index]
+    for metric in all_log:
+        data_metric = pd.DataFrame.from_dict(all_log[metric])
+        data_metric.to_csv(os.path.join(folder_path, f'all_formula_{metric}.csv'))
     return all_log
 
 
+def normal_form_comparison(folder_path, form1, form2, metrics):
+    all_formula = pd.read_csv('data/generated_formula_anchor_node=3.csv')
+    unequal_task = set()
+    form1_log, form2_log = collections.defaultdict(lambda: collections.defaultdict(float)), \
+                           collections.defaultdict(lambda: collections.defaultdict(float))
+    comparison_log = collections.defaultdict(list)
+    for metric in metrics:
+        metric_logging = pd.read_csv(os.path.join(folder_path, f'all_formula_{metric}.csv'))
+        index2taskid = metric_logging['Unnamed: 0']
+        for index in range(len(index2taskid)):
+            taskid = index2taskid[index]
+            id_str = '0' * (4 - len(str(taskid))) + str(taskid)
+            formula_index = all_formula.loc[all_formula['formula_id'] == f'type{id_str}'].index[0]
+            formula1, formula2 = all_formula[form1][formula_index], all_formula[form2][formula_index]
+            score1, score2 = metric_logging[form1][index], metric_logging[form2][index]
+            if formula1 != formula2 and str(score1) != 'nan' and str(score2) != 'nan':
+                # todo: filter those with d/D
+                if taskid not in unequal_task:
+                    assert metric == metrics[0]
+                    unequal_task.add(taskid)
+                form1_log[metric][taskid], form2_log[metric][taskid] = score1, score2
+    if len(unequal_task) > 0:
+        for metric in metrics:
+            averaged1, averaged2 = sum(form1_log[metric][taskid] for taskid in form1_log[metric]) / \
+                                   len(form1_log[metric]), \
+                                   sum(form2_log[metric][taskid] for taskid in form2_log[metric]) / \
+                                   len(form2_log[metric])
+            comparison_log[metric] = [averaged1, averaged2]
+    else:
+        for metric in metrics:
+            comparison_log[metric] = [0, 0]
+    comparison_log['different_queries'] = [len(unequal_task), len(unequal_task)]
+    '''
+    df = pd.DataFrame.from_dict(comparison_log)
+    df.to_csv(os.path.join(folder_path, f'compare_{form1}_{form2}.csv'))
+    '''
+    return comparison_log
 
 
+def compare_all_form(folder_path, form_list, metrics):
+    difference_mrr = collections.defaultdict(lambda: collections.defaultdict(list))
+    difference_number = collections.defaultdict(lambda: collections.defaultdict(int))
+    n = len(form_list)
+    for i in range(n):
+        for j in range(i + 1, n):
+            comparison_log = normal_form_comparison(folder_path, form_list[i], form_list[j], metrics)
+            difference_mrr[form_list[j]][form_list[i]] = comparison_log['MRR']
+            difference_number[form_list[j]][form_list[i]] = comparison_log['different_queries'][0]
+    print(difference_number)
+    print(difference_mrr)
+    dm, dn = pd.DataFrame.from_dict(difference_mrr), pd.DataFrame.from_dict(difference_number)
+    dm.to_csv(os.path.join(folder_path, f'allmrr_compare.csv'))
+    dn.to_csv(os.path.join(folder_path, f'alllength_compare.csv'))
 
 
-
-
+def log_benchmark_depth_anchornode(folder_path, support_normal_forms, metrics):
+    all_formula = pd.read_csv('data/generated_formula_anchor_node=3.csv')
+    all_logging = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(list)))
+    averaged_split = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(float)))
+    averaged_all = collections.defaultdict(lambda: collections.defaultdict(float))
+    for normal_form in support_normal_forms:
+        for i in range(1, 4):
+            for j in range(1, 4):
+                for metric in metrics:
+                    averaged_split[normal_form][(i, j)][metric] = 0
+    for metric in metrics:
+        metric_logging = pd.read_csv(os.path.join(folder_path, f'all_formula_{metric}.csv'))
+        index2taskid = metric_logging['Unnamed: 0']
+        for index in range(len(index2taskid)):
+            taskid = index2taskid[index]
+            id_str = '0' * (4 - len(str(taskid))) + str(taskid)
+            formula_index = all_formula.loc[all_formula['formula_id'] == f'type{id_str}'].index[0]
+            depth = all_formula['original_depth'][formula_index]
+            anchornode_num = all_formula['num_anchor_nodes'][formula_index]
+            for normal_form in support_normal_forms:
+                query_scores = metric_logging.loc[index][normal_form]
+                all_logging[normal_form][(anchornode_num, depth)][metric].append(query_scores)
+    all_number = sum(len(all_logging[support_normal_forms[0]][key][metrics[0]])
+                     for key in all_logging[support_normal_forms[0]])
+    assert all_number == 251  # all query type are included
+    for normal_form in support_normal_forms:
+        for key in all_logging[normal_form]:
+            for metric in metrics:
+                averaged_split[normal_form][key][metric] = sum(all_logging[normal_form][key][metric])\
+                                                           / len(all_logging[normal_form][key][metric])
+    for normal_form in support_normal_forms:
+        for metric in metrics:
+            averaged_all[normal_form][metric] = sum(sum(all_logging[normal_form][key][metric])
+                                                    for key in all_logging[normal_form])
+            averaged_all[normal_form][metric] /= 251
+            averaged_split[normal_form]['average'][metric] = averaged_all[normal_form][metric]
+        df = pd.DataFrame.from_dict(averaged_split[normal_form])
+        df.to_csv(os.path.join(folder_path, f'anchornode_depth_of_{normal_form}.csv'))
+    print(averaged_all)
+    return averaged_split
 
 
 box_query_v2 = {
@@ -341,12 +442,18 @@ log_all_metrics(test_path, test_step, 'test', log_meta_formula=check_query.value
 log_all_metrics(old_path, test_step, 'test', log_meta_formula=check_query.values())
 '''
 
-benchmark_path = ''
-log_benchmark(benchmark_path,'data/generated_formula_anchor_node=3.csv', list(range(0, 464)))
-#log_old_metrics(old_path, test_step, 'test')
+beta_path = '/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k-237/Beta_full210822.00:58:08058bb673'
+NLK_path = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k-237/NLK_full210822.11:13:14cdab5a51"
+Logic_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k-237/Logic_full210822.11:05:21a6a1f874"
+Box_path = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k-237/Box_full210822.00:56:4448dc3a71"
+id_file = 'data/generated_formula_anchor_node=3.csv'
+log_benchmark(Logic_path, list(range(0, 464)))
+# compare_all_form(Box_path, all_normal_form, all_metrics)
+log_benchmark_depth_anchornode(Logic_path, model_supportform_dict['Logic'], all_metrics)
+
+# log_old_metrics(old_path, test_step, 'test')
 # train_all, valid_all, test_all = read_beta_log('../download_log/full/')
 # train_part, valid_part, test_part = read_logic_log(logic_path, 'test', test_step, averaged_meta_formula=DNF_query.values())
 
 
-#comparison('../download_log/1p.2p.2i/', ['1p', '2p', '2i'])
-
+# comparison('../download_log/1p.2p.2i/', ['1p', '2p', '2i'])

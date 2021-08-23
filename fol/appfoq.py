@@ -416,6 +416,7 @@ class BetaEstimator4V(AppFOQEstimator):
     def get_negation_embedding(self, emb: torch.Tensor, **kwargs):
         return 1. / emb
 
+    '''
     def get_difference_embedding(self, lemb: torch.Tensor, remb: torch.Tensor, 
                                  **kwargs):  # a-b = a and(-b)
         r_neg_emb = self.get_negation_embedding(remb)
@@ -428,6 +429,14 @@ class BetaEstimator4V(AppFOQEstimator):
             neg_remb = self.get_negation_embedding(remb, **kwargs)
             emb_list.append(neg_remb)
         return self.get_conjunction_embedding(emb_list, **kwargs)
+        '''
+
+    def get_difference_embedding(self, lemb: torch.Tensor, remb: torch.Tensor,
+                                 **kwargs):
+        assert False, 'Do not use d in BetaE'
+
+    def get_multiple_difference_embedding(self, emb: List[torch.Tensor], **kwargs):
+        assert False, 'Do not use D in BetaE'
 
     def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList], union: bool = False):
         assert pred_emb.shape[0] == len(answer_set)
@@ -844,7 +853,7 @@ class LogicEstimator(AppFOQEstimator):
 
     def get_disjunction_embedding(self, disj_emb: List[torch.Tensor]):
         return torch.stack(disj_emb, dim=1)
-
+    '''
     def get_difference_embedding(self, lemb: torch.Tensor, remb: torch.Tensor):
         n_remb = self.get_negation_embedding(remb)
         return self.get_conjunction_embedding([lemb, n_remb])
@@ -856,7 +865,13 @@ class LogicEstimator(AppFOQEstimator):
             neg_remb = self.get_negation_embedding(remb, **kwargs)
             emb_list.append(neg_remb)
         return self.get_conjunction_embedding(emb_list, **kwargs)
+    '''
+    def get_difference_embedding(self, lemb: torch.Tensor, remb: torch.Tensor,
+                                 **kwargs):
+        assert False, 'Do not use d in Logic'
 
+    def get_multiple_difference_embedding(self, emb: List[torch.Tensor], **kwargs):
+        assert False, 'Do not use D in Logic'
 
     def criterion(self, pred_emb: torch.Tensor, answer_set: List[IntList], union: bool = False):
         assert pred_emb.shape[0] == len(answer_set)
