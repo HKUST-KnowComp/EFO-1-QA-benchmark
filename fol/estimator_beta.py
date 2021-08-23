@@ -5,7 +5,18 @@ import torch.nn.functional as F
 from torch import nn
 
 from .appfoq import (AppFOQEstimator, IntList, inclusion_sampling,
-                     negative_sampling, find_optimal_batch, Regularizer)
+                     find_optimal_batch)
+
+
+
+class Regularizer:
+    def __init__(self, base_add, min_val, max_val):
+        self.base_add = base_add
+        self.min_val = min_val
+        self.max_val = max_val
+
+    def __call__(self, entity_embedding):
+        return torch.clamp(entity_embedding + self.base_add, self.min_val, self.max_val)
 
 
 class BetaProjection(nn.Module):
