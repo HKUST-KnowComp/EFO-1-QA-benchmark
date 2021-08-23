@@ -1,6 +1,10 @@
-from .appfoq import (AppFOQEstimator, BetaEstimator, BoxEstimator,
-                     LogicEstimator, NLKEstimator, TransEEstimator, BetaEstimator4V)
+from .appfoq import (AppFOQEstimator,
+                     NLKEstimator,
+                     TransEEstimator)
 from .foq import FirstOrderQuery, parse_foq_formula
+from .estimator_box import BoxEstimator
+from .estimator_beta import BetaEstimator, BetaEstimator4V
+from .estimator_logic import LogicEstimator
 from .foq_v2 import parse_formula, count_depth, count_entities
 
 
