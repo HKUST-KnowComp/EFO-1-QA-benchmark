@@ -1,9 +1,9 @@
 action: ['test']  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: 3
+cuda: 0
 data:
   type: benchmark  # one of ['beta', 'benchmark']
-  data_folder: data/benchmark/FB15k
+  data_folder: data/benchmark/NELL
   cpu: 10
 train:
   negative_sample_size: 128  # for each positive sample

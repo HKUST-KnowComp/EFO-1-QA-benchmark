@@ -52,16 +52,17 @@ if __name__ == "__main__":
         projection_test, reverse_projection_test = load_data_with_indexing(read_data_path)
     NewLook_Query = ['2D', '3D', 'Dp']
     p_Query = ['1p', '2p', '3p']
-
+    generalize_query = ['4p', '4i']
     '''
     sampling_stored(p_Query, data_path, 10798, None,
                     projection_train, reverse_projection_train, 'train', True)
     sampling_stored(p_Query, data_path, 4000, projection_train, projection_valid,
                     reverse_projection_valid, 'valid', True)
-                   '''
+                   
     sampling_stored(['1p'], data_path, 22804, projection_valid, projection_test,
                     reverse_projection_test, 'test', True)
-    sampling_stored(['2p', '3p'], data_path, 5000, projection_valid, projection_test,
+    '''
+    sampling_stored(generalize_query, data_path, 5000, projection_valid, projection_test,
                     reverse_projection_test, 'test', True)
 
 

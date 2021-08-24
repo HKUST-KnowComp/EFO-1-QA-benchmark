@@ -8,15 +8,14 @@ from tqdm.std import trange, tqdm
 
 from fol.appfoq import compute_final_loss
 from data_helper import TaskManager, BenchmarkTaskManager, all_normal_form
-from fol import BetaEstimator, BoxEstimator, LogicEstimator, NLKEstimator, BetaEstimator4V
-from fol.appfoq import order_bounds
+from fol import BetaEstimator, BoxEstimator, LogicEstimator, NLKEstimator, BetaEstimator4V, order_bounds
 from utils.util import (Writer, load_data_with_indexing, load_task_manager, read_from_yaml,
                         set_global_seed)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', default='config/benchmark_box.yaml', type=str)
-parser.add_argument('--prefix', default='benchmark_FB15k', type=str)
-parser.add_argument('--checkpoint_path', default="ckpt/FB15k/Box_full", type=str)
+parser.add_argument('--config', default='config/benchmark_beta.yaml', type=str)
+parser.add_argument('--prefix', default='benchmark_FB15k-237', type=str)
+parser.add_argument('--checkpoint_path', default="ckpt/FB15k-237/Logic_full", type=str)
 parser.add_argument('--load_step', default=450000, type=int)
 
 
@@ -346,19 +345,13 @@ if __name__ == "__main__":
     elif configure['data']['type'] == 'benchmark':
         test_tm_list = []
         if 'test' in configure['action']:
-            lower_id, upper_id = configure['evaluate']['meta_queries']
-            for query_id in range(lower_id, upper_id):
-                id_str = str(query_id)
-                id_str = '0' * (4 - len(id_str)) + id_str
-                filename = os.path.join(data_folder, f'data-type{id_str}.csv')
+            formula_id_file = configure['evaluate']['formula_id_file']
+            formula_id_data = pd.read_csv(formula_id_file)
+            query_id_str_list = formula_id_data['formula_id']
+            for type_str in query_id_str_list:
+                filename = os.path.join(data_folder, f'data-{type_str}.csv')
                 if os.path.exists(filename):
-                    if model_name == 'box':
-                        all_formula = pd.read_csv('data/generated_formula_anchor_node=3.csv')
-                        real_index = all_formula.loc[all_formula['formula_id'] == f'type{id_str}'].index[0]
-                        original_formula = all_formula['original'][real_index]
-                        if 'n' in original_formula:
-                            continue
-                    test_tm = BenchmarkTaskManager(data_folder, query_id, device, model)
+                    test_tm = BenchmarkTaskManager(data_folder, type_str, device, model)
                     test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
                     test_tm_list.append(test_tm)
             train_path_iterator = None

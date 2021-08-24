@@ -192,15 +192,13 @@ class TrainDataset(Dataset):
 
 
 class BenchmarkTaskManager:
-    def __init__(self,  data_folder: str, task_id: int, device, model):
+    def __init__(self,  data_folder: str, type_str: str, device, model):     # type_str: type0001
         all_formula = pd.read_csv('data/generated_formula_anchor_node=3.csv')
-        self.task_id = task_id
+        self.type_str = type_str
         self.tasks, self.form2formula = {}, {}
         self.all_formula, self.allowed_formula = set(), set()
-        id_str = str(task_id)
-        self.id_str = '0' * (4 - len(id_str)) + id_str
-        filename = os.path.join(data_folder, f'data-type{self.id_str}.csv')
-        real_index = all_formula.loc[all_formula['formula_id'] == f'type{self.id_str}'].index[0]  # index != formula id
+        filename = os.path.join(data_folder, f'data-{self.type_str}.csv')
+        real_index = all_formula.loc[all_formula['formula_id'] == f'{self.type_str}'].index[0]  # index != formula id
         for normal_form in all_normal_form:
             formula = all_formula[normal_form][real_index]
             self.form2formula[normal_form] = formula

@@ -3,7 +3,7 @@ seed: 0
 cuda: 2
 data:
   type: benchmark
-  data_folder: data/benchmark/FB15k
+  data_folder: data/benchmark/NELL
   cpu: 10
 train:
   negative_sample_size: 128  # for each positive sample
