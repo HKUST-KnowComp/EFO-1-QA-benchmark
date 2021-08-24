@@ -98,7 +98,7 @@ def normal_forms_generation(formula):
     query = DeMorgan_replacement(parse_formula(formula))
     DM_MultiI = concate_iu_chains(copy_query(query, True))
     result["DeMorgan"] = query.formula
-    result["DeMorgan_MultiI"] = DM_MultiI.formula
+    result["DeMorgan+MultiI"] = DM_MultiI.formula
     query_dnf = convert_to_dnf(parse_formula(formula))
     result["DNF"] = query_dnf.formula
     query = to_d(parse_formula(formula))
