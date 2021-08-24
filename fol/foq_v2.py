@@ -449,14 +449,16 @@ class Projection(FirstOrderSetQuery):
 class MultipleSetQuery(FirstOrderSetQuery):
     def __init__(self, *queries: List[FirstOrderSetQuery]):
         self.sub_queries = queries
+        
+    def sort_sub(self):
+        self.sub_queries = sorted(self.sub_queries, key=lambda q: q.formula)
 
     @property
     def dumps(self):
         dobject = {
             'o': self.__o__,
             'a': [
-                json.loads(subq.dumps) for subq in
-                sorted(self.sub_queries, key=lambda q: q.formula)
+                json.loads(subq.dumps) for subq in self.sub_queries
             ]
         }
         return json.dumps(dobject)
@@ -469,7 +471,7 @@ class MultipleSetQuery(FirstOrderSetQuery):
             symb = self.__o__
         return "({},{})".format(
             symb,
-            ",".join(sorted(subq.formula for subq in self.sub_queries))
+            ",".join(self.sub_queries)
         )
 
     def additive_ground(self, dobject: Dobject):
@@ -708,6 +710,9 @@ class Multiple_Difference(MultipleSetQuery):
 
     def __init__(self, *queries: List[FirstOrderSetQuery]):
         super().__init__(*queries)
+        
+    def sort_sub(self):
+        pass
 
     @property
     def formula(self):
