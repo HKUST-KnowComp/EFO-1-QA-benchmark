@@ -868,9 +868,9 @@ def parse_formula(fosq_formula: str) -> FirstOrderSetQuery:
 
 op_candidates_dict = {
     "p": "epiu",
-    "n": "piu",
-    "i": {1: "piue", 2: "pniue"},
-    "u": {1: "piue", 2: "piue"}
+    "n": "epiu",
+    "i": {1: "epiu", 2: "epiun"},
+    "u": {1: "epiu", 2: "epiu"}
 }
 
 
