@@ -162,7 +162,10 @@ class Entity(FirstOrderSetQuery):
         self.entities = []
         self.tentities = None
         self.device = 'cpu'
-
+        
+    def sort_sub(self):
+        pass
+        
     @property
     def formula(self):
         return "(e)"
@@ -255,6 +258,9 @@ class Negation(FirstOrderSetQuery):
     def __init__(self, q: FirstOrderSetQuery=None):
         super().__init__()
         self.query = q
+        
+    def sort_sub(self):
+        self.query.sort_sub()
 
     @property
     def formula(self):
@@ -315,6 +321,9 @@ class Projection(FirstOrderSetQuery):
         self.relations = []
         self.trelations = None
         self.device = 'cpu'
+        
+    def sort_sub(self):
+        self.query.sort_sub()
 
     @property
     def formula(self):
@@ -455,6 +464,7 @@ class MultipleSetQuery(FirstOrderSetQuery):
 
     @property
     def dumps(self):
+        self.sort_sub()
         dobject = {
             'o': self.__o__,
             'a': [
@@ -465,13 +475,14 @@ class MultipleSetQuery(FirstOrderSetQuery):
 
     @property
     def formula(self):
+        self.sort_sub()
         if len(self.sub_queries) > 2:
             symb = self.__o__.upper()
         else:
             symb = self.__o__
         return "({},{})".format(
             symb,
-            ",".join(self.sub_queries)
+            ",".join(q.formula for q in self.sub_queries)
         )
 
     def additive_ground(self, dobject: Dobject):

@@ -53,11 +53,13 @@ def sample_by_row_final(row, easy_proj, hard_proj, hard_rproj):
         results = normal_forms_transformation(query_instance)
         if 0 < len(hard_answers) <= 100:
             break
+    for key in results:
+        parse_formula(row[key]).additive_ground(results[key].dumps)
     return list(easy_answers), list(hard_answers), results
 
 
 if __name__ == "__main__":
-    df = pd.read_csv("logs/generated_formula_anchor_node=3.csv")
+    df = pd.read_csv("logs/ip_gen.csv")
     beta_data_folders = ["data/FB15k-237-betae",
                          "data/FB15k-betae",
                          "data/NELL-betae"]
@@ -68,8 +70,7 @@ if __name__ == "__main__":
             proj_test, reverse_test = load_data_with_indexing(data_path)
 
         kg_name = osp.basename(data_path).replace("-betae", "")
-        out_folder = osp.join("data", "benchmark", kg_name)
-        if osp.exists(out_folder): rmtree(out_folder)
+        out_folder = osp.join("data", "benchmark-ipgen", kg_name)
         os.makedirs(out_folder, exist_ok=True)
 
         for i, row in tqdm(df.iterrows(), total=len(df)):
@@ -85,36 +86,39 @@ if __name__ == "__main__":
                     row_data[k] = results[k].dumps
                 return row_data
  
-            produced_size = 0
-            sample_size = 5000
-            generated = set()
-            while produced_size < sample_size:
-                with Pool(12) as p:
-                    gets = p.map(sampler_func, list(range(sample_size - produced_size)))
+            # produced_size = 0
+            # sample_size = 5000
+            # generated = set()
+            # while produced_size < sample_size:
+            #     with Pool(12) as p:
+            #         gets = p.map(sampler_func, list(range(sample_size - produced_size)))
 
-                    for row_data in gets:
-                        original = row_data['original']
-                        if original in generated:
-                            continue
-                        else:
-                            produced_size += 1
-                            generated.add(original)
+            #         for row_data in gets:
+            #             original = row_data['original']
+            #             if original in generated:
+            #                 continue
+            #             else:
+            #                 produced_size += 1
+            #                 generated.add(original)
 
-                        for k in row_data:
-                            data[k].append(row_data[k])
+            #             for k in row_data:
+            #                 data[k].append(row_data[k])
                          
+            generated = set()
+            for i in tqdm(range(5000), leave=False, desc=row.original + fid):
+                query_id = f"{fid}-sample{i:04d}"
+                easy_answers, hard_answers, results = sample_by_row_final(
+                    row, proj_valid, proj_test, reverse_test)
+                if results['original'] in generated:
+                    continue
+                else:
+                    generated.add(results['original'])
+                data['easy_answers'].append(easy_answers)
+                data['hard_answers'].append(hard_answers)
+                for k in results:
+                    data[k].append(results[k].dumps)
 
             pd.DataFrame(data).to_csv(osp.join(out_folder, f"data-{fid}.csv"), index=False)
-#           for i in tqdm(range(10000), leave=False, desc=row.original + fid):
-#               query_id = f"{fid}-sample{i:04d}"
-#               data['query_id'].append(query_id)
-#               easy_answers, hard_answers, results = sample_by_row_final(
-#                   row, proj_train, reverse_train, proj_test)
-#               data['easy_answers'].append(easy_answers)
-#               data['hard_answers'].append(hard_answers)
-#               for k in results:
-#                   data[k].append(results[k].dumps)
-
                 
         
 
