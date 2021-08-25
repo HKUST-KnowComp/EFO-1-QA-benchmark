@@ -1,4 +1,3 @@
-from utils.util import load_graph
 import os
 import logging
 from collections import defaultdict
@@ -17,12 +16,15 @@ from fol.foq_v2 import (concate_n_chains, copy_query,
 
 
 def convert_log_to_csv(logfile, outfile):
-
+    already = False
     if os.path.exists(outfile):
+        already = True
         already_df = pd.read_csv(outfile)
-    formula_id_set = set(already_df.formula_id)
-    original_set = set(already_df.original)
-    outfile = outfile.replace(".csv", "_extend.csv")
+        formula_id_set = set(already_df.formula_id)
+        original_set = set(already_df.original)
+        outfile = outfile.replace(".csv", "_extend.csv")
+    formula_id_set = set()
+    original_set = ()
 
     data_dict = defaultdict(list)
     with open(logfile, 'rt') as f:
@@ -53,9 +55,9 @@ def convert_log_to_csv(logfile, outfile):
     df = pd.DataFrame(data_dict)
     df = df.drop_duplicates(subset=['original'])
     df.to_csv(outfile, index=False)
-    
-    df = df.append(already_df, ignore_index=True)
-    df.to_csv(outfile.replace("extend", "full"), index=False)
+    if already:
+        df = df.append(already_df, ignore_index=True)
+        df.to_csv(outfile.replace("extend", "full"), index=False)
     for c in df.columns:
         logging.info(f"{len(df[c].unique())} {c} unique formulas found")
     # for i, row in df.iterrows():

@@ -1,6 +1,8 @@
 from collections import defaultdict
 import os.path as osp
+import argparse
 import os
+import json
 from shutil import rmtree
 from multiprocessing import Pool
 
@@ -11,6 +13,12 @@ from fol.foq_v2 import (DeMorgan_replacement, concate_iu_chains, parse_formula,
                         to_d, to_D, copy_query)
 from formula_generation import convert_to_dnf
 from utils.util import load_data_with_indexing
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--benchmark_name", type=str, default="benchmark")
+parser.add_argument("--input_formula_file", type=str, default="logs/generated_formula_anchor_node=3.csv")
+parser.add_argument("--knowledge_graph", action="append")
+parser.add_argument("--ncpus", type=int, default=1)
 
 
 def normal_forms_transformation(query):
@@ -54,71 +62,72 @@ def sample_by_row_final(row, easy_proj, hard_proj, hard_rproj):
         if 0 < len(hard_answers) <= 100:
             break
     for key in results:
-        parse_formula(row[key]).additive_ground(results[key].dumps)
+        parse_formula(row[key]).additive_ground(json.loads(results[key].dumps))
     return list(easy_answers), list(hard_answers), results
 
 
 if __name__ == "__main__":
-    df = pd.read_csv("logs/ip_gen.csv")
-    beta_data_folders = ["data/FB15k-237-betae",
-                         "data/FB15k-betae",
-                         "data/NELL-betae"]
-    for data_path in beta_data_folders:
+    args = parser.parse_args()
+    df = pd.read_csv(args.input_formula_file)
+    beta_data_folders = {"fb15k237": "data/FB15k-237-betae",
+                         "fb15k": "data/FB15k-betae",
+                         "nell": "data/NELL-betae"}
+    for kg in args.knowledge_graphs:
+        data_paht = beta_data_folders[kg]
         ent2id, rel2id, \
             proj_train, reverse_train, \
             proj_valid, reverse_valid, \
             proj_test, reverse_test = load_data_with_indexing(data_path)
 
         kg_name = osp.basename(data_path).replace("-betae", "")
-        out_folder = osp.join("data", "benchmark-ipgen", kg_name)
+        out_folder = osp.join("data", args.benchmark_name, kg_name)
         os.makedirs(out_folder, exist_ok=True)
 
         for i, row in tqdm(df.iterrows(), total=len(df)):
             fid = row.formula_id
             data = defaultdict(list)
-            def sampler_func(i):
-                row_data = {}
-                easy_answers, hard_answers, results = sample_by_row_final(
-                    row, proj_valid, proj_test, reverse_test)
-                row_data['easy_answers'] = easy_answers
-                row_data['hard_answers'] = hard_answers
-                for k in results:
-                    row_data[k] = results[k].dumps
-                return row_data
- 
-            # produced_size = 0
-            # sample_size = 5000
-            # generated = set()
-            # while produced_size < sample_size:
-            #     with Pool(12) as p:
-            #         gets = p.map(sampler_func, list(range(sample_size - produced_size)))
+            
+            if args.ncpus > 1:
+                def sampler_func(i):
+                    row_data = {}
+                    easy_answers, hard_answers, results = sample_by_row_final(
+                        row, proj_valid, proj_test, reverse_test)
+                    row_data['easy_answers'] = easy_answers
+                    row_data['hard_answers'] = hard_answers
+                    for k in results:
+                        row_data[k] = results[k].dumps
+                    return row_data
 
-            #         for row_data in gets:
-            #             original = row_data['original']
-            #             if original in generated:
-            #                 continue
-            #             else:
-            #                 produced_size += 1
-            #                 generated.add(original)
+                produced_size = 0
+                sample_size = 5000
+                generated = set()
+                while produced_size < sample_size:
+                    with Pool(12) as p:
+                        gets = p.map(sampler_func, list(range(sample_size - produced_size)))
 
-            #             for k in row_data:
-            #                 data[k].append(row_data[k])
-                         
-            generated = set()
-            for i in tqdm(range(5000), leave=False, desc=row.original + fid):
-                query_id = f"{fid}-sample{i:04d}"
-                easy_answers, hard_answers, results = sample_by_row_final(
-                    row, proj_valid, proj_test, reverse_test)
-                if results['original'] in generated:
-                    continue
-                else:
-                    generated.add(results['original'])
-                data['easy_answers'].append(easy_answers)
-                data['hard_answers'].append(hard_answers)
-                for k in results:
-                    data[k].append(results[k].dumps)
+                        for row_data in gets:
+                            original = row_data['original']
+                            if original in generated:
+                                continue
+                            else:
+                                produced_size += 1
+                                generated.add(original)
+
+                            for k in row_data:
+                                data[k].append(row_data[k])
+            else:
+                generated = set()
+                for _ in tqdm(range(5), leave=False, desc=row.original + fid):
+                    easy_answers, hard_answers, results = sample_by_row_final(
+                        row, proj_valid, proj_test, reverse_test)
+                    if results['original'] in generated:
+                        continue
+                    else:
+                        generated.add(results['original'])
+                    data['easy_answers'].append(easy_answers)
+                    data['hard_answers'].append(hard_answers)
+                    for k in results:
+                        data[k].append(results[k].dumps)
 
             pd.DataFrame(data).to_csv(osp.join(out_folder, f"data-{fid}.csv"), index=False)
-                
-        
 
