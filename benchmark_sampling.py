@@ -68,12 +68,13 @@ def sample_by_row_final(row, easy_proj, hard_proj, hard_rproj):
 
 if __name__ == "__main__":
     args = parser.parse_args()
+    print(args)
     df = pd.read_csv(args.input_formula_file)
     beta_data_folders = {"fb15k237": "data/FB15k-237-betae",
                          "fb15k": "data/FB15k-betae",
                          "nell": "data/NELL-betae"}
-    for kg in args.knowledge_graphs:
-        data_paht = beta_data_folders[kg]
+    for kg in args.knowledge_graph:
+        data_path = beta_data_folders[kg]
         ent2id, rel2id, \
             proj_train, reverse_train, \
             proj_valid, reverse_valid, \
@@ -102,7 +103,7 @@ if __name__ == "__main__":
                 sample_size = 5000
                 generated = set()
                 while produced_size < sample_size:
-                    with Pool(12) as p:
+                    with Pool(args.ncpus) as p:
                         gets = p.map(sampler_func, list(range(sample_size - produced_size)))
 
                         for row_data in gets:
