@@ -8,6 +8,7 @@ from fol.foq_v2 import (concate_n_chains, copy_query,
                         negation_sink,
                         binary_formula_iterator,
                         concate_iu_chains,
+                        decompose_D,
                         parse_formula,
                         projection_sink, to_D,
                         union_bubble,
@@ -17,25 +18,24 @@ from fol.foq_v2 import (concate_n_chains, copy_query,
 
 
 def convert_query(df,
-                  old_form_name='DNF+diff',
+                  old_form_name='DNF+MultiIUD',
                   new_form_name='DNF+MultiIUd',
-                  convert_functional=lambda f:
-                  concate_iu_chains(parse_formula(f)).formula):
-    if new_form_name in df.columns:
-        return df
-    df[new_form_name] = df[old_form_name].map(convert_functional)
+                  convert_functional=decompose_D):
+    def convertor(f):
+        query_instance = parse_formula(f)
+        query_instance = convert_functional(query_instance)
+        return query_instance.formula
+
+    df[new_form_name] = df[old_form_name].map(convertor)
     return df
-    
+
 def convert_grounded_query(df,
-                           old_form_name='DNF+diff',
+                           old_form_name='DNF+MultiIUD',
                            new_form_name='DNF+MultiIUd',
                            old_form_formula=None,
                            convert_functional=None):
     assert old_form_formula is not None
     assert convert_functional is not None
-
-    if new_form_name in df.columns:
-        return df
     
     def grounded_convertor(f):
         query_instance = parse_formula(old_form_formula)
@@ -62,7 +62,7 @@ if __name__ == "__main__":
             data_df = pd.read_csv(os.path.join(folder, data_file))
             converted_data_df = convert_grounded_query(
                 data_df,
-                old_form_formula=row['DNF+diff'],
-                convert_functional=concate_iu_chains)
+                old_form_formula=row['DNF+MultiIUD'],
+                convert_functional=decompose_D)
             converted_data_df.to_csv(os.path.join(folder, data_file))
-                
+

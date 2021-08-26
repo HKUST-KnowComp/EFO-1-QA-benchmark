@@ -1181,6 +1181,25 @@ def to_D(fosq):
     else:
         raise NotImplementedError
 
+
+def decompose_D(fosq):
+    if fosq.__o__ == 'D':
+        first, *rest = fosq.sub_queries
+        while len(rest) > 1:
+            first = Multiple_Difference(*[first, rest[0]])
+            rest = rest[1:]
+        fosq.sub_queries = [first, rest[0]]
+        return fosq
+    elif fosq.__o__ in 'iuIU':
+        fosq.sub_queries = [decompose_D(q) for q in fosq.sub_queries]
+        return fosq
+    elif fosq.__o__ in 'pn':
+        fosq.query = decompose_D(fosq.query)
+        return fosq
+    elif fosq.__o__ == 'e':
+        return fosq
+
+
 def to_d(query):
     """
     Convert the i-n like difference into difference,
