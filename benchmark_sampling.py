@@ -117,7 +117,7 @@ if __name__ == "__main__":
                                 data[k].append(row_data[k])
             else:
                 generated = set()
-                for _ in tqdm(range(5), leave=False, desc=row.original + fid):
+                for _ in tqdm(range(5000), leave=False, desc=row.original + fid):
                     easy_answers, hard_answers, results = sample_by_row_final(
                         row, proj_valid, proj_test, reverse_test)
                     if results['original'] in generated:

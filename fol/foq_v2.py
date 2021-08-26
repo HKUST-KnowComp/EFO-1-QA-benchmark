@@ -1140,6 +1140,13 @@ def concate_iu_chains(fosq: FirstOrderSetQuery) -> FirstOrderSetQuery:
         _fosq = ops_dict[op](*sub_queries)
         assert _fosq.formula != fosq.formula
         return concate_iu_chains(_fosq)
+    if fosq.__o__ == 'd':
+        fosq.lquery = concate_iu_chains(fosq.lquery)
+        fosq.rquery = concate_iu_chains(fosq.rquery)
+        return fosq
+    if fosq.__o__ in 'DIU':
+        fosq.sub_queries = [concate_iu_chains(q) for q in fosq.sub_queries]
+        return fosq
 
 
 def to_D(fosq):
