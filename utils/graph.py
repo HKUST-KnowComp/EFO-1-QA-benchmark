@@ -17,12 +17,12 @@ all_metrics = ['MRR', 'HITS1', 'HITS3', 'HITS10', 'retrieval_accuracy']
 model_supportform_dict = {
     'Beta': ['DeMorgan', 'DeMorgan+MultiI', 'DNF+MultiIU'],
     'Logic': ['DeMorgan', 'DeMorgan+MultiI', 'DNF+MultiIU'],
-    'NewLook': ['DNF+MultiIUD']
+    'NewLook': ['DNF+MultiIUd', 'DNF+MultiIUD']
 }
 model_compareform_dict = {
     'Beta': ['original', 'DeMorgan', 'DeMorgan+MultiI', 'DNF', 'DNF+MultiIU'],
     'Logic': ['original', 'DeMorgan', 'DeMorgan+MultiI', 'DNF', 'DNF+MultiIU'],
-    'NewLook': ['original', 'DNF', 'diff', 'DNF+diff', 'DNF+MultiIU', 'DNF+MultiIUD']
+    'NewLook': ['diff', 'DNF+diff', 'DNF+MultiIUd', 'DNF+MultiIUD']
 }
 
 def print_loss(path):
@@ -325,19 +325,30 @@ def normal_form_comparison(folder_path, form1, form2, metrics, save_csv=False, p
     else:
         for metric in metrics:
             comparison_log[metric] = [0, 0]
+    form1_win_rate = sum(form1_log['MRR'][taskid] > form2_log['MRR'][taskid] for taskid in unequal_task)
+    form2_win_rate = sum(form1_log['MRR'][taskid] < form2_log['MRR'][taskid] for taskid in unequal_task)
+    comparison_log['win_rate'] = [form1_win_rate, form2_win_rate]
     comparison_log['different_queries'] = [len(unequal_task), len(unequal_task)]
     if save_csv:
         compare_taskid = {}
         for metric in metrics:
             compare_taskid[f'{form1}_{metric}'] = form1_log[metric]
+            compare_taskid[f'{form2}_{metric}'] = form2_log[metric]
         compare_taskid[f'{form1}_formula'] = {}
         compare_taskid[f'{form2}_formula'] = {}
+        compare_taskid['winner'] = {}
         for taskid in unequal_task:
             id_str = '0' * (4 - len(str(taskid))) + str(taskid)
             formula_index = all_formula.loc[all_formula['formula_id'] == f'type{id_str}'].index[0]
             formula1, formula2 = all_formula[form1][formula_index], all_formula[form2][formula_index]
             compare_taskid[f'{form1}_formula'][taskid] = formula1
             compare_taskid[f'{form2}_formula'][taskid] = formula2
+            if compare_taskid[f'{form1}_MRR'][taskid] > compare_taskid[f'{form2}_MRR'][taskid]:
+                compare_taskid['winner'][taskid] = form1
+            elif compare_taskid[f'{form1}_MRR'][taskid] < compare_taskid[f'{form2}_MRR'][taskid]:
+                compare_taskid['winner'][taskid] = form2
+            else:
+                compare_taskid['winner'][taskid] = 'draw'
         data = pd.DataFrame.from_dict(compare_taskid)
         data.to_csv(os.path.join(folder_path, f'compare_detail_{form1}_{form2}.csv'))
 
@@ -351,21 +362,38 @@ def normal_form_comparison(folder_path, form1, form2, metrics, save_csv=False, p
 def compare_all_form(folder_path, form_list, metrics, save_csv=False):
     difference_mrr = collections.defaultdict(lambda: collections.defaultdict(list))
     difference_number = collections.defaultdict(lambda: collections.defaultdict(int))
+    difference_win_rate = collections.defaultdict(lambda: collections.defaultdict(float))
     n = len(form_list)
+    for i in range(n):
+        for j in range(n):
+            difference_number[form_list[j]][form_list[i]] = 0
+            difference_win_rate[form_list[j]][form_list[i]] = 0
     for i in range(n):
         for j in range(i + 1, n):
             comparison_log = normal_form_comparison(folder_path, form_list[i], form_list[j], metrics, save_csv)
             difference_mrr[form_list[j]][form_list[i]] = comparison_log['MRR']
             difference_number[form_list[j]][form_list[i]] = comparison_log['different_queries'][0]
-    print(difference_number)
-    print(difference_mrr)
-    dm, dn = pd.DataFrame.from_dict(difference_mrr), pd.DataFrame.from_dict(difference_number)
+            difference_number[form_list[i]][form_list[j]] = comparison_log['different_queries'][0]
+            formj_win, formi_win = comparison_log['win_rate']
+            if formj_win + formi_win > 0:
+                j_against_i = formj_win / (formj_win + formi_win) * 100
+                difference_win_rate[form_list[j]][form_list[i]] = j_against_i
+                difference_win_rate[form_list[i]][form_list[j]] = 100 - j_against_i
+            else:
+                difference_win_rate[form_list[j]][form_list[i]] = 0
+                difference_win_rate[form_list[i]][form_list[j]] = 0
+
+
+    dm, dn, dw = pd.DataFrame.from_dict(difference_mrr), pd.DataFrame.from_dict(difference_number),\
+        pd.DataFrame.from_dict(difference_win_rate)
     dm.to_csv(os.path.join(folder_path, f'allmrr_compare.csv'))
     dn.to_csv(os.path.join(folder_path, f'alllength_compare.csv'))
+    dw.to_csv(os.path.join(folder_path, f'allwin_rate_compare.csv'))
 
 
 def log_benchmark_depth_anchornode(folder_path, support_normal_forms, metrics):
     all_formula = pd.read_csv('data/generated_formula_anchor_node=3.csv')
+    query_type_num = len(all_formula['original'])
     all_logging = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(list)))
     averaged_split = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(float)))
     averaged_all = collections.defaultdict(lambda: collections.defaultdict(float))
@@ -388,7 +416,7 @@ def log_benchmark_depth_anchornode(folder_path, support_normal_forms, metrics):
                 all_logging[normal_form][(anchornode_num, depth)][metric].append(query_scores)
     all_number = sum(len(all_logging[support_normal_forms[0]][key][metrics[0]])
                      for key in all_logging[support_normal_forms[0]])
-    assert all_number == 251  # all query type are included
+    assert all_number == query_type_num  # all query type are included
     for normal_form in support_normal_forms:
         for key in all_logging[normal_form]:
             for metric in metrics:
@@ -398,11 +426,13 @@ def log_benchmark_depth_anchornode(folder_path, support_normal_forms, metrics):
         for metric in metrics:
             averaged_all[normal_form][metric] = sum(sum(all_logging[normal_form][key][metric])
                                                     for key in all_logging[normal_form])
-            averaged_all[normal_form][metric] /= 251
+            averaged_all[normal_form][metric] /= query_type_num
             averaged_split[normal_form]['average'][metric] = averaged_all[normal_form][metric]
         df = pd.DataFrame.from_dict(averaged_split[normal_form])
-        df.to_csv(os.path.join(folder_path, f'anchornode_depth_of_{normal_form}.csv'))
-    print(averaged_all)
+        if normal_form != 'DNF+MultiIUd':
+            df.to_csv(os.path.join(folder_path, f'anchornode_depth_of_{normal_form}.csv'))
+        else:
+            df.to_csv(os.path.join(folder_path, f'anchornode_depth_of_new_form.csv'))
     return averaged_split
 
 
@@ -463,16 +493,29 @@ logic_path = "/data/zwanggc/Logic-unbounded210813.22:24:17607989e2/"
 log_all_metrics(test_path, test_step, 'test', log_meta_formula=check_query.values())
 log_all_metrics(old_path, test_step, 'test', log_meta_formula=check_query.values())
 '''
-
-beta_path = '/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k-237/Beta_full210822.00:58:08058bb673'
-NLK_path = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k-237/NLK_full210822.11:13:14cdab5a51"
-Logic_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k-237/Logic_full210824.00:02:41898e39b7"
+p_list = [0, 1, 2, 1116, 1117]
+i_list = [13, 137, 1113]
+all_3_3_list = list(range(0, 531))
+beta_path = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k-237/Beta_full210825.15:22:232c21f3b3"
+NLK_path = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k-237/NLK_full210826.23:36:50d23a5d5b"
+Logic_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k-237/Logic_full210825.15:51:1849c53e66"
 Box_path = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k-237/Box_full210822.00:56:4448dc3a71"
+Beta_NELL = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_NELL/Beta_full210825.21:52:1297dedee3"
+Logic_NELL = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_NELL/Logic_full210826.13:49:32c5fd1d95"
+NLK_NELL = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_NELL/NLK_full210827.00:51:3138596ff6"
+Beta_FB = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k/Beta_full210825.23:58:4931c08094"
+Logic_FB = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k/Logic_full210825.23:57:165bfacfac"
+NLK_FB = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k/NLK_full210827.00:50:15114a092f"
 id_file = 'data/generated_formula_anchor_node=3.csv'
-log_benchmark(Logic_path, list(range(0, 464)), percentage=True)
+Logic_1p_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_1p210825.15:55:2565735b8d"
+Logic_2p_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_2p210825.16:02:51b8e4878b"
+Logic_3p_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_3p210825.16:07:530d917424"
+Logic_2i_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_2i210825.16:26:241f438fbf"
+Logic_3i_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_3i210825.16:44:0584f53968"
+log_benchmark(NLK_FB, all_3_3_list, percentage=True)
 # compare_all_form(Box_path, all_normal_form, all_metrics)
-compare_all_form(Logic_path, model_compareform_dict['Logic'], metrics=all_metrics, save_csv=True)
-log_benchmark_depth_anchornode(Logic_path, model_supportform_dict['Logic'], all_metrics)
+compare_all_form(NLK_FB, model_compareform_dict['NewLook'], metrics=all_metrics, save_csv=True)
+log_benchmark_depth_anchornode(NLK_FB, model_supportform_dict['NewLook'], all_metrics)
 
 # log_old_metrics(old_path, test_step, 'test')
 # train_all, valid_all, test_all = read_beta_log('../download_log/full/')

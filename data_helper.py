@@ -13,7 +13,8 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 
 from fol import parse_foq_formula, parse_formula, beta_query_v2
-all_normal_form = ['original', 'DeMorgan', 'DeMorgan+MultiI', 'DNF', 'diff', 'DNF+diff', 'DNF+MultiIU', 'DNF+MultiIUD']
+all_normal_form = ['original', 'DeMorgan', 'DeMorgan+MultiI', 'DNF', 'diff', 'DNF+diff', 'DNF+MultiIU', 'DNF+MultiIUd',
+                   'DNF+MultiIUD']
 
 
 class Task:
@@ -192,8 +193,8 @@ class TrainDataset(Dataset):
 
 
 class BenchmarkTaskManager:
-    def __init__(self,  data_folder: str, type_str: str, device, model):     # type_str: type0001
-        all_formula = pd.read_csv('data/generated_formula_anchor_node=3.csv')
+    def __init__(self, formula_id_data, data_folder: str, type_str: str, device, model):     # type_str: type0001
+        all_formula = formula_id_data
         self.type_str = type_str
         self.tasks, self.form2formula = {}, {}
         self.all_formula, self.allowed_formula = set(), set()
