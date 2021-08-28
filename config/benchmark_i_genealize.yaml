@@ -1,9 +1,9 @@
-action: ['train','valid','test']  # one of [train, train+valid, train+test, valid, test]
+action: ['test']  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: 0
+cuda: 2
 data:
-  type: beta
-  data_folder: data/FB15k-237-foq
+  type: benchmark
+  data_folder: data/benchmark/FB15k-237
   cpu: 10
 train:
   negative_sample_size: 128  # for each positive sample
@@ -12,27 +12,22 @@ train:
   steps: 900000
   log_every_steps: 100
   warm_up_steps: 450000
-  evaluate_every_steps: 30000
-  save_every_steps: 20000
-  checkpoint_every: 20000
+  evaluate_every_steps: 15000
+  save_every_steps: 10000
+  checkpoint_every: 10000
   meta_queries:
-     - 1p
-     - 2p
 evaluate:  # only used when valid/test in action
   batch_size: 1000
   print: true
-  meta_queries:
-     - 1p
-     - 2p
-     - 3p
+  formula_id_file: 'data/i_generalize.csv'
 estimator:
-  embedding: NewLook # one of [Transe, box, beta, dm]
+  embedding: logic # one of [Transe, box, beta, dm, logic]
   beta:
     entity_dim: 400
     relation_dim: 400
     hidden_dim: 1600
     num_layers: 2
-    # evaluate_union: DM # one of [DM, DNF] after parsing it can be omitted
+    evaluate_union: DM # one of [DM, DNF]
     gamma: 60
   box:
     entity_dim: 400
@@ -50,22 +45,9 @@ estimator:
     relation_dim: 400
     hidden_dim: 1600
     num_layers: 2
-    evaluate_union: DM
     gamma: 0.375
     t_norm: luk
-    bounded: 1
+    bounded: 0
     use_att: 1
     use_gtrans: 0
-  cqd:
-    entity_dim: 1000 # actually 2000
-    relation_dim: 1000
-    norm_type: product
-  NewLook:
-    entity_dim: 400
-    relation_dim: 400
-    hidden_dim: 1600
-    center_reg: 0.2
-    x_reg: 0.02 # \lambda in the paper
-    gamma: 24
-    group_number: 200
 

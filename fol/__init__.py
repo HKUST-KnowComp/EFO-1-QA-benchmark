@@ -3,8 +3,8 @@ from .appfoq import (AppFOQEstimator,
 from .foq import FirstOrderQuery, parse_foq_formula
 from .estimator_box import BoxEstimator
 from .estimator_beta import BetaEstimator, BetaEstimator4V
+from .estimator_logic import LogicEstimator, order_bounds
 from .estimator_newlook import NLKEstimator
-from .estimator_logic import LogicEstimator
 from .foq_v2 import parse_formula, count_depth, count_entities
 
 
@@ -48,4 +48,6 @@ beta_query_v2 = {
     '2D': '(D, (p,(e)), (p,(e)))',
     '3D': '(D, (p,(e)), (p,(e)), (p,(e)))',
     'Dp': '(p, (D, (p,(e)), (p,(e))))',
+    '4p': '(p,(p,(p,(p,(e)))))',
+    '4i': '(i,(p,(e)),(p,(e)),(p,(e)),(p,(e)))'
 }

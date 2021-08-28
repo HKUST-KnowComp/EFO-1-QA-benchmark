@@ -1,6 +1,6 @@
 action: ['train','valid','test']  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: 6
+cuda: 2
 data:
   type: beta
   data_folder: data/FB15k-237-foq
@@ -18,6 +18,7 @@ train:
   meta_queries:
      - 1p
      - 2i
+     - 3i
 evaluate:  # only used when valid/test in action
   batch_size: 1000
   print: true
