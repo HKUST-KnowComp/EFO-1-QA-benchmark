@@ -119,13 +119,13 @@ if __name__ == "__main__":
     # r = normal_forms_generation(formula)
     # print(r)
 
-    logging.basicConfig(filename='logs/formula_generation_fixed.log',
+    logging.basicConfig(filename='logs/formula_generation_test.log',
                         filemode='wt',
                         level=logging.INFO)
     total_count = 0
     reductions = defaultdict(set)
 
-    for k in range(1, 5):
+    for k in range(1, 6):
         it = binary_formula_iterator(depth=3, num_anchor_nodes=k)
         for i, f in enumerate(it):
             res = normal_forms_generation(f)
@@ -139,8 +139,8 @@ if __name__ == "__main__":
             for _k in keys:
                 reductions[_k].add(res[_k])
 
-        convert_log_to_csv('logs/formula_generation_fixed.log',
-                           f'logs/generated_formula_anchor_node={k}.csv')
+        convert_log_to_csv('logs/formula_generation_test.log',
+                           f'logs/test_generated_formula_anchor_node={k}.csv')
 
         for k, v in reductions.items():
             logging.info(f"statistics:{len(v)} {k} produced cumulatively")

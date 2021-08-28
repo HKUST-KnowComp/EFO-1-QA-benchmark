@@ -61,8 +61,8 @@ def sample_by_row_final(row, easy_proj, hard_proj, hard_rproj):
         results = normal_forms_transformation(query_instance)
         if 0 < len(hard_answers) <= 100:
             break
-    for key in results:
-        parse_formula(row[key]).additive_ground(json.loads(results[key].dumps))
+    # for key in results:
+        # parse_formula(row[key]).additive_ground(json.loads(results[key].dumps))
     return list(easy_answers), list(hard_answers), results
 
 
