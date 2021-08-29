@@ -4,7 +4,7 @@ import pickle
 from fol.sampler import *
 from fol.foq import parse_foq_formula
 from fol.foq_v2 import parse_formula
-from fol.test_foq_v2 import beta_query_v2
+from fol import beta_query_v2
 from utils.util import load_rawdata_with_indexing
 
 query_name_dict = {('e', ('r',)): '1p',
