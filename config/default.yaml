@@ -1,6 +1,6 @@
 action: ['train','valid','test']  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: 7
+cuda: 0
 data:
   type: beta  # one of ['beta', 'benchmark']
   data_folder: data/NELL-foq
