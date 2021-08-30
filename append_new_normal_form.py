@@ -48,7 +48,7 @@ def convert_grounded_query(df,
 
 if __name__ == "__main__":
     target_folder = "data/benchmark-sample"
-    formula_file = "logs/generated_formula_anchor_node=3.csv"
+    formula_file = "outputs/generated_formula_anchor_node=3.csv"
     df = pd.read_csv(formula_file)
     df = convert_query(df)
     df.to_csv(formula_file)

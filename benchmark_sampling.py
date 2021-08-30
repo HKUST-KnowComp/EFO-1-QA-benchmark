@@ -16,7 +16,7 @@ from utils.util import load_data_with_indexing
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--benchmark_name", type=str, default="benchmark")
-parser.add_argument("--input_formula_file", type=str, default="logs/generated_formula_anchor_node=3.csv")
+parser.add_argument("--input_formula_file", type=str, default="outputs/generated_formula_anchor_node=3.csv")
 parser.add_argument("--knowledge_graph", action="append")
 parser.add_argument("--ncpus", type=int, default=1)
 
