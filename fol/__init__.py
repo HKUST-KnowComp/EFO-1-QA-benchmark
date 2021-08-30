@@ -1,6 +1,4 @@
-from .appfoq import (AppFOQEstimator,
-                     TransEEstimator)
-from .foq import FirstOrderQuery, parse_foq_formula
+from .appfoq import (AppFOQEstimator)
 from .estimator_box import BoxEstimator
 from .estimator_beta import BetaEstimator, BetaEstimator4V
 from .estimator_logic import LogicEstimator, order_bounds
