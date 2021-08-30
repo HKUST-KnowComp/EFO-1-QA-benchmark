@@ -13,10 +13,10 @@ from utils.util import (Writer, load_data_with_indexing, load_task_manager, read
                         set_global_seed)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', default='config/benchmark_NewLook.yaml', type=str)
-parser.add_argument('--prefix', default='benchmark_NELL', type=str)
-parser.add_argument('--checkpoint_path', default="ckpt/NELL/NLK_full", type=str)
-parser.add_argument('--load_step', default=450000, type=int)
+parser.add_argument('--config', default='config/default.yaml', type=str)
+parser.add_argument('--prefix', default='dev', type=str)
+parser.add_argument('--checkpoint_path', default=None, type=str)
+parser.add_argument('--load_step', default=0, type=int)
 
 
 

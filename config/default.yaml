@@ -3,7 +3,7 @@ seed: 0
 cuda: 0
 data:
   type: beta  # one of ['beta', 'benchmark']
-  data_folder: data/NELL-foq
+  data_folder: data/FB15k-237-foq
   cpu: 10
 train:
   negative_sample_size: 128  # for each positive sample
