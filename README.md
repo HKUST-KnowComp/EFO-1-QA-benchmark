@@ -70,7 +70,7 @@ our form by running:
 python transform_beta_data.py
 ```
 
-If you want to train models, the commands will be following, depending on the choice of models:
+If you want to train models, use one of the commands in the following, depending on the choice of models:
 
 ```bash
 python main.py --config config/beta.yaml
