@@ -1,6 +1,6 @@
 action: ['test']  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: 7
+cuda: 0
 data:
   type: benchmark
   data_folder: data/benchmark/FB15k-237

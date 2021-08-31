@@ -328,7 +328,7 @@ if __name__ == "__main__":
 
     for data_path in beta_data_folders:
         logging.info(f"beta data folder {data_path}")
-        target_data_path = data_path.replace('betae', 'foq')
+        target_data_path = data_path
         logging.info(f"target data folder {target_data_path}")
         ent2id, rel2id, \
             proj_train, reverse_train, \

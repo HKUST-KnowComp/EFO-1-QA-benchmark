@@ -59,13 +59,21 @@ python benchmark_sampling.py
 
 **Examples**
 
-Please refer to the `examples.sh` for the scripts of all 3 models on all 3 datasets.
-The detailed setting of hyper-parameters are in /config folder:
+The detailed setting of hyper-parameters or the knowledge graph to choose are in /config folder,
+you can modify those configurations on your own, all the experiments are on FB15k-237 by default.
 
-If you want to train models, the command will be:
+Suppose you want to use the KG data above to train the model, you need to convert those data to 
+our form by running:
+
+
+```
+python transform_beta_data.py
+```
+
+If you want to train models, the commands will be following, depending on the choice of models:
 
 ```bash
-python main.py --config config/default.yaml
+python main.py --config config/beta.yaml
 python main.py --config config/Query2Box.yaml
 python main.py --config config/NewLook.yaml
 python main.py --config config/Logic.yaml

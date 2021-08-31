@@ -1,6 +1,6 @@
 action: ['test']  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: 2
+cuda: 0
 data:
   type: benchmark
   data_folder: data/benchmark/FB15k-237
@@ -21,7 +21,7 @@ evaluate:  # only used when valid/test in action
   print: true
   formula_id_file: 'data/p_generalize.csv'
 estimator:
-  embedding: logic # one of [Transe, box, beta, dm, logic]
+  embedding: logic # one of [Transe, box, beta, logic]
   beta:
     entity_dim: 400
     relation_dim: 400
