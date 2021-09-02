@@ -17,6 +17,7 @@ from utils.util import load_data_with_indexing
 parser = argparse.ArgumentParser()
 parser.add_argument("--benchmark_name", type=str, default="benchmark")
 parser.add_argument("--input_formula_file", type=str, default="outputs/generated_formula_anchor_node=3.csv")
+parser.add_argument("--sample_size", default=5, type=int)
 parser.add_argument("--knowledge_graph", action="append")
 parser.add_argument("--ncpus", type=int, default=1)
 
@@ -70,9 +71,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     print(args)
     df = pd.read_csv(args.input_formula_file)
-    beta_data_folders = {"fb15k237": "data/FB15k-237-betae",
-                         "fb15k": "data/FB15k-betae",
-                         "nell": "data/NELL-betae"}
+    beta_data_folders = {"FB15k-237": "data/FB15k-237-betae",
+                         "FB15k": "data/FB15k-betae",
+                         "NELL": "data/NELL-betae"}
     for kg in args.knowledge_graph:
         data_path = beta_data_folders[kg]
         ent2id, rel2id, \
@@ -100,7 +101,7 @@ if __name__ == "__main__":
                     return row_data
 
                 produced_size = 0
-                sample_size = 5000
+                sample_size = args.sample_size
                 generated = set()
                 while produced_size < sample_size:
                     with Pool(args.ncpus) as p:
@@ -118,7 +119,7 @@ if __name__ == "__main__":
                                 data[k].append(row_data[k])
             else:
                 generated = set()
-                for _ in tqdm(range(5000), leave=False, desc=row.original + fid):
+                for _ in tqdm(range(args.sample_size), leave=False, desc=row.original + fid):
                     easy_answers, hard_answers, results = sample_by_row_final(
                         row, proj_valid, proj_test, reverse_test)
                     if results['original'] in generated:

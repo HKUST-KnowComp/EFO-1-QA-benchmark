@@ -39,16 +39,20 @@ data
 	|---NELL-betae	
 ```
 
-Then we can run the sampling code by
-```
-python benchmark_sampling.py
+Then we can run the benchmark sampling code on specific knowledge graph by
+```bash
+python benchmark_sampling.py --knowledge_graph FB15k-237 
+python benchmark_sampling.py --knowledge_graph FB15k
+python benchmark_sampling.py --knowledge_graph NELL
 ```
 
-
+**Append new forms to existing data**
+One can append new forms to the existing dataset by
+```bash
+python append_new_normal_form.py --knowledge_graph FB15k-237 
+```
 
 ## Model training and estimation
-
-
 
 **Models**
 
@@ -59,25 +63,25 @@ python benchmark_sampling.py
 
 **Examples**
 
-The detailed setting of hyper-parameters or the knowledge graph to choose are in /config folder,
-you can modify those configurations on your own, all the experiments are on FB15k-237 by default.
-
-Suppose you want to use the KG data above to train the model, you need to convert those data to 
-our form by running:
+The detailed setting of hyper-parameters or the knowledge graph to choose are in `config` folder,
+you can modify those configurations to create your own, all the experiments are on FB15k-237 by default.
 
 
-```
+Besides, the generated benchmark, one can also use the BetaE dataset after 
+converting to our format by running:
+
+```bash
 python transform_beta_data.py
 ```
 
-If you want to train models, use one of the commands in the following, depending on the choice of models:
+Use one of the commands in the following, depending on the choice of models:
 
 ```bash
-python main.py --config config/beta.yaml
-python main.py --config config/Query2Box.yaml
-python main.py --config config/NewLook.yaml
-python main.py --config config/Logic.yaml
+python main.py --config config/{data_type}_{model_name}.yaml
 ```
+
+- The `data_type` includes `benchmark` and `beta`
+- The `model_name` includes `BetaE`, `LogicE`, `NewLook` and `Query2Box`
 
 If you need to evaluate on the EFO-1-QA benchmark, be sure to load from existing model checkpoint, you can
 train one on your own or download
@@ -88,6 +92,7 @@ python main.py --config config/benchmark_beta.yaml --checkpoint_path ckpt/FB15k/
 python main.py --config config/benchmark_NewLook.yaml --checkpoint_path ckpt/FB15k/NLK_full --load_step 450000
 python main.py --config config/benchmark_Logic.yaml --checkpoint_path ckpt/FB15k/Logic_full --load_step 450000
 ```
+We note that the BetaE checkpoint above is trained from [KGReasoning](https://github.com/snap-stanford/KGReasoning)
 
 ## Paper Checklist
 

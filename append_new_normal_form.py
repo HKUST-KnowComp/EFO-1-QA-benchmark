@@ -1,3 +1,4 @@
+import argparse
 import os
 import pandas as pd
 import json
@@ -15,6 +16,11 @@ from fol.foq_v2 import (concate_n_chains, copy_query,
                         DeMorgan_replacement,
                         to_d,
                         transformation)
+                        
+parser = argparse.ArgumentParser()
+parser.add_argument("--benchmark_name", type=str, default="benchmark")
+parser.add_argument("--input_formula_file", type=str, default="outputs/generated_formula_anchor_node=3.csv")
+parser.add_argument("--knowledge_graph", action="append")
 
 
 def convert_query(df,
@@ -46,15 +52,16 @@ def convert_grounded_query(df,
     df[new_form_name] = df[old_form_name].map(grounded_convertor)
     return df
 
+
 if __name__ == "__main__":
-    target_folder = "data/benchmark-sample"
-    formula_file = "outputs/generated_formula_anchor_node=3.csv"
+    args = parser.parse_args()
+    target_folder = f"data/{args.benchmark_name}"
+    formula_file = args.input_formula_file
     df = pd.read_csv(formula_file)
     df = convert_query(df)
-    df.to_csv(formula_file)
-    
+    df.to_csv(formula_file, index=False)
 
-    for kg in ["FB15k-237", "FB15k", "NELL"]:
+    for kg in args.knowledge_graph:
         folder = os.path.join(target_folder, kg)
         for i, row in df.iterrows():
             print(row.formula_id)
@@ -64,5 +71,5 @@ if __name__ == "__main__":
                 data_df,
                 old_form_formula=row['DNF+MultiIUD'],
                 convert_functional=decompose_D)
-            converted_data_df.to_csv(os.path.join(folder, data_file))
+            converted_data_df.to_csv(os.path.join(folder, data_file), index=False)
 

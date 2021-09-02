@@ -12,7 +12,7 @@ import json
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
-from fol import parse_foq_formula, parse_formula, beta_query_v2
+from fol import parse_formula, beta_query_v2
 all_normal_form = ['original', 'DeMorgan', 'DeMorgan+MultiI', 'DNF', 'diff', 'DNF+diff', 'DNF+MultiIU', 'DNF+MultiIUd',
                    'DNF+MultiIUD']
 
