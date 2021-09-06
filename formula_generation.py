@@ -110,7 +110,7 @@ def normal_forms_generation(formula):
     query_dnf_multiiu = concate_iu_chains(parse_formula(query_dnf.formula))
     result["DNF+MultiIU"] = query_dnf_multiiu.formula
     result["DNF+MultiIUd"] = concate_iu_chains(
-                                parse_formula(result['DNF+diff']))
+                                parse_formula(result['DNF+diff'])).formula
     query = to_D(parse_formula(query_dnf_multiiu.formula))
     result["DNF+MultiIUD"] = query.formula
     return result
