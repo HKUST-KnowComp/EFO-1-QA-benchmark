@@ -33,6 +33,7 @@ def normal_forms_transformation(query):
     result["DNF+diff"] = to_d(copy_query(result["DNF"], True))
     result["DNF+MultiIU"] = concate_iu_chains(copy_query(result["DNF"], True))
     result['DNF+MultiIU'].sort_sub()
+    result["DNF+MultiIUd"] = concate_iu_chains(copy_query(result["DNF+diff"], True))
     result["DNF+MultiIUD"] = to_D(copy_query(result["DNF+MultiIU"], True))
     return result
 

@@ -383,7 +383,6 @@ def compare_all_form(folder_path, form_list, metrics, save_csv=False):
                 difference_win_rate[form_list[j]][form_list[i]] = 0
                 difference_win_rate[form_list[i]][form_list[j]] = 0
 
-
     dm, dn, dw = pd.DataFrame.from_dict(difference_mrr), pd.DataFrame.from_dict(difference_number),\
         pd.DataFrame.from_dict(difference_win_rate)
     dm.to_csv(os.path.join(folder_path, f'allmrr_compare.csv'))
@@ -434,6 +433,48 @@ def log_benchmark_depth_anchornode(folder_path, support_normal_forms, metrics):
         else:
             df.to_csv(os.path.join(folder_path, f'anchornode_depth_of_new_form.csv'))
     return averaged_split
+
+
+def answer_statistic(data_folder, formula_id_file):
+    formula_id_data = pd.read_csv(formula_id_file)
+    query_id_str_list = formula_id_data['formula_id']
+    statistis_grouping = collections.defaultdict(list)
+    statistis_grouping_averaged = collections.defaultdict(lambda: collections.defaultdict(float))
+    for i in range(1, 4):
+        for j in range(1, 4):
+            statistis_grouping[(i, j)] = []
+    for type_str in query_id_str_list:
+        filename = os.path.join(data_folder, f'data-{type_str}.csv')
+        dense = filename.replace('data', 'tmp').replace('csv', 'pickle')
+        if os.path.exists(dense):
+            print("load from existed files", type_str)
+            with open(dense, 'rb') as f:
+                data = pickle.load(f)
+                easy_answer_set = data['easy_answer_set']
+                hard_answer_set = data['hard_answer_set']
+                easy_ans_num, hard_ans_num = sum(len(easy) for easy in easy_answer_set) /len(easy_answer_set), \
+                                                sum(len(hard) for hard in hard_answer_set) / len(hard_answer_set)
+                formula_index = formula_id_data.loc[formula_id_data['formula_id'] == f'{type_str}'].index[0]
+                depth = formula_id_data['original_depth'][formula_index]
+                anchor_node_num = formula_id_data['num_anchor_nodes'][formula_index]
+                statistis_grouping[(anchor_node_num, depth)].append(hard_ans_num)
+        else:
+            query_data = pd.read_csv(filename)
+            all_easy_ans, all_hard_ans = query_data.easy_answers.map(lambda x: list(eval(x))).tolist(), \
+                                         query_data.hard_answers.map(lambda x: list(eval(x))).tolist()
+            easy_ans_num, hard_ans_num = sum(len(easy) for easy in all_easy_ans) / len(all_easy_ans), \
+                                         sum(len(hard) for hard in all_hard_ans) / len(all_hard_ans)
+            formula_index = formula_id_data.loc[formula_id_data['formula_id'] == f'{type_str}'].index[0]
+            depth = formula_id_data['original_depth'][formula_index]
+            anchor_node_num = formula_id_data['num_anchor_nodes'][formula_index]
+            statistis_grouping[(anchor_node_num, depth)].append(hard_ans_num)
+
+    for key in statistis_grouping:
+        statistis_grouping_averaged[key]['hard'] = sum(statistis_grouping[key]) / len(statistis_grouping[key])
+        print(key, len(statistis_grouping[key]))
+    data_averaged = pd.DataFrame.from_dict(statistis_grouping_averaged)
+    data_averaged.to_csv(os.path.join(data_folder, 'size_statistics_grouping_formhard.csv'))
+
 
 
 box_query_v2 = {
@@ -494,7 +535,7 @@ log_all_metrics(test_path, test_step, 'test', log_meta_formula=check_query.value
 log_all_metrics(old_path, test_step, 'test', log_meta_formula=check_query.values())
 '''
 p_list = [0, 1, 2, 1116, 1117]
-i_list = [13, 137, 1113]
+i_list = [13, 137, 1113, 1114]
 all_3_3_list = list(range(0, 531))
 beta_path = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k-237/Beta_full210825.15:22:232c21f3b3"
 NLK_path = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k-237/NLK_full210826.23:36:50d23a5d5b"
@@ -506,17 +547,23 @@ NLK_NELL = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_NELL/
 Beta_FB = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k/Beta_full210825.23:58:4931c08094"
 Logic_FB = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k/Logic_full210825.23:57:165bfacfac"
 NLK_FB = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k/NLK_full210827.00:50:15114a092f"
-id_file = 'data/generated_formula_anchor_node=3.csv'
+
 Logic_1p_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_1p210825.15:55:2565735b8d"
 Logic_2p_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_2p210825.16:02:51b8e4878b"
 Logic_3p_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_3p210825.16:07:530d917424"
 Logic_2i_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_2i210825.16:26:241f438fbf"
 Logic_3i_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_3i210825.16:44:0584f53968"
-log_benchmark(NLK_FB, all_3_3_list, percentage=True)
-# compare_all_form(Box_path, all_normal_form, all_metrics)
-compare_all_form(NLK_FB, model_compareform_dict['NewLook'], metrics=all_metrics, save_csv=True)
-log_benchmark_depth_anchornode(NLK_FB, model_supportform_dict['NewLook'], all_metrics)
 
+new_2i_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_2i210828.17:53:31146141ce"
+new_3i_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_3i210828.17:56:27662c4441"
+id_file = 'data/generated_formula_anchor_node=3.csv'
+FB15_237_data, FB_data, NELL_data = 'data/benchmark/FB15k-237', 'data/benchmark/FB15k', 'data/benchmark/NELL'
+
+log_benchmark(new_3i_path, i_list, percentage=True)
+# compare_all_form(Box_path, all_normal_form, all_metrics)
+#compare_all_form(NLK_FB, model_compareform_dict['NewLook'], metrics=all_metrics, save_csv=True)
+#log_benchmark_depth_anchornode(NLK_FB, model_supportform_dict['NewLook'], all_metrics)
+# answer_statistic(NELL_data, id_file)
 # log_old_metrics(old_path, test_step, 'test')
 # train_all, valid_all, test_all = read_beta_log('../download_log/full/')
 # train_part, valid_part, test_part = read_logic_log(logic_path, 'test', test_step, averaged_meta_formula=DNF_query.values())
