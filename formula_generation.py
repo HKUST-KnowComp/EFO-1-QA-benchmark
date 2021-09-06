@@ -127,7 +127,7 @@ if __name__ == "__main__":
     total_count = 0
     reductions = defaultdict(set)
 
-    for k in range(1, 6):
+    for k in range(1, 4):
         it = binary_formula_iterator(depth=3, num_anchor_nodes=k)
         for i, f in enumerate(it):
             res = normal_forms_generation(f)
