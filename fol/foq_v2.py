@@ -953,7 +953,7 @@ def copy_query(q: FirstOrderSetQuery, deep=False) -> FirstOrderSetQuery:
             _q.sub_queries = [copy_query(sq, deep) for sq in q.sub_queries]
         return _q
     elif op == 'd':
-        _q = Difference(lq=copy_query(q.lq, deep), rq=copy_query(q.rq, deep))
+        _q = Difference(lq=copy_query(q.lquery, deep), rq=copy_query(q.rquery, deep))
         return _q
     else:
         raise NotImplementedError
