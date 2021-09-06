@@ -19,6 +19,7 @@ parser.add_argument("--benchmark_name", type=str, default="benchmark")
 parser.add_argument("--input_formula_file", type=str, default="logs/generated_formula_anchor_node=3.csv")
 parser.add_argument("--knowledge_graph", action="append")
 parser.add_argument("--ncpus", type=int, default=1)
+parser.add_argument("--num_samples", type=int, default=5000)
 
 
 def normal_forms_transformation(query):
@@ -101,7 +102,7 @@ if __name__ == "__main__":
                     return row_data
 
                 produced_size = 0
-                sample_size = 5000
+                sample_size = args.num_samples
                 generated = set()
                 while produced_size < sample_size:
                     with Pool(args.ncpus) as p:
@@ -119,7 +120,7 @@ if __name__ == "__main__":
                                 data[k].append(row_data[k])
             else:
                 generated = set()
-                for _ in tqdm(range(5000), leave=False, desc=row.original + fid):
+                for _ in tqdm(range(args.num_samples), leave=False, desc=row.original + fid):
                     easy_answers, hard_answers, results = sample_by_row_final(
                         row, proj_valid, proj_test, reverse_test)
                     if results['original'] in generated:
