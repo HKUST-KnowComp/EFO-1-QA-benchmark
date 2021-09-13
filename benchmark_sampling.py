@@ -10,7 +10,7 @@ from tqdm import tqdm
 import pandas as pd
 
 from fol.foq_v2 import (DeMorgan_replacement, concate_iu_chains, parse_formula,
-                        to_d, to_D, copy_query)
+                        to_d, to_D, decompose_D, copy_query)
 from formula_generation import convert_to_dnf
 from utils.util import load_data_with_indexing
 
@@ -34,8 +34,8 @@ def normal_forms_transformation(query):
     result["DNF+diff"] = to_d(copy_query(result["DNF"], True))
     result["DNF+MultiIU"] = concate_iu_chains(copy_query(result["DNF"], True))
     result['DNF+MultiIU'].sort_sub()
-    result["DNF+MultiIUd"] = concate_iu_chains(copy_query(result["DNF+diff"], True))
     result["DNF+MultiIUD"] = to_D(copy_query(result["DNF+MultiIU"], True))
+    result["DNF+MultiIUd"] = decompose_D(copy_query(result["DNF+MultiIUD"], True))
     return result
 
 
