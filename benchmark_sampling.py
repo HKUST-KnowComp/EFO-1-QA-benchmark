@@ -10,7 +10,7 @@ import pandas as pd
 from fol.foq_v2 import (DeMorgan_replacement, concate_iu_chains, parse_formula,
                         to_d, to_D, copy_query)
 from formula_generation import convert_to_dnf
-from utils.util import load_data_with_indexing
+from utils.util import load_data_with_indexing, set_global_seed
 
 
 def normal_forms_transformation(query):
@@ -56,6 +56,7 @@ def sample_by_row_final(row, easy_proj, hard_proj, hard_rproj):
 
 
 if __name__ == "__main__":
+    set_global_seed(0)
     df = pd.read_csv("logs/generated_formula_anchor_node=3.csv")
     beta_data_folders = ["data/FB15k-237-betae",
                          "data/FB15k-betae",
