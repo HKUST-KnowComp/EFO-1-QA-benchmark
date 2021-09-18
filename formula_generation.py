@@ -8,7 +8,7 @@ from fol.foq_v2 import (concate_n_chains, copy_query,
                         binary_formula_iterator,
                         concate_iu_chains,
                         parse_formula,
-                        projection_sink, to_D,
+                        decompose_D, to_D,
                         union_bubble,
                         DeMorgan_replacement,
                         to_d,
@@ -109,10 +109,10 @@ def normal_forms_generation(formula):
     result["DNF+diff"] = query.formula
     query_dnf_multiiu = concate_iu_chains(parse_formula(query_dnf.formula))
     result["DNF+MultiIU"] = query_dnf_multiiu.formula
-    result["DNF+MultiIUd"] = concate_iu_chains(
-                                parse_formula(result['DNF+diff']))
     query = to_D(parse_formula(query_dnf_multiiu.formula))
     result["DNF+MultiIUD"] = query.formula
+    result["DNF+MultiIUd"] = decompose_D(
+                                parse_formula(result['DNF+MultiIUD'])).formula
     return result
 
 

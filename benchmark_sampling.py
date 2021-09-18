@@ -10,7 +10,7 @@ from tqdm import tqdm
 import pandas as pd
 
 from fol.foq_v2 import (DeMorgan_replacement, concate_iu_chains, parse_formula,
-                        to_d, to_D, copy_query)
+                        to_d, to_D, decompose_D, copy_query)
 from formula_generation import convert_to_dnf
 from utils.util import load_data_with_indexing
 
@@ -20,6 +20,7 @@ parser.add_argument("--input_formula_file", type=str, default="outputs/generated
 parser.add_argument("--sample_size", default=5, type=int)
 parser.add_argument("--knowledge_graph", action="append")
 parser.add_argument("--ncpus", type=int, default=1)
+parser.add_argument("--num_samples", type=int, default=5000)
 
 
 def normal_forms_transformation(query):
@@ -34,8 +35,8 @@ def normal_forms_transformation(query):
     result["DNF+diff"] = to_d(copy_query(result["DNF"], True))
     result["DNF+MultiIU"] = concate_iu_chains(copy_query(result["DNF"], True))
     result['DNF+MultiIU'].sort_sub()
-    result["DNF+MultiIUd"] = concate_iu_chains(copy_query(result["DNF+diff"], True))
     result["DNF+MultiIUD"] = to_D(copy_query(result["DNF+MultiIU"], True))
+    result["DNF+MultiIUd"] = decompose_D(copy_query(result["DNF+MultiIUD"], True))
     return result
 
 
@@ -89,7 +90,7 @@ if __name__ == "__main__":
         for i, row in tqdm(df.iterrows(), total=len(df)):
             fid = row.formula_id
             data = defaultdict(list)
-            
+
             if args.ncpus > 1:
                 def sampler_func(i):
                     row_data = {}
@@ -102,7 +103,7 @@ if __name__ == "__main__":
                     return row_data
 
                 produced_size = 0
-                sample_size = args.sample_size
+                sample_size = args.num_samples
                 generated = set()
                 while produced_size < sample_size:
                     with Pool(args.ncpus) as p:
@@ -120,7 +121,7 @@ if __name__ == "__main__":
                                 data[k].append(row_data[k])
             else:
                 generated = set()
-                for _ in tqdm(range(args.sample_size), leave=False, desc=row.original + fid):
+                for _ in tqdm(range(args.num_samples), leave=False, desc=row.original + fid):
                     easy_answers, hard_answers, results = sample_by_row_final(
                         row, proj_valid, proj_test, reverse_test)
                     if results['original'] in generated:
@@ -133,4 +134,3 @@ if __name__ == "__main__":
                         data[k].append(results[k].dumps)
 
             pd.DataFrame(data).to_csv(osp.join(out_folder, f"data-{fid}.csv"), index=False)
-
