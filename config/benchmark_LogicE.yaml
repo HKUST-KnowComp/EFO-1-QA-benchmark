@@ -1,9 +1,9 @@
 action: ['test']  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: 0
+cuda: 3
 data:
   type: benchmark
-  data_folder: data/benchmark/FB15k-237
+  data_folder: data/benchmark/NELL
   cpu: 10
 train:
   negative_sample_size: 128  # for each positive sample
@@ -19,7 +19,7 @@ train:
 evaluate:  # only used when valid/test in action
   batch_size: 1000
   print: true
-  formula_id_file: 'data/generated_formula_anchor_node=3.csv'
+  formula_id_file: 'data/test_generated_formula_anchor_node=3.csv'
 estimator:
   embedding: logic # one of [Transe, box, beta, dm, logic]
   beta:
