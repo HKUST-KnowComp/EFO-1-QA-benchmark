@@ -140,8 +140,8 @@ if __name__ == "__main__":
             logging.info(f"record:{title_str}:{formula_str}")
             for _k in keys:
                 reductions[_k].add(res[_k])
-
-        convert_log_to_csv('logs/formula_generation_test.log',
+        os.makedirs('outputs', exist_ok=True)
+        convert_log_to_csv('logs/formula_generation.log',
                            f'outputs/generated_formula_anchor_node={k}.csv')
 
         for k, v in reductions.items():
