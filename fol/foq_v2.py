@@ -1,3 +1,5 @@
+import collections
+import copy
 import json
 import random
 from itertools import product
@@ -5,7 +7,7 @@ from abc import ABC, abstractmethod
 from typing import List, Tuple, TypedDict
 from typing import Union as TUnion
 from numpy.core.arrayprint import SubArrayFormat
-from collections import Counter
+from collections import Counter, defaultdict
 import torch
 
 from fol.appfoq import AppFOQEstimator, IntList
@@ -87,10 +89,8 @@ class FirstOrderSetQuery(ABC):
         pass
 
     @abstractmethod
-    def backward_sample(self, projs, rprojs,
-                        contain: bool = True,
-                        keypoint: int = None,
-                        cumulative: bool = False, **kwargs):
+    def backward_sample(self, projs, rprojs, requirement = None,
+                        cumulative: bool = False, meaningful_difference: bool = False, **kwargs):
         pass
 
     @abstractmethod
@@ -210,15 +210,12 @@ class Entity(FirstOrderSetQuery):
         # TODO: change to return a list of set
         return {self.entities[0]}
 
-    def backward_sample(self, projs, rprojs,
-                        contain: bool = True,
-                        keypoint: int = None,
-                        cumulative: bool = False, **kwargs):
-        if keypoint:
-            if contain:
-                new_entity = [keypoint]
+    def backward_sample(self, projs, rprojs, requirement = None, cumulative=False, **kwargs):
+        if requirement:
+            if requirement['must include']:
+                new_entity = list(requirement['must include'])
             else:
-                new_entity = random.sample(set(projs.keys()) - {keypoint}, 1)
+                new_entity = list(random.sample(set(projs.keys()) - {requirement['mustnot include']}, 1))
         else:
             new_entity = random.sample(set(projs.keys()), 1)
 
@@ -288,9 +285,17 @@ class Negation(FirstOrderSetQuery):
         ans = projection.keys() - self.query.deterministic_query(projection)
         return ans
 
-    def backward_sample(self, projs, rprojs,
-                        contain: bool = True, keypoint: int = None, cumulative: bool = False, **kwargs):
-        return projs.keys() - self.query.backward_sample(projs, rprojs, 1-contain, keypoint, cumulative, **kwargs)
+    def backward_sample(self, projs, rprojs, requirement: bool = None, cumulative=False,
+                        meaningful_difference: bool = False,**kwargs):
+        # assert meaningful_difference == False  This is not true only in DM-like queries
+        if not requirement:
+            requirement = defaultdict(set)
+            requirement['must include'] = {random.randrange(0, len(projs.keys()))}
+        new_requirement = defaultdict(set)
+        new_requirement['must include'] = requirement['must exclude']
+        new_requirement['must exclude'] = requirement['must include']
+        return projs.keys() - self.query.backward_sample(projs, rprojs, new_requirement, cumulative,
+                                                         meaningful_difference, **kwargs)
 
     def random_query(self, projs, cumulative=False):
         ans = projs.keys() - self.query.random_query(projs, cumulative)
@@ -365,34 +370,64 @@ class Projection(FirstOrderSetQuery):
             answer.update(projs[e][rel])
         return answer
 
-    def backward_sample(self, projs, rprojs,
-                        contain: bool = True,
-                        keypoint: int = None,
-                        cumulative: bool = False, **kwargs):
+    def backward_sample(self, projs, rprojs, requirement=None, cumulative=False, meaningful_difference: bool = False,
+                        **kwargs):
         # since the projection[next_point][self.rel] may contains essential_point even if not starting from it
-        while True:
-            if keypoint is not None:
-                if contain:
-                    cursor = keypoint
-                else:
-                    cursor = random.sample(
-                        set(rprojs.keys()) - {keypoint}, 1)[0]
-            else:
-                cursor = random.sample(set(rprojs.keys()), 1)[0]
+        # This issue can not be totally solved since the p_object contains other entity than parent
+        def find_exlusion(projs, rprojs, exclude_point):
+            while True:
+                cursor = random.sample(rprojs.keys() - exclude_point, 1)[0]
+                relation = random.sample(rprojs[cursor].keys(), 1)[0]
+                parents = rprojs[cursor][relation]
+                parent = random.sample(parents, 1)[0]
+                if not exclude_point.issubset(projs[parent][relation]) :
+                    break
+            return parent, relation
 
+        if not requirement:
+            requirement = defaultdict(set)
+            requirement['must include'] = {random.randrange(0, len(projs.keys()))}
+
+        if requirement['must include']:
+            cursor = list(requirement['must include'])[0]
             relation = random.sample(rprojs[cursor].keys(), 1)[0]
             parents = rprojs[cursor][relation]
             # find an incoming edge and a corresponding node
             parent = random.sample(parents, 1)[0]
-
-            if keypoint:
-                if (keypoint in projs[parent][relation]) == contain:
+        elif requirement['must exclude']:
+            if requirement['optional include']:
+                cursor = list(requirement['optional include'])[0]
+                for relation in rprojs[cursor].keys():
+                    parents = rprojs[cursor][relation]
+                    for parent in parents:
+                        if not requirement['must exclude'].issubset(projs[parent][relation]):
+                            break
+                    else:
+                        continue
                     break
+                else:
+                    parent, relation = find_exlusion(projs, rprojs, requirement['must exclude'])
             else:
+                parent, relation = find_exlusion(projs, rprojs, requirement['must exclude'])
+        elif requirement['optional include']:
+            cursor = list(requirement['optional include'])[0]
+            for relation in rprojs[cursor].keys():
+                parents = rprojs[cursor][relation]
+                for parent in parents:
+                    if not requirement['optional exclude'].issubset(projs[parent][relation]):
+                        break
+                else:
+                    continue
                 break
+        elif requirement['optional exclude']:
+            parent, relation = find_exlusion(projs, rprojs, requirement['optional exclude'])
+        else:  # requirement is empty defaultdict(set)
+            parent, relation = find_exlusion(projs, rprojs, {-1})
 
-        p_object = self.query.backward_sample(projs, rprojs,
-                                                  contain=True, keypoint=parent, cumulative=cumulative, **kwargs)
+        new_requirement = defaultdict(set)
+        new_requirement['must include'] = {parent}
+        p_object = self.query.backward_sample(projs, rprojs, requirement=new_requirement, cumulative=cumulative,
+                                              meaningful_difference=meaningful_difference, **kwargs)
         if None in p_object:  # FIXME: why this is a none in return type
             raise ValueError
 
@@ -520,33 +555,76 @@ class Intersection(MultipleSetQuery):
             *(q.deterministic_query(projs) for q in self.sub_queries)
         )
 
-    def backward_sample(self, projs, rprojs,
-                        contain: bool = True,
-                        keypoint: int = None,
-                        cumulative: bool = False, **kwargs):
-        sub_obj_list = []
-        if keypoint:
-            if contain:
-                for query in self.sub_queries:
-                    sub_objs = query.backward_sample(
-                        projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
+    def backward_sample(self, projs, rprojs, requirement=None, cumulative: bool = False,
+                        meaningful_difference: bool = False, **kwargs):
+
+
+        sub_obj_list, pos_obj_list, neg_obj_list = [], [], []
+        if not requirement:
+            requirement = defaultdict(set)
+            requirement['must include'] = {random.randrange(0, len(projs.keys()))}
+        positive_subqueries, neg_subqueries = [], []
+        for sub_query in self.sub_queries:
+            if sub_query.__o__ == 'n':
+                neg_subqueries.append(sub_query.query)
+            else:
+                positive_subqueries.append(sub_query)
+        if meaningful_difference and len(positive_subqueries) > 0:
+            positive_requirement = defaultdict(set)
+            positive_requirement['must include'] = requirement['must include']
+            positive_requirement['optional include'] = requirement['optional include']
+            positive_choose_requirement = copy.deepcopy(requirement)
+            choose_formula = random.randint(0, len(positive_subqueries) - 1)
+            for i in range(len(positive_subqueries)):
+                if i == choose_formula:
+                    pos_objs = positive_subqueries[i].backward_sample(projs, rprojs, positive_choose_requirement,
+                                                                      cumulative, meaningful_difference, **kwargs)
+                else:
+                    pos_objs = positive_subqueries[i].backward_sample(projs, rprojs, positive_requirement,
+                                                                      cumulative, meaningful_difference, **kwargs)
+                pos_obj_list.append(pos_objs)
+            all_pos_objs = set.intersection(*pos_obj_list)
+            negative_requirement = defaultdict(set)
+            negative_requirement['must exclude'] = requirement['must include']
+            negative_requirement['optional exclude'] = requirement['optional include']
+            optional_exclude_set = all_pos_objs - requirement['must include'] - requirement['optional include']
+            max_exclude_num = min(len(optional_exclude_set), len(neg_subqueries))
+            negative_choose_formulas = random.sample(list(range(len(neg_subqueries))), max_exclude_num)
+            optional_exclude_list = list(optional_exclude_set)
+            exclude_element_list = random.sample(optional_exclude_list, max_exclude_num)
+            exclude_ordinal = 0
+            for i in range(len(neg_subqueries)):
+                if i in negative_choose_formulas:
+                    specific_negative_requirement = copy.deepcopy(negative_requirement)
+                    specific_negative_requirement['optional include'] = {exclude_element_list[exclude_ordinal]}
+                    exclude_ordinal += 1
+                    neg_objs = neg_subqueries[i].backward_sample(
+                        projs, rprojs, specific_negative_requirement, cumulative, meaningful_difference, **kwargs)
+                else:
+                    neg_objs = neg_subqueries[i].backward_sample(projs, rprojs, negative_requirement, cumulative,
+                                                                 meaningful_difference, **kwargs)
+                all_pos_objs = all_pos_objs - neg_objs
+            return all_pos_objs
+        else:
+            new_requirement = copy.deepcopy(requirement)
+            if requirement['must include']:
+                for sub_query in self.sub_queries:
+                    sub_objs = sub_query.backward_sample(projs, rprojs, new_requirement, cumulative,
+                                                         meaningful_difference, **kwargs)
                     sub_obj_list.append(sub_objs)
             else:
                 choose_formula = random.randint(0, len(self.sub_queries) - 1)
                 for i in range(len(self.sub_queries)):
                     if i != choose_formula:
-                        sub_objs = self.sub_queries[i].backward_sample(projs, rprojs, cumulative=cumulative)
-                    else:
                         sub_objs = self.sub_queries[i].backward_sample(
-                            projs, rprojs, contain=False, keypoint=keypoint, cumulative=cumulative)
+                            projs, rprojs, requirement = None, cumulative = cumulative,
+                            meaningful_difference = meaningful_difference, **kwargs)
+                    else:
+                        sub_objs = self.sub_queries[i].backward_sample(projs, rprojs, new_requirement, cumulative,
+                                                         meaningful_difference, **kwargs)
                     sub_obj_list.append(sub_objs)
-        else:
-            keypoint = random.sample(set(projs.keys()), 1)[0]
-            for query in self.sub_queries:
-                sub_objs = query.backward_sample(
-                    projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
-                sub_obj_list.append(sub_objs)
-        return set.intersection(*sub_obj_list)
+            return set.intersection(*sub_obj_list)
+
 
     def random_query(self, projs, cumulative=False):
         sub_obj_list = []
@@ -576,31 +654,31 @@ class Union(MultipleSetQuery):
             *(q.deterministic_query(projs) for q in self.sub_queries)
         )
 
-    def backward_sample(self, projs, rprojs,
-                        contain: bool = True,
-                        keypoint: int = None,
-                        cumulative: bool = False, **kwargs):
+    def backward_sample(self, projs, rprojs, requirement = None, cumulative=False,
+                        meaningful_difference : bool = False, **kwargs):
         sub_obj_list = []
-        if keypoint:
-            if contain:
-                choose_formula_num = random.randint(0, len(self.sub_queries) - 1)
-                for i in range(len(self.sub_queries)):
-                    if i == choose_formula_num:
-                        sub_objs = self.sub_queries[i].backward_sample(
-                            projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
-                        sub_obj_list.append(sub_objs)
-                    else:
-                        sub_objs = self.sub_queries[i].backward_sample(projs, rprojs, cumulative=cumulative)
-                        sub_obj_list.append(sub_objs)
-            else:
-                for query in self.sub_queries:
-                    sub_objs = query.backward_sample(
-                        projs, rprojs, contain=False, keypoint=keypoint, cumulative=cumulative)
+        if not requirement:
+            requirement = defaultdict(set)
+            requirement['must include'] = {random.randrange(0, len(projs.keys()))}
+        normal_requirement = defaultdict(set)
+        normal_requirement['must exclude'] = requirement['must exclude']
+        normal_requirement['optional exclude'] = requirement['optional exclude']
+        if requirement['must include'] or requirement['optional include']:
+            choose_formula_num = random.randint(0, len(self.sub_queries) - 1)
+            specific_requirement = copy.deepcopy(requirement)
+            for i in range(len(self.sub_queries)):
+                if i == choose_formula_num:
+                    sub_objs = self.sub_queries[i].backward_sample(projs, rprojs, specific_requirement, cumulative,
+                                                                   meaningful_difference, **kwargs)
                     sub_obj_list.append(sub_objs)
-
+                else:
+                    sub_objs = self.sub_queries[i].backward_sample(projs, rprojs, normal_requirement, cumulative,
+                                                                   meaningful_difference, **kwargs)
+                    sub_obj_list.append(sub_objs)
         else:
             for query in self.sub_queries:
-                sub_objs = query.backward_sample(projs, rprojs, cumulative=cumulative)
+                sub_objs = query.backward_sample(projs, rprojs, normal_requirement, cumulative,
+                                                 meaningful_difference, **kwargs)
                 sub_obj_list.append(sub_objs)
         return set.union(*sub_obj_list)
 
@@ -653,35 +731,50 @@ class Difference(FirstOrderSetQuery):
         r_result = self.rquery.deterministic_query(projs)
         return l_result - r_result
 
-    def backward_sample(self, projs, rprojs,
-                        contain: bool = True,
-                        keypoint: int = None,
-                        cumulative: bool = False, **kwargs):
-        if keypoint:
-            if contain:
-                lobjs = self.lquery.backward_sample(
-                    projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
-                robjs = self.rquery.backward_sample(
-                    projs, rprojs, contain=False, keypoint=keypoint, cumulative=cumulative)
-            else:
-                choose_formula = random.randint(0, 1)
-                if choose_formula == 0:
-                    lobjs = self.lquery.backward_sample(
-                        projs, rprojs, contain=False, keypoint=keypoint, cumulative=cumulative)
-                    robjs = self.rquery.backward_sample(
-                        projs, rprojs, cumulative=cumulative)
-                else:
-                    lobjs = self.lquery.backward_sample(
-                        projs, rprojs, cumulative=cumulative)
-                    robjs = self.rquery.backward_sample(
-                        projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
+    def backward_sample(self, projs, rprojs, requirement=None, cumulative=False,
+                        meaningful_difference: bool = False, **kwargs):
+        if not requirement:
+            requirement = defaultdict(set)
+            requirement['must include'] = {random.randrange(0, len(projs.keys()))}
+        sub_obj_list, neg_obj_list = [], []
+        lquery, rquery = self.sub_queries[0], self.sub_queries[1]
+        negative_requirement = defaultdict(set)
+        negative_requirement['must exclude'] = requirement['must include']
+        if meaningful_difference:
+            positive_choose_requirement = copy.deepcopy(requirement)
+            pos_objs = lquery.backward_sample(projs, rprojs, positive_choose_requirement,
+                                              cumulative, meaningful_difference, **kwargs)
+            negative_requirement['optional exclude'] = requirement['optional include']
+            optional_exclude_set = pos_objs - requirement['must include'] - requirement['optional include']
+            exclude_element = random.sample(optional_exclude_set, 1)
+            specific_negative_requirement = copy.deepcopy(negative_requirement)
+            specific_negative_requirement['optional include'] = set(exclude_element)
+            neg_objs = rquery.backward_sample(
+                        projs, rprojs, specific_negative_requirement, cumulative, meaningful_difference, **kwargs)
+            pos_objs = pos_objs - neg_objs
+            return pos_objs
         else:
-            lobjs = self.lquery.backward_sample(
-                projs, rprojs, cumulative=cumulative)
-            robjs = self.rquery.backward_sample(
-                projs, rprojs, cumulative=cumulative)
-
-        return lobjs - robjs
+            positive_requirement = copy.deepcopy(requirement)
+            negative_requirement['must include'] = requirement['must exclude']
+            if requirement['must include']:
+                lobjs = lquery.backward_sample(projs, rprojs, positive_requirement,
+                                               cumulative, meaningful_difference, **kwargs)
+                robjs = rquery.backward_sample(projs, rprojs, negative_requirement,
+                                                   cumulative, meaningful_difference, **kwargs)
+            else:
+                choose_lr = random.randint(0, 1)
+                if choose_lr:
+                    lobjs = lquery.backward_sample(projs, rprojs, positive_requirement,
+                                                   cumulative, meaningful_difference, **kwargs)
+                    robjs = rquery.backward_sample(projs, rprojs, requirement=None, cumulative=cumulative,
+                                                       meaningful_difference=meaningful_difference, **kwargs)
+                else:
+                    lobjs = lquery.backward_sample(projs, rprojs, requirement=None, cumulative=cumulative,
+                                                   meaningful_difference=meaningful_difference, **kwargs)
+                    robjs = rquery.backward_sample(projs, rprojs, negative_requirement, cumulative,
+                                                                meaningful_difference, **kwargs)
+            lobjs = lobjs - robjs
+            return lobjs
 
     def random_query(self, projs, cumulative=False):
         lobjs = self.lquery.random_query(projs, cumulative)
@@ -740,44 +833,70 @@ class Multiple_Difference(MultipleSetQuery):
         ans_origin = lquery.deterministic_query(projs)
         return ans_origin - ans_excluded
 
-    def backward_sample(self, projs, rprojs,
-                        contain: bool = True,
-                        keypoint: int = None,
-                        cumulative: bool = False, **kwargs):
-        robj_list = []
+    def backward_sample(self, projs, rprojs, requirement = None, cumulative=False,
+                        meaningful_difference:bool = False, **kwargs):
+        sub_obj_list, neg_obj_list = [], []
         lquery, rqueries = self.sub_queries[0], self.sub_queries[1:]
-        if keypoint:
-            if contain:
-                lobjs = lquery.backward_sample(projs, rprojs, contain=True, keypoint=keypoint, cumulative=cumulative)
-                for i in range(len(rqueries)):
-                    robjs = rqueries[i].backward_sample(
-                            projs, rprojs, contain=False, keypoint=keypoint, cumulative=cumulative)
-                    robj_list.append(robjs)
+        if not requirement:
+            requirement = defaultdict(set)
+            requirement['must include'] = {random.randrange(0, len(projs.keys()))}
+        positive_choose_requirement = copy.deepcopy(requirement)
+        negative_requirement = defaultdict(set)
+        negative_requirement['must exclude'] = requirement['must include']
+        if meaningful_difference:
+            negative_requirement['optional exclude'] = requirement['optional include']
+            pos_objs = lquery.backward_sample(projs, rprojs, positive_choose_requirement,
+                                              cumulative, meaningful_difference, **kwargs)
+
+            optional_exclude_set = pos_objs - requirement['must include'] - requirement['optional include']
+            max_exclude_num = min(len(optional_exclude_set), len(rqueries))
+            negative_choose_formulas = random.sample(list(range(len(rqueries))), max_exclude_num)
+            optional_exclude_list = list(optional_exclude_set)
+            exclude_element_list = random.sample(optional_exclude_list, max_exclude_num)
+            exclude_ordinal = 0
+            for i in range(len(rqueries)):
+                if i in negative_choose_formulas:
+                    specific_negative_requirement = copy.deepcopy(negative_requirement)
+                    specific_negative_requirement['optional include'] = {exclude_element_list[exclude_ordinal]}
+                    exclude_ordinal += 1
+                    neg_objs = rqueries[i].backward_sample(
+                        projs, rprojs, specific_negative_requirement, cumulative, meaningful_difference, **kwargs)
+                else:
+                    neg_objs = rqueries[i].backward_sample(projs, rprojs, negative_requirement, cumulative,
+                                                           meaningful_difference, **kwargs)
+                pos_objs = pos_objs - neg_objs
+            return pos_objs
+        else:
+            negative_requirement['must include'] = requirement['must exclude']
+            if requirement['must include']:
+                lobjs = lquery.backward_sample(projs, rprojs, positive_choose_requirement,
+                                               cumulative, meaningful_difference, **kwargs)
+                for rquery in rqueries:
+                    robjs = rquery.backward_sample(projs, rprojs, negative_requirement,
+                                                   cumulative, meaningful_difference, **kwargs)
+                    lobjs = lobjs - robjs
             else:
                 choose_lr = random.randint(0, 1)
-                if choose_lr:  # this
-                    lobjs = lquery.backward_sample(projs, rprojs,
-                                                   contain=False, keypoint=keypoint, cumulative=cumulative)
+                if choose_lr:
+                    lobjs = lquery.backward_sample(projs, rprojs, positive_choose_requirement,
+                                                   cumulative, meaningful_difference, **kwargs)
                     for rquery in rqueries:
-                        robjs = rquery.backward_sample(projs, rprojs, cumulative=cumulative)
-                        robj_list.append(robjs)
+                        robjs = rquery.backward_sample(projs, rprojs, requirement=None, cumulative=cumulative,
+                                                       meaningful_difference=meaningful_difference, **kwargs)
+                        lobjs = lobjs - robjs
                 else:
-                    choose_formula = random.randint(0, len(rqueries) - 1)
-                    lobjs = lquery.backward_sample(projs, rprojs, cumulative=cumulative)
+                    choose_formula = random.randrange(0, len(rqueries))
+                    lobjs = lquery.backward_sample(projs, rprojs, requirement=None, cumulative=cumulative,
+                                                   meaningful_difference=meaningful_difference, **kwargs)
                     for i in range(len(rqueries)):
                         if i == choose_formula:
-                            robjs = rqueries[i].backward_sample(projs, rprojs,
-                                                                contain=True, keypoint=keypoint, cumulative=cumulative)
-                            robj_list.append(robjs)
+                            robjs = rqueries[i].backward_sample(projs, rprojs, negative_requirement, cumulative,
+                                                                meaningful_difference, **kwargs)
                         else:
-                            robjs = rqueries[i].backward_sample(projs, rprojs, cumulative=cumulative)
-                            robj_list.append(robjs)
-        else:
-            lobjs = lquery.backward_sample(projs, rprojs, cumulative=cumulative)
-            for query in rqueries:
-                robjs = query.backward_sample(projs, rprojs, cumulative=cumulative)
-                robj_list.append(robjs)
-        return lobjs - set.union(*robj_list)
+                            robjs = rqueries[i].backward_sample(projs, rprojs, requirement=None, cumulative=cumulative,
+                                                   meaningful_difference=meaningful_difference, **kwargs)
+                        lobjs = lobjs - robjs
+            return lobjs
 
     def random_query(self, projs, cumulative=False):
         robj_list = []
