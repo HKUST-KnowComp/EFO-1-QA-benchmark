@@ -15,15 +15,17 @@ inverse_step_dict = {beta_step[i]: i for i in range(len(beta_step))}
 
 all_metrics = ['MRR', 'HITS1', 'HITS3', 'HITS10', 'retrieval_accuracy']
 model_supportform_dict = {
-    'Beta': ['DeMorgan', 'DeMorgan+MultiI', 'DNF+MultiIU'],
-    'Logic': ['DeMorgan', 'DeMorgan+MultiI', 'DNF+MultiIU'],
+    'BetaE': ['DeMorgan', 'DeMorgan+MultiI', 'DNF+MultiIU'],
+    'LogicE': ['DeMorgan', 'DeMorgan+MultiI', 'DNF+MultiIU'],
     'NewLook': ['DNF+MultiIUd', 'DNF+MultiIUD']
 }
 model_compareform_dict = {
-    'Beta': ['original', 'DeMorgan', 'DeMorgan+MultiI', 'DNF', 'DNF+MultiIU'],
-    'Logic': ['original', 'DeMorgan', 'DeMorgan+MultiI', 'DNF', 'DNF+MultiIU'],
+    'BetaE': ['original', 'DeMorgan', 'DeMorgan+MultiI', 'DNF', 'DNF+MultiIU'],
+    'LogicE': ['original', 'DeMorgan', 'DeMorgan+MultiI', 'DNF', 'DNF+MultiIU'],
     'NewLook': ['diff', 'DNF+diff', 'DNF+MultiIUd', 'DNF+MultiIUD']
 }
+formula_file = 'data/test_generated_formula_anchor_node=3.csv'
+
 
 def print_loss(path):
     data_file = os.path.join(path, 'train.csv')
@@ -295,7 +297,7 @@ def log_benchmark(folder_path, id_list, percentage=False):
 
 
 def normal_form_comparison(folder_path, form1, form2, metrics, save_csv=False, percentage=False):
-    all_formula = pd.read_csv('data/generated_formula_anchor_node=3.csv')
+    all_formula = pd.read_csv(formula_file)
     unequal_task = set()
     form1_log, form2_log = collections.defaultdict(lambda: collections.defaultdict(float)), \
         collections.defaultdict(lambda: collections.defaultdict(float))
@@ -390,12 +392,17 @@ def compare_all_form(folder_path, form_list, metrics, save_csv=False):
     dw.to_csv(os.path.join(folder_path, f'allwin_rate_compare.csv'))
 
 
-def log_benchmark_depth_anchornode(folder_path, support_normal_forms, metrics):
-    all_formula = pd.read_csv('data/generated_formula_anchor_node=3.csv')
+def log_benchmark_depth_anchornode(folder_path, support_normal_forms, metrics, distinguish_negation=False):
+    all_formula = pd.read_csv(formula_file)
     query_type_num = len(all_formula['original'])
     all_logging = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(list)))
+    negation_logging = collections.defaultdict(lambda: collections.defaultdict(
+        lambda: collections.defaultdict(lambda: collections.defaultdict(list))))
     averaged_split = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(float)))
+    negation_split = collections.defaultdict(lambda: collections.defaultdict(
+        lambda: collections.defaultdict(lambda: collections.defaultdict(float))))
     averaged_all = collections.defaultdict(lambda: collections.defaultdict(float))
+    negation_all = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(float)))
     for normal_form in support_normal_forms:
         for i in range(1, 4):
             for j in range(1, 4):
@@ -413,6 +420,12 @@ def log_benchmark_depth_anchornode(folder_path, support_normal_forms, metrics):
             for normal_form in support_normal_forms:
                 query_scores = metric_logging.loc[index][normal_form]
                 all_logging[normal_form][(anchornode_num, depth)][metric].append(query_scores)
+                formula = all_formula['original'][formula_index]
+
+                if 'd' in formula or 'D' in formula or 'n' in formula:
+                    negation_logging[normal_form][(anchornode_num, depth)][metric]['N'].append(query_scores)
+                else:
+                    negation_logging[normal_form][(anchornode_num, depth)][metric]['EPFO'].append(query_scores)
     all_number = sum(len(all_logging[support_normal_forms[0]][key][metrics[0]])
                      for key in all_logging[support_normal_forms[0]])
     assert all_number == query_type_num  # all query type are included
@@ -421,17 +434,58 @@ def log_benchmark_depth_anchornode(folder_path, support_normal_forms, metrics):
             for metric in metrics:
                 averaged_split[normal_form][key][metric] = sum(all_logging[normal_form][key][metric])\
                                                            / len(all_logging[normal_form][key][metric])
+                for whether_neg in negation_logging[normal_form][key][metric]:
+                    if len(negation_logging[normal_form][key][metric][whether_neg]) != 0:
+                        negation_split[normal_form][key][metric][whether_neg] = \
+                            sum(negation_logging[normal_form][key][metric][whether_neg]) / len(
+                                negation_logging[normal_form][key][metric][whether_neg])
+                    else:
+                        negation_split[normal_form][key][metric][whether_neg] = 0
     for normal_form in support_normal_forms:
         for metric in metrics:
             averaged_all[normal_form][metric] = sum(sum(all_logging[normal_form][key][metric])
                                                     for key in all_logging[normal_form])
             averaged_all[normal_form][metric] /= query_type_num
+            for whether_neg in ['EPFO', 'N']:
+                negation_all[normal_form][metric][whether_neg] = \
+                    sum(sum(negation_logging[normal_form][key][metric][whether_neg])
+                        for key in negation_logging[normal_form])
+                negation_all[normal_form][metric][whether_neg] /= \
+                    sum(len(negation_logging[normal_form][key][metric][whether_neg])
+                        for key in negation_logging[normal_form])
+                negation_split[normal_form]['average'][metric][whether_neg] = \
+                    negation_all[normal_form][metric][whether_neg]
             averaged_split[normal_form]['average'][metric] = averaged_all[normal_form][metric]
+
         df = pd.DataFrame.from_dict(averaged_split[normal_form])
         if normal_form != 'DNF+MultiIUd':
             df.to_csv(os.path.join(folder_path, f'anchornode_depth_of_{normal_form}.csv'))
         else:
             df.to_csv(os.path.join(folder_path, f'anchornode_depth_of_new_form.csv'))
+    averaged_split_changeseq = \
+        collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(float)))
+    negation_split_changeseq = collections.defaultdict(lambda: collections.defaultdict(
+        lambda: collections.defaultdict(lambda: collections.defaultdict(float))))
+    for form in averaged_split.keys():
+        for j in averaged_split[form].keys():
+            for metric in metrics:
+                averaged_split_changeseq[form][metric][j] = averaged_split[form][j][metric]
+                for whether_neg in ['EPFO', 'N']:
+                    negation_split_changeseq[whether_neg][form][metric][j] = \
+                        negation_split[form][j][metric][whether_neg]
+    all_df = pd.DataFrame.from_dict({(i, j): averaged_split_changeseq[i][j]
+                                     for i in averaged_split_changeseq.keys()
+                                     for j in averaged_split_changeseq[i].keys()}, orient='index')
+    all_df.to_csv(os.path.join(folder_path, f'anchornode_depth_of_all_form.csv'))
+
+    for whether_neg in ['EPFO', 'N']:
+        negation_split_use = negation_split_changeseq[whether_neg]
+        all_neg_df = pd.DataFrame.from_dict({(i, j): negation_split_use[i][j]
+                                             for i in negation_split_use.keys()
+                                             for j in negation_split_use[i].keys()}, orient='index')
+        all_neg_df.to_csv(os.path.join(folder_path, f'anchornode_depth_of_allform_{whether_neg}.csv'))
+    all_df_latex = all_df.to_latex()
+    all_neg_df_latex = all_neg_df.to_latex()
     return averaged_split
 
 
@@ -474,6 +528,43 @@ def answer_statistic(data_folder, formula_id_file):
         print(key, len(statistis_grouping[key]))
     data_averaged = pd.DataFrame.from_dict(statistis_grouping_averaged)
     data_averaged.to_csv(os.path.join(data_folder, 'size_statistics_grouping_formhard.csv'))
+
+
+def pandas_logging_depth_anchornode(models_folder, support_normal_forms, metrics):
+    all_formula = pd.read_csv(formula_file)
+    query_type_num = len(all_formula['original'])
+    all_logging = collections.defaultdict(list)
+    i = 0
+    for model in models_folder:
+        folder_path = models_folder[model]
+        for metric in metrics:
+            metric_logging = pd.read_csv(os.path.join(folder_path, f'all_formula_{metric}.csv'))
+            index2taskid = metric_logging['Unnamed: 0']
+            for index in range(len(index2taskid)):
+                taskid = index2taskid[index]
+                id_str = '0' * (4 - len(str(taskid))) + str(taskid)
+                formula_index = all_formula.loc[all_formula['formula_id'] == f'type{id_str}'].index[0]
+                depth = all_formula['original_depth'][formula_index]
+                anchornode_num = all_formula['num_anchor_nodes'][formula_index]
+                for normal_form in support_normal_forms[model]:
+                    formula = all_formula[normal_form][formula_index]
+                    if 'd' in formula or 'D' in formula or 'n' in formula:
+                        whether_neg = 'N'
+                    else:
+                        whether_neg = 'EPFO'
+                    all_logging[i] = [metric_logging[normal_form][index], (anchornode_num, depth), metric,
+                                      normal_form, taskid, whether_neg, model]
+                    i += 1
+    all_df = pd.DataFrame.from_dict(all_logging, orient="index", columns=['value', 'anchornode_depth', 'Metric',
+                                                                          'Normal_Form', 'Taskid', 'Contain_negation',
+                                                                          'Model'])
+    for metric in metrics:
+        required_df = all_df.groupby(['Model', 'Normal_Form', 'Contain_negation'])[metric]
+    required_latex = required_df.to_latex()
+    required_df.to_csv()
+
+
+
 
 
 
@@ -526,43 +617,48 @@ DNF_query = {
 # print_loss(graph_path)
 '''
 test_step = 450000
-test_path = "/home/hyin/DiscreteMeasureReasoning/log/newdev/Logic-unbounded210813.22:26:062c614d51/"
-old_path = "/home/hyin/DiscreteMeasureReasoning/log/newdev/Logic-unbounded210813.21:19:26aaf6eebf/"
-# test_path = "/home/hyin/DiscreteMeasureReasoning/log/dev/default210705.14:43:26fba267b0/"
+test_path = "/home/hyin/FirstOrderQueryEstimation/log/newdev/Logic-unbounded210813.22:26:062c614d51/"
+old_path = "/home/hyin/FirstOrderQueryEstimation/log/newdev/Logic-unbounded210813.21:19:26aaf6eebf/"
+# test_path = "/home/hyin/FirstOrderQueryEstimation/log/dev/default210705.14:43:26fba267b0/"
 logic_path = "/data/zwanggc/Logic-unbounded210813.22:24:17607989e2/"
 #compare_loss(test_path, test_path, choose_len=3000)
 log_all_metrics(test_path, test_step, 'test', log_meta_formula=check_query.values())
 log_all_metrics(old_path, test_step, 'test', log_meta_formula=check_query.values())
 '''
+
 p_list = [0, 1, 2, 1116, 1117]
 i_list = [13, 137, 1113, 1114]
 all_3_3_list = list(range(0, 531))
-beta_path = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k-237/Beta_full210825.15:22:232c21f3b3"
-NLK_path = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k-237/NLK_full210826.23:36:50d23a5d5b"
-Logic_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k-237/Logic_full210825.15:51:1849c53e66"
-Box_path = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k-237/Box_full210822.00:56:4448dc3a71"
-Beta_NELL = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_NELL/Beta_full210825.21:52:1297dedee3"
-Logic_NELL = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_NELL/Logic_full210826.13:49:32c5fd1d95"
-NLK_NELL = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_NELL/NLK_full210827.00:51:3138596ff6"
-Beta_FB = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k/Beta_full210825.23:58:4931c08094"
-Logic_FB = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k/Logic_full210825.23:57:165bfacfac"
-NLK_FB = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k/NLK_full210827.00:50:15114a092f"
+Beta_path = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k-237/Beta_full210825.15:22:232c21f3b3"
+NLK_path = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k-237/NLK_full210826.23:36:50d23a5d5b"
+Logic_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k-237/Logic_full210825.15:51:1849c53e66"
+Box_path = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k-237/Box_full210822.00:56:4448dc3a71"
 
-Logic_1p_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_1p210825.15:55:2565735b8d"
-Logic_2p_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_2p210825.16:02:51b8e4878b"
-Logic_3p_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_3p210825.16:07:530d917424"
-Logic_2i_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_2i210825.16:26:241f438fbf"
-Logic_3i_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_3i210825.16:44:0584f53968"
+Beta_NELL = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_NELL/Beta_full210913.20:38:073ac04fdd"
+Logic_NELL = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_NELL/Logic_full210914.15:08:107f055b58"
+NLK_NELL = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_NELL/NLK_full210913.20:39:41ed2d1a66"
+NELL_result = {'BetaE': Beta_NELL, 'LogicE': Logic_NELL, 'NewLook': NLK_NELL}
 
-new_2i_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_2i210828.17:53:31146141ce"
-new_3i_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_3i210828.17:56:27662c4441"
+Beta_FB = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k/Beta_full210913.16:41:50167f3830"
+Logic_FB = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k/Logic_full210913.16:10:2098d29206"
+NLK_FB = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k/NLK_full210913.16:09:06993f5e67"
+
+Logic_1p_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_generalize/Logic_1p210825.15:55:2565735b8d"
+Logic_2p_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_generalize/Logic_2p210825.16:02:51b8e4878b"
+Logic_3p_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_generalize/Logic_3p210825.16:07:530d917424"
+Logic_2i_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_generalize/Logic_2i210825.16:26:241f438fbf"
+Logic_3i_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_generalize/Logic_3i210825.16:44:0584f53968"
+
+new_2i_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_generalize/Logic_2i210828.17:53:31146141ce"
+new_3i_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_generalize/Logic_3i210828.17:56:27662c4441"
 id_file = 'data/generated_formula_anchor_node=3.csv'
 FB15_237_data, FB_data, NELL_data = 'data/benchmark/FB15k-237', 'data/benchmark/FB15k', 'data/benchmark/NELL'
 
-log_benchmark(new_3i_path, i_list, percentage=True)
+log_benchmark(Logic_FB, all_3_3_list, percentage=True)
 # compare_all_form(Box_path, all_normal_form, all_metrics)
 #compare_all_form(NLK_FB, model_compareform_dict['NewLook'], metrics=all_metrics, save_csv=True)
-#log_benchmark_depth_anchornode(NLK_FB, model_supportform_dict['NewLook'], all_metrics)
+#pandas_logging_depth_anchornode(NELL_result, model_supportform_dict, all_metrics)
+log_benchmark_depth_anchornode(Logic_FB, model_supportform_dict['BetaE'], all_metrics)
 # answer_statistic(NELL_data, id_file)
 # log_old_metrics(old_path, test_step, 'test')
 # train_all, valid_all, test_all = read_beta_log('../download_log/full/')
