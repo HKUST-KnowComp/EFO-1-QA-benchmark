@@ -526,9 +526,9 @@ DNF_query = {
 # print_loss(graph_path)
 '''
 test_step = 450000
-test_path = "/home/hyin/DiscreteMeasureReasoning/log/newdev/Logic-unbounded210813.22:26:062c614d51/"
-old_path = "/home/hyin/DiscreteMeasureReasoning/log/newdev/Logic-unbounded210813.21:19:26aaf6eebf/"
-# test_path = "/home/hyin/DiscreteMeasureReasoning/log/dev/default210705.14:43:26fba267b0/"
+test_path = "/home/hyin/FirstOrderQueryEstimation/log/newdev/Logic-unbounded210813.22:26:062c614d51/"
+old_path = "/home/hyin/FirstOrderQueryEstimation/log/newdev/Logic-unbounded210813.21:19:26aaf6eebf/"
+# test_path = "/home/hyin/FirstOrderQueryEstimation/log/dev/default210705.14:43:26fba267b0/"
 logic_path = "/data/zwanggc/Logic-unbounded210813.22:24:17607989e2/"
 #compare_loss(test_path, test_path, choose_len=3000)
 log_all_metrics(test_path, test_step, 'test', log_meta_formula=check_query.values())
@@ -537,25 +537,28 @@ log_all_metrics(old_path, test_step, 'test', log_meta_formula=check_query.values
 p_list = [0, 1, 2, 1116, 1117]
 i_list = [13, 137, 1113, 1114]
 all_3_3_list = list(range(0, 531))
-beta_path = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k-237/Beta_full210825.15:22:232c21f3b3"
-NLK_path = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k-237/NLK_full210826.23:36:50d23a5d5b"
-Logic_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k-237/Logic_full210825.15:51:1849c53e66"
-Box_path = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k-237/Box_full210822.00:56:4448dc3a71"
-Beta_NELL = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_NELL/Beta_full210825.21:52:1297dedee3"
-Logic_NELL = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_NELL/Logic_full210826.13:49:32c5fd1d95"
-NLK_NELL = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_NELL/NLK_full210827.00:51:3138596ff6"
-Beta_FB = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k/Beta_full210825.23:58:4931c08094"
-Logic_FB = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k/Logic_full210825.23:57:165bfacfac"
-NLK_FB = "/home/zwanggc/DiscreteMeasureReasoning/benchmark_log/benchmark_FB15k/NLK_full210827.00:50:15114a092f"
+Beta_path = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k-237/Beta_full210825.15:22:232c21f3b3"
+NLK_path = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k-237/NLK_full210826.23:36:50d23a5d5b"
+Logic_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k-237/Logic_full210825.15:51:1849c53e66"
+Box_path = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k-237/Box_full210822.00:56:4448dc3a71"
 
-Logic_1p_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_1p210825.15:55:2565735b8d"
-Logic_2p_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_2p210825.16:02:51b8e4878b"
-Logic_3p_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_3p210825.16:07:530d917424"
-Logic_2i_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_2i210825.16:26:241f438fbf"
-Logic_3i_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_3i210825.16:44:0584f53968"
+Beta_NELL = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_NELL/Beta_full210913.20:38:073ac04fdd"
+Logic_NELL = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_NELL/Logic_full210914.15:08:107f055b58"
+NLK_NELL = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_NELL/NLK_full210913.20:39:41ed2d1a66"
+NELL_result = {'BetaE': Beta_NELL, 'LogicE': Logic_NELL, 'NewLook': NLK_NELL}
 
-new_2i_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_2i210828.17:53:31146141ce"
-new_3i_path = "/home/hyin/DiscreteMeasureReasoning/benchmark_log/benchmark_generalize/Logic_3i210828.17:56:27662c4441"
+Beta_FB = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k/Beta_full210913.16:41:50167f3830"
+Logic_FB = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k/Logic_full210913.16:10:2098d29206"
+NLK_FB = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k/NLK_full210913.16:09:06993f5e67"
+
+Logic_1p_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_generalize/Logic_1p210825.15:55:2565735b8d"
+Logic_2p_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_generalize/Logic_2p210825.16:02:51b8e4878b"
+Logic_3p_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_generalize/Logic_3p210825.16:07:530d917424"
+Logic_2i_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_generalize/Logic_2i210825.16:26:241f438fbf"
+Logic_3i_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_generalize/Logic_3i210825.16:44:0584f53968"
+
+new_2i_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_generalize/Logic_2i210828.17:53:31146141ce"
+new_3i_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_generalize/Logic_3i210828.17:56:27662c4441"
 id_file = 'data/generated_formula_anchor_node=3.csv'
 FB15_237_data, FB_data, NELL_data = 'data/benchmark/FB15k-237', 'data/benchmark/FB15k', 'data/benchmark/NELL'
 
