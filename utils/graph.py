@@ -4,7 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import collections
 import numpy as np
-from fol import beta_query_v2, parse_formula, beta_query, parse_foq_formula
+from fol import beta_query_v2, parse_formula, beta_query
 from data_helper import all_normal_form
 
 beta_step = [15000 * i for i in range(1, 21)] + [360000, 420000, 450000]
@@ -87,7 +87,7 @@ def log_all_metrics(path, step, mode, log_meta_formula=beta_query_v2.values()):
     print(all_data)
     print(averaged_metric)
 
-
+'''
 def log_old_metrics(path, step, mode, log_meta_formula=beta_query.values()):
     log = collections.defaultdict(lambda: collections.defaultdict(float))
 
@@ -111,7 +111,7 @@ def log_old_metrics(path, step, mode, log_meta_formula=beta_query.values()):
     all_data.to_csv(os.path.join(path, f'eval_{mode}_{step}_average.csv'))
     print(all_data)
     print(averaged_metric)
-
+'''
 
 def read_beta_log(path, mode='test', chosen_step=None, averaged_meta_formula=beta_query_v2.values()):
     train_log = collections.defaultdict(lambda: collections.defaultdict(float))

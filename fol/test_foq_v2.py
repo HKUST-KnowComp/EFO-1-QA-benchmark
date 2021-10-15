@@ -3,12 +3,10 @@ import random
 import sys
 import json
 from os import path as osp
-
-sys.path.append(osp.dirname(osp.dirname(__file__)))
-from fol import  beta_query_v2
-from fol.appfoq import TransEEstimator
+from fol import beta_query_v2
 from fol.foq_v2 import parse_formula
 from utils.util import read_indexing, load_graph
+sys.path.append(osp.dirname(osp.dirname(__file__)))
 
 
 def random_e_ground(foq_formula):
@@ -72,6 +70,7 @@ def test_additive_ground():
         assert obj.formula == obj.formula
 
 
+'''
 def test_embedding_estimation():
     for k, v in beta_query_v2.items():
         cg_formula = complete_ground(v)
@@ -81,6 +80,7 @@ def test_embedding_estimation():
             obj.additive_ground(cg_formula)
         print(f"multi-instantiation for formula {obj.ground_formula}")
         obj.embedding_estimation(estimator=TransEEstimator())
+'''
 
 
 def test_sample():
@@ -145,12 +145,6 @@ def test_backward_sample():
         ans_another = check_instance.deterministic_query(projection_train)
         assert ans_another == ans_check_back_sample
         print(name, ansclass.dumps)
-
-
-def test_gen_foq_meta_formula():
-    for i in range(100):
-        mf = gen_foq_meta_formula()
-        parse_foq_formula(mf)
 
 
 if __name__ == "__main__":

@@ -19,8 +19,6 @@ parser.add_argument('--checkpoint_path', default=None, type=str)
 parser.add_argument('--load_step', default=0, type=int)
 
 
-
-
 def train_step(model, opt, iterator):
     opt.zero_grad()
     data = next(iterator)

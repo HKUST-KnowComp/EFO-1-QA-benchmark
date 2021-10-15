@@ -20,18 +20,16 @@ from torch.autograd import backward
 import numpy as np
 from torch.distributions.beta import Beta
 import torch.nn.functional as F
-
-torch.set_printoptions(precision=20)
-
-from fol.appfoq import BetaEstimator4V
-from fol.foq_v2 import parse_formula
-from fol import beta_query_v2
+from fol import beta_query_v2, parse_formula, BetaEstimator4V
 from main import compute_final_loss
 from transform_beta_data import transform_json_query
 from KGReasoning.dataloader import (SingledirectionalOneShotIterator,
                                     TrainDataset)
 from KGReasoning.models import KGReasoning
 from KGReasoning.util import flatten_query
+
+torch.set_printoptions(precision=20)
+
 
 parser = argparse.ArgumentParser()
 
