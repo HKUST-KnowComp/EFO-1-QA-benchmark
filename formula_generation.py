@@ -96,7 +96,7 @@ def normal_forms_generation(formula):
     formula = query.formula
     # proj, rproj = load_graph()
     # query.backward_sample()
-    result["original"] = query.formula
+    result["original"] = formula
     query = DeMorgan_replacement(parse_formula(formula))
     DM_MultiI = concate_iu_chains(copy_query(query, True))
     result["DeMorgan"] = query.formula
@@ -109,7 +109,7 @@ def normal_forms_generation(formula):
     result["DNF+diff"] = query.formula
     query_dnf_multiiu = concate_iu_chains(parse_formula(query_dnf.formula))
     result["DNF+MultiIU"] = query_dnf_multiiu.formula
-    query = to_D(parse_formula(query_dnf_multiiu.formula))
+    query = to_D(parse_formula(result["DNF+MultiIU"]))
     result["DNF+MultiIUD"] = query.formula
     result["DNF+MultiIUd"] = decompose_D(
                                 parse_formula(result['DNF+MultiIUD'])).formula
@@ -142,7 +142,7 @@ if __name__ == "__main__":
                 reductions[_k].add(res[_k])
         os.makedirs('outputs', exist_ok=True)
         convert_log_to_csv('logs/formula_generation.log',
-                           f'outputs/generated_formula_anchor_node={k}.csv')
+                           f'outputs/test_generated_formula_anchor_node={k}.csv')
 
         for k, v in reductions.items():
             logging.info(f"statistics:{len(v)} {k} produced cumulatively")

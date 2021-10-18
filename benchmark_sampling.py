@@ -16,11 +16,12 @@ from utils.util import load_data_with_indexing
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--benchmark_name", type=str, default="benchmark")
-parser.add_argument("--input_formula_file", type=str, default="outputs/generated_formula_anchor_node=3.csv")
+parser.add_argument("--input_formula_file", type=str, default="outputs/test_generated_formula_anchor_node=3.csv")
 parser.add_argument("--sample_size", default=5, type=int)
 parser.add_argument("--knowledge_graph", action="append")
 parser.add_argument("--ncpus", type=int, default=1)
 parser.add_argument("--num_samples", type=int, default=5000)
+parser.add_argument("--meaningful_difference", type=bool, default=False)
 
 
 def normal_forms_transformation(query):
@@ -40,9 +41,9 @@ def normal_forms_transformation(query):
     return result
 
 
-def sample_by_row(row, easy_proj, easy_rproj, hard_proj):
+def sample_by_row(row, easy_proj, easy_rproj, hard_proj, meaningful_difference: bool = False):
     query_instance = parse_formula(row.original)
-    easy_answers = query_instance.backward_sample(easy_proj, easy_rproj)
+    easy_answers = query_instance.backward_sample(easy_proj, easy_rproj, meaningful_difference=meaningful_difference)
     full_answers = query_instance.deterministic_query(hard_proj)
     hard_answers = full_answers.difference(easy_answers)
     results = normal_forms_transformation(query_instance)
@@ -55,10 +56,11 @@ def sample_by_row(row, easy_proj, easy_rproj, hard_proj):
     return list(easy_answers), list(hard_answers), results
 
 
-def sample_by_row_final(row, easy_proj, hard_proj, hard_rproj):
+def sample_by_row_final(row, easy_proj, hard_proj, hard_rproj, meaningful_difference: bool = False):
     while True:
         query_instance = parse_formula(row.original)
-        full_answers = query_instance.backward_sample(hard_proj, hard_rproj)
+        full_answers = query_instance.backward_sample(hard_proj, hard_rproj,
+                                                      meaningful_difference=meaningful_difference)
         easy_answers = query_instance.deterministic_query(easy_proj)
         hard_answers = full_answers.difference(easy_answers)
         results = normal_forms_transformation(query_instance)
@@ -95,7 +97,7 @@ if __name__ == "__main__":
                 def sampler_func(i):
                     row_data = {}
                     easy_answers, hard_answers, results = sample_by_row_final(
-                        row, proj_valid, proj_test, reverse_test)
+                        row, proj_valid, proj_test, reverse_test, meaningful_difference=args.meaningful_difference)
                     row_data['easy_answers'] = easy_answers
                     row_data['hard_answers'] = hard_answers
                     for k in results:
@@ -123,7 +125,7 @@ if __name__ == "__main__":
                 generated = set()
                 for _ in tqdm(range(args.num_samples), leave=False, desc=row.original + fid):
                     easy_answers, hard_answers, results = sample_by_row_final(
-                        row, proj_valid, proj_test, reverse_test)
+                        row, proj_valid, proj_test, reverse_test, meaningful_difference=args.meaningful_difference)
                     if results['original'] in generated:
                         continue
                     else:
