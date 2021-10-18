@@ -65,6 +65,13 @@ class FirstOrderSetQuery(ABC):
         self.latent_embedding = None
         pass
 
+    @abstractmethod
+    def sort_sub(self):
+        """
+        Sort the sub query by their formula in alphabetical order.
+        """
+        pass
+
     @property
     @abstractmethod
     def formula(self) -> str:
@@ -501,6 +508,8 @@ class MultipleSetQuery(FirstOrderSetQuery):
         self.sub_queries = queries
         
     def sort_sub(self):
+        for sub_query in self.sub_queries:
+            sub_query.sort_sub()
         self.sub_queries = sorted(self.sub_queries, key=lambda q: q.formula)
 
     @property
@@ -713,6 +722,10 @@ class Difference(FirstOrderSetQuery):
         self.lquery = lq
         self.rquery = rq
 
+    def sort_sub(self):
+        self.lquery.sort_sub()
+        self.rquery.sort_sub()
+
     @property
     def formula(self):
         return f"(d,{self.lquery.formula},{self.rquery.formula})"
@@ -819,10 +832,15 @@ class Multiple_Difference(MultipleSetQuery):
         super().__init__(*queries)
         
     def sort_sub(self):
-        pass
+        for sub_query in self.sub_queries:
+            sub_query.sort_sub()
+        lquery, rqueries = self.sub_queries[0], self.sub_queries[1:]
+        rqueries = sorted(rqueries, key=lambda q: q.formula)
+        self.sub_queries = [lquery].extend(rqueries)
 
     @property
     def formula(self):
+        self.sort_sub()
         return "({},{})".format(
             self.__o__,
             ",".join(subq.formula for subq in self.sub_queries)
@@ -830,6 +848,7 @@ class Multiple_Difference(MultipleSetQuery):
 
     @property
     def dumps(self):
+        self.sort_sub()
         dobject = {
             'o': self.__o__,
             'a': [
