@@ -102,6 +102,12 @@ class FirstOrderSetQuery(ABC):
         A function used to ground a query, the backward sampling strategy is used to ensure that there are always an
         answer of this query, specifically, queries like 3i tend to have no answers if you use random_query rather than
         backward_sample.
+        Requirement is a defaultdict(set)
+        If the meaningful_difference is False, the requirement only have 1 key: 'must include' or 'must exclude'.
+        If the meaningful_difference is True, the requirement may have 4 keys: 'must include', 'must exclude',
+        'optional include', 'optional exclude', the priority follows this order.
+        All possibilities are 'I' / 'E+O_I' / 'E' / 'O_I+O_E' / 'O_I' / 'O_E', where they are short for requirement.
+        All requirement have at most one element given the new assignment of requirement in intersection.
         """
         pass
 
@@ -508,8 +514,6 @@ class MultipleSetQuery(FirstOrderSetQuery):
         self.sub_queries = queries
         
     def sort_sub(self):
-        for sub_query in self.sub_queries:
-            sub_query.sort_sub()
         self.sub_queries = sorted(self.sub_queries, key=lambda q: q.formula)
 
     @property
@@ -832,11 +836,10 @@ class Multiple_Difference(MultipleSetQuery):
         super().__init__(*queries)
         
     def sort_sub(self):
-        for sub_query in self.sub_queries:
-            sub_query.sort_sub()
         lquery, rqueries = self.sub_queries[0], self.sub_queries[1:]
+        lquery.sort_sub()
         rqueries = sorted(rqueries, key=lambda q: q.formula)
-        self.sub_queries = [lquery].extend(rqueries)
+        self.sub_queries = [lquery] + rqueries
 
     @property
     def formula(self):
