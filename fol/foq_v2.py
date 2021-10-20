@@ -106,7 +106,7 @@ class FirstOrderSetQuery(ABC):
         If the meaningful_difference is False, the requirement only have 1 key: 'must include' or 'must exclude'.
         If the meaningful_difference is True, the requirement may have 4 keys: 'must include', 'must exclude',
         'optional include', 'optional exclude', the priority follows this order.
-        All possibilities are 'I' / 'E+O_I' / 'E' / 'O_I+O_E' / 'O_I' / 'O_E', where they are short for requirement.
+        All possibilities are 'I' / 'E+O_I' / 'E' / 'O_I+O_E' / 'O_I' / 'O_E', those are short for requirement keys.
         All requirement have at most one element given the new assignment of requirement in intersection.
         """
         pass
