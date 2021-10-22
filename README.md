@@ -54,9 +54,9 @@ data
 
 Then we can run the benchmark sampling code on specific knowledge graph by
 ```bash
-python benchmark_sampling.py --knowledge_graph FB15k-237 
-python benchmark_sampling.py --knowledge_graph FB15k
-python benchmark_sampling.py --knowledge_graph NELL
+python benchmark_sampling.py --knowledge_graph FB15k-237 --num_samples 5000
+python benchmark_sampling.py --knowledge_graph FB15k --num_samples 8000
+python benchmark_sampling.py --knowledge_graph NELL --num_samples 4000
 ```
 
 **Append new forms to existing data**
