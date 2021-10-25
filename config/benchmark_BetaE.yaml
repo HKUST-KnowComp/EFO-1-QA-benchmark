@@ -19,7 +19,7 @@ train:
 evaluate:  # only used when valid/test in action
   batch_size: 1000
   print: true
-  formula_id_file: 'data/generated_formula_anchor_node=3.csv'
+  formula_id_file: 'data/test_generated_formula_anchor_node=3.csv'
 estimator:
   embedding: beta # one of [Transe, box, beta, dm]
   beta:
