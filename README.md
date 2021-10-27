@@ -1,17 +1,18 @@
 # EFO-1-QA Benchmark for First Order Query Estimation on Knowledge Graphs
 
-This repository contains an entire pipeline for the EFO-1-QA benchmark. EFO-1 stands for the Existential First Order Queries with Single Free Varibale. The related paper has been submitted to the NeurIPS 2021 track on dataset and benchmark (see [OpenReview](https://openreview.net/forum?id=pX4x8f6Km5T)), and appeared on [arXiv](https://arxiv.org/abs/2109.08925).
+This repository contains an entire pipeline for the EFO-1-QA benchmark. EFO-1 stands for the Existential First Order Queries with Single Free Varibale. The related paper has been accepted by the NeurIPS 2021 track on dataset and benchmark (see [OpenReview Link](https://openreview.net/forum?id=pX4x8f6Km5T)), and appeared on [arXiv](https://arxiv.org/abs/2109.08925).
 
 The data used in the evaluation can be found in this open link https://hkustconnect-my.sharepoint.com/:f:/g/personal/zwanggc_connect_ust_hk/EpaFL1PUoOFBuCc7hclIM30B8c21e-Tnv1gL11jw_z_SQQ?e=m8RJb5. The compressed version is about 5GB.
 
 
 If this work helps you, please cite
 ```
-@article{EFO-1-QA,
-  title={Benchmarking the Combinatorial Generalizability of Complex Query Answering on Knowledge Graphs},
-  author={Wang, Zihao and Yin, Hang and Song, Yangqiu},
-  journal={arXiv preprint arXiv:2109.08925},
-  year={2021}
+@inproceedings{wang2021benchmarking,
+title={Benchmarking the Combinatorial Generalizability of Complex Query Answering on Knowledge Graphs},
+author={Zihao Wang and Hang Yin and Yangqiu Song},
+booktitle={NeurIPS Datasets and Benchmarks Track},
+year={2021},
+url={https://openreview.net/forum?id=pX4x8f6Km5T}
 }
 ```
 
@@ -107,7 +108,7 @@ python main.py --config config/benchmark_Logic.yaml --checkpoint_path ckpt/FB15k
 ```
 We note that the BetaE checkpoint above is trained from [KGReasoning](https://github.com/snap-stanford/KGReasoning)
 
-## Paper Checklist
+## Paper/Repository Checklist
 
 1. For all authors..
 
