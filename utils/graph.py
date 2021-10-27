@@ -4,8 +4,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import collections
 import numpy as np
-from fol import beta_query_v2, parse_formula, beta_query, parse_foq_formula
+import sys
+sys.path.append("/home/zwanggc/FirstOrderQueryEstimation")
+from fol import beta_query_v2, parse_formula, beta_query
 from data_helper import all_normal_form
+
 
 beta_step = [15000 * i for i in range(1, 21)] + [360000, 420000, 450000]
 beta_valid_step = [15000 * i for i in range(1, 21)] + [360000, 420000]
@@ -85,7 +88,7 @@ def log_all_metrics(path, step, mode, log_meta_formula=beta_query_v2.values()):
     print(all_data)
     print(averaged_metric)
 
-
+'''
 def log_old_metrics(path, step, mode, log_meta_formula=beta_query.values()):
     log = collections.defaultdict(lambda: collections.defaultdict(float))
 
@@ -109,7 +112,7 @@ def log_old_metrics(path, step, mode, log_meta_formula=beta_query.values()):
     all_data.to_csv(os.path.join(path, f'eval_{mode}_{step}_average.csv'))
     print(all_data)
     print(averaged_metric)
-
+'''
 
 def read_beta_log(path, mode='test', chosen_step=None, averaged_meta_formula=beta_query_v2.values()):
     train_log = collections.defaultdict(lambda: collections.defaultdict(float))
@@ -537,19 +540,19 @@ log_all_metrics(old_path, test_step, 'test', log_meta_formula=check_query.values
 p_list = [0, 1, 2, 1116, 1117]
 i_list = [13, 137, 1113, 1114]
 all_3_3_list = list(range(0, 531))
-Beta_path = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k-237/Beta_full210825.15:22:232c21f3b3"
-NLK_path = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k-237/NLK_full210826.23:36:50d23a5d5b"
-Logic_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k-237/Logic_full210825.15:51:1849c53e66"
+Beta_path = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k-237/Beta_full211021.21:53:5622b7307f/"
+NLK_path = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k-237/NLK_full211022.10:23:213a1fea21/"
+Logic_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k-237/Logic_full211022.14:06:57d7bd0d37/"
 Box_path = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k-237/Box_full210822.00:56:4448dc3a71"
 
-Beta_NELL = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_NELL/Beta_full210913.20:38:073ac04fdd"
-Logic_NELL = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_NELL/Logic_full210914.15:08:107f055b58"
-NLK_NELL = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_NELL/NLK_full210913.20:39:41ed2d1a66"
+Beta_NELL = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_NELL/Beta_full211021.21:54:2510bcf310/"
+Logic_NELL = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_NELL/Logic_full211022.14:06:0128fd7614/"
+NLK_NELL = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_NELL/NLK_full211022.14:23:059a6b9d86/"
 NELL_result = {'BetaE': Beta_NELL, 'LogicE': Logic_NELL, 'NewLook': NLK_NELL}
 
-Beta_FB = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k/Beta_full210913.16:41:50167f3830"
-Logic_FB = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k/Logic_full210913.16:10:2098d29206"
-NLK_FB = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k/NLK_full210913.16:09:06993f5e67"
+Beta_FB = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k/Beta_full211021.21:52:5760fc2d24/"
+Logic_FB = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k/Logic_full211022.10:14:23940a46a4/"
+NLK_FB = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k/NLK_full211022.14:22:1240d958f1/"
 
 Logic_1p_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_generalize/Logic_1p210825.15:55:2565735b8d"
 Logic_2p_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_generalize/Logic_2p210825.16:02:51b8e4878b"
@@ -559,14 +562,14 @@ Logic_3i_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_ge
 
 new_2i_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_generalize/Logic_2i210828.17:53:31146141ce"
 new_3i_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_generalize/Logic_3i210828.17:56:27662c4441"
-id_file = 'data/generated_formula_anchor_node=3.csv'
 FB15_237_data, FB_data, NELL_data = 'data/benchmark/FB15k-237', 'data/benchmark/FB15k', 'data/benchmark/NELL'
 
-log_benchmark(new_3i_path, i_list, percentage=True)
+#log_benchmark(Logic_path, all_3_3_list, percentage=True)
 # compare_all_form(Box_path, all_normal_form, all_metrics)
-#compare_all_form(NLK_FB, model_compareform_dict['NewLook'], metrics=all_metrics, save_csv=True)
-#log_benchmark_depth_anchornode(NLK_FB, model_supportform_dict['NewLook'], all_metrics)
-# answer_statistic(NELL_data, id_file)
+#compare_all_form(Logic_path, model_compareform_dict['LogicE'], metrics=all_metrics, save_csv=True)
+#  pandas_logging_depth_anchornode(NELL_result, model_supportform_dict, all_metrics)
+#log_benchmark_depth_anchornode(Logic_path, model_supportform_dict['LogicE'], all_metrics)
+answer_statistic(NELL_data, formula_file)
 # log_old_metrics(old_path, test_step, 'test')
 # train_all, valid_all, test_all = read_beta_log('../download_log/full/')
 # train_part, valid_part, test_part = read_logic_log(logic_path, 'test', test_step, averaged_meta_formula=DNF_query.values())

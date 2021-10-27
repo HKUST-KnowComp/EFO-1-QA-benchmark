@@ -65,6 +65,13 @@ class FirstOrderSetQuery(ABC):
         self.latent_embedding = None
         pass
 
+    @abstractmethod
+    def sort_sub(self):
+        """
+        Sort the sub query by their formula in alphabetical order.
+        """
+        pass
+
     @property
     @abstractmethod
     def formula(self) -> str:
@@ -95,6 +102,12 @@ class FirstOrderSetQuery(ABC):
         A function used to ground a query, the backward sampling strategy is used to ensure that there are always an
         answer of this query, specifically, queries like 3i tend to have no answers if you use random_query rather than
         backward_sample.
+        Requirement is a defaultdict(set)
+        If the meaningful_difference is False, the requirement only have 1 key: 'must include' or 'must exclude'.
+        If the meaningful_difference is True, the requirement may have 4 keys: 'must include', 'must exclude',
+        'optional include', 'optional exclude', the priority follows this order.
+        All possibilities are 'I' / 'E+O_I' / 'E' / 'O_I+O_E' / 'O_I' / 'O_E', those are short for requirement keys.
+        All requirement have at most one element given the new assignment of requirement in intersection.
         """
         pass
 
@@ -713,6 +726,10 @@ class Difference(FirstOrderSetQuery):
         self.lquery = lq
         self.rquery = rq
 
+    def sort_sub(self):
+        self.lquery.sort_sub()
+        self.rquery.sort_sub()
+
     @property
     def formula(self):
         return f"(d,{self.lquery.formula},{self.rquery.formula})"
@@ -819,10 +836,14 @@ class Multiple_Difference(MultipleSetQuery):
         super().__init__(*queries)
         
     def sort_sub(self):
-        pass
+        lquery, rqueries = self.sub_queries[0], self.sub_queries[1:]
+        lquery.sort_sub()
+        rqueries = sorted(rqueries, key=lambda q: q.formula)
+        self.sub_queries = [lquery] + rqueries
 
     @property
     def formula(self):
+        self.sort_sub()
         return "({},{})".format(
             self.__o__,
             ",".join(subq.formula for subq in self.sub_queries)
@@ -830,6 +851,7 @@ class Multiple_Difference(MultipleSetQuery):
 
     @property
     def dumps(self):
+        self.sort_sub()
         dobject = {
             'o': self.__o__,
             'a': [
