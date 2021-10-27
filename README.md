@@ -1,4 +1,4 @@
-# EFO-1-QA Benchmark for First Order Query Estimation on Knowledge Graphs
+# EFO-1-QA Benchmark for Complex Query Answering on Knowledge Graphs
 
 This repository contains an entire pipeline for the EFO-1-QA benchmark. EFO-1 stands for the Existential First Order Queries with Single Free Varibale. The related paper has been accepted by the NeurIPS 2021 track on dataset and benchmark (see [OpenReview Link](https://openreview.net/forum?id=pX4x8f6Km5T)), and appeared on [arXiv](https://arxiv.org/abs/2109.08925).
 
