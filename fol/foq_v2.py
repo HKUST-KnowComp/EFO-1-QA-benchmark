@@ -402,6 +402,7 @@ class Projection(FirstOrderSetQuery):
                         **kwargs):
         # since the projection[next_point][self.rel] may contains essential_point even if not starting from it
         # This issue can not be totally solved since the p_object contains other entity than parent
+        # TODO: maybe solve this by not considering in edge type, but seems unfavourable in meaningful difference.
         def find_exlusion(projs, rprojs, exclude_point):
             while True:
                 cursor = random.sample(rprojs.keys() - exclude_point, 1)[0]
