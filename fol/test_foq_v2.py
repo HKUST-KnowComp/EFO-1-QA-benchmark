@@ -1,13 +1,14 @@
 import collections
 import random
 import sys
+from os import path as osp
 import json
 import pandas as pd
-from os import path as osp
 from fol import beta_query_v2
 from fol.foq_v2 import parse_formula
 from utils.util import read_indexing, load_graph, load_data_with_indexing
 sys.path.append(osp.dirname(osp.dirname(__file__)))
+stanford_data_path = 'data/FB15k-237-betae'
 
 
 def random_e_ground(foq_formula):
@@ -41,6 +42,7 @@ def complete_ground(foq_formula):
 def test_parse_formula():
     for k, v in beta_query_v2.items():
         obj = parse_formula(v)
+        assert obj.formula == v, print(obj.formula, v)
         oobj = parse_formula(obj.formula)
         assert oobj.formula == obj.formula
         print(k, obj, obj.formula)
@@ -67,7 +69,7 @@ def test_additive_ground():
         obj = parse_formula(v)
         for _ in range(10):
             gv = random_p_ground(random_e_ground(obj.dumps))
-            obj.additive_ground(gv)
+            obj.additive_ground(json.loads(gv))
         assert obj.formula == obj.formula
 
 
@@ -85,32 +87,23 @@ def test_embedding_estimation():
 
 
 def test_sample():
-    stanford_data_path = '../../data/FB15k-237-betae'
-    all_entity_dict, all_relation_dict, id2ent, id2rel = read_indexing(
-        stanford_data_path)  # TODO: this function may be moved to other data utilities
-    projection_none = {}
-    reverse_proection_none = {}
-    for i in all_entity_dict.values():
-        projection_none[i] = collections.defaultdict(set)
-        reverse_proection_none[i] = collections.defaultdict(set)
-    projection_train, reverse_projection_train = load_graph('../../data/FB15k-237-betae/train.txt', projection_none,
-                                                            reverse_proection_none)
+    ent2id, rel2id, proj_train, reverse_train, proj_valid, reverse_valid, proj_test, reverse_test = \
+        load_data_with_indexing(stanford_data_path)
     for name in beta_query_v2:
         query_structure = beta_query_v2[name]
         ansclass = parse_formula(query_structure)
-        ans_sample = ansclass.random_query(projection_train, cumulative=True)
-        ans_check_sample = ansclass.deterministic_query(projection_train)
+        ans_sample = ansclass.random_query(proj_train, cumulative=True)
+        ans_check_sample = ansclass.deterministic_query(proj_train)
         assert ans_sample == ans_check_sample
         query_dumps = ansclass.dumps
         brand_new_instance = parse_formula(query_structure)
         brand_new_instance.additive_ground(json.loads(query_dumps))
-        ans_another = brand_new_instance.deterministic_query(projection_train)
+        ans_another = brand_new_instance.deterministic_query(proj_train)
         assert ans_another == ans_sample
         print(ansclass.dumps)
 
 
 def test_backward_sample():
-    stanford_data_path = 'data/FB15k-237-betae'
     ent2id, rel2id, proj_train, reverse_train, proj_valid, reverse_valid, proj_test, reverse_test = \
         load_data_with_indexing(stanford_data_path)
     for name in beta_query_v2:
@@ -142,7 +135,7 @@ def test_backward_sample():
 
 
 def test_benchmark_backward_sample():
-    stanford_data_path = 'data/FB15k-237-betae'
+
     ent2id, rel2id, proj_train, reverse_train, proj_valid, reverse_valid, proj_test, reverse_test = \
         load_data_with_indexing(stanford_data_path)
     formula_file = "outputs/test_generated_formula_anchor_node=3.csv"
@@ -163,7 +156,7 @@ def test_benchmark_backward_sample():
 
 if __name__ == "__main__":
     test_parse_formula()
-    # test_sample()
+    test_sample()
     test_backward_sample()
     test_benchmark_backward_sample()
     # test_additive_ground()
