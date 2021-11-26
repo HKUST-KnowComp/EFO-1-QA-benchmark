@@ -15,7 +15,10 @@ train:
   evaluate_every_steps: 15000
   save_every_steps: 10000
   checkpoint_every: 10000
-  meta_queries:
+  interested_normal_forms:
+    - 'DNF+MultiIU'
+    - 'DeMorgan'
+  formula_id_file: 'data/test_generated_formula_anchor_node=3.csv'
 evaluate:  # only used when valid/test in action
   batch_size: 1000
   print: true

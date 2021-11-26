@@ -12,7 +12,7 @@ from fol.foq_v2 import (concate_n_chains, copy_query,
                         union_bubble,
                         DeMorgan_replacement,
                         to_d,
-                        transformation)
+                        transformation, count_query_depth)
 
 
 def convert_log_to_csv(logfile, outfile):
@@ -72,21 +72,6 @@ def convert_to_dnf(query):
 
     query = transformation(query, dnf_step)
     return query
-
-
-def count_query_depth(query):
-    if query.__o__ == 'e':
-        return 0
-    elif query.__o__ in 'uiUID':
-        return max(count_query_depth(q) for q in query.sub_queries)
-    elif query.__o__ == 'p':
-        return count_query_depth(query.query) + 1
-    elif query.__o__ == 'n':
-        return count_query_depth(query.query)
-    elif query.__o__ == 'd':
-        return max(count_query_depth(query.lquery), count_query_depth(query.rquery))
-    else:
-        raise NotImplementedError
 
 
 def normal_forms_generation(formula):
