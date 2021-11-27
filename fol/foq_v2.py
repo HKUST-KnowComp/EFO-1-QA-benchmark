@@ -1037,7 +1037,7 @@ op_candidates_dict = {
 
 def binary_formula_iterator(depth=5,
                             num_anchor_nodes=4,
-                            op_candidates=None):
+                            op_candidates=None, negation_length=True):
     # decide the ops, we didn't consider the negation as the top-level operator
     if op_candidates is None:
         op_candidates = "epiu"
@@ -1050,12 +1050,15 @@ def binary_formula_iterator(depth=5,
         if (op == 'e' and num_anchor_nodes == 1):
             yield "(p,(e))"
         elif op in 'np':
-            arg_candidate_iterator = binary_formula_iterator(
-                depth=depth - 1,
-                num_anchor_nodes=num_anchor_nodes,
-                op_candidates=op_candidates_dict[op])
-            for f in arg_candidate_iterator:
-                yield f"({op},{f})"
+            if negation_length:
+                arg_candidate_iterator = binary_formula_iterator(
+                    depth=depth - 1,
+                    num_anchor_nodes=num_anchor_nodes,
+                    op_candidates=op_candidates_dict[op], negation_length=negation_length)
+                for f in arg_candidate_iterator:
+                    yield f"({op},{f})"
+            else:
+                pass
         elif op in 'iu':
             for arg1_num_anchor_nodes in range(1, num_anchor_nodes):
                 arg2_num_anchor_nodes = num_anchor_nodes \
@@ -1063,12 +1066,14 @@ def binary_formula_iterator(depth=5,
                 arg1_candidate_iterator = binary_formula_iterator(
                     depth=depth,
                     num_anchor_nodes=arg1_num_anchor_nodes,
-                    op_candidates=op_candidates_dict[op][1]
+                    op_candidates=op_candidates_dict[op][1],
+                    negation_length=negation_length
                 )
                 arg2_candidate_iterator = binary_formula_iterator(
                     depth=depth,
                     num_anchor_nodes=arg2_num_anchor_nodes,
-                    op_candidates=op_candidates_dict[op][2]
+                    op_candidates=op_candidates_dict[op][2],
+                    negation_length=negation_length
                 )
                 for f1, f2 in product(arg1_candidate_iterator,
                                       arg2_candidate_iterator):
