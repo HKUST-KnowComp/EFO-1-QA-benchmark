@@ -192,16 +192,14 @@ class TrainDataset(Dataset):
         return query, ans_set, beta_name
 
 
-class BenchmarkTaskManager:
-    def __init__(self, formula_id_data, data_folder: str, type_str: str, device, model):     # type_str: type0001
-        all_formula = formula_id_data
-        self.type_str = type_str
+class BenchmarkFormManager:  # A FormManager is actually managing all different normal forms of the same formula
+    def __init__(self, mode, query_inform_dict: dict, filename: str, device, model):   # type_str: type0001
+        self.mode = mode
+        self.query_inform_dict = query_inform_dict
         self.tasks, self.form2formula = {}, {}
         self.all_formula, self.allowed_formula = set(), set()
-        filename = os.path.join(data_folder, f'data-{self.type_str}.csv')
-        real_index = all_formula.loc[all_formula['formula_id'] == f'{self.type_str}'].index[0]  # index != formula id
         for normal_form in all_normal_form:
-            formula = all_formula[normal_form][real_index]
+            formula = query_inform_dict[normal_form]
             self.form2formula[normal_form] = formula
             self.all_formula.add(formula)
         print(f'[data] load query from file {filename}')
@@ -217,9 +215,13 @@ class BenchmarkTaskManager:
             print("load from existed files")
             with open(dense, 'rb') as f:
                 data = pickle.load(f)
-                self.easy_answer_set = data['easy_answer_set']
-                self.hard_answer_set = data['hard_answer_set']
-                self.len = len(self.easy_answer_set)
+                if self.mode == 'train':
+                    self.answer_set = data['answer_set']
+                    self.len = len(self.answer_set)
+                else:
+                    self.easy_answer_set = data['easy_answer_set']
+                    self.hard_answer_set = data['hard_answer_set']
+                    self.len = len(self.easy_answer_set)
                 for formula in self.all_formula:
                     query_instance = data[formula]
                     try:
@@ -236,15 +238,32 @@ class BenchmarkTaskManager:
             df = pd.read_csv(filename)
             self.len = len(df)
             loaded = {formula: False for formula in self.all_formula}
-            if 'easy_answers' in df.columns:
-                self.easy_answer_set = df.easy_answers.map(
-                    lambda x: list(eval(x))).tolist()
-                assert self.len == len(self.easy_answer_set)
-            if 'hard_answers' in df.columns:
-                self.hard_answer_set = df.hard_answers.map(
-                    lambda x: list(eval(x))).tolist()
-                assert self.len == len(self.hard_answer_set)
-            data = {'easy_answer_set': self.easy_answer_set, 'hard_answer_set': self.hard_answer_set}
+            data = {}
+            # todo: 'easy_answers' all change to easy_answer_set, and so does hard answers
+            if self.mode == 'train':
+                if 'answer_set' in df.columns:
+                    self.answer_set = df.answer_set.map(lambda x: list(eval(x))).tolist()
+                    data = {'answer_set': self.answer_set}
+            elif self.mode == 'valid' or self.mode == 'test':
+                if 'easy_answers' in df.columns or 'easy_answer_set' in df.columns:
+                    if 'easy_answer_set' in df.columns:
+                        self.easy_answer_set = df.easy_answer_set.map(
+                            lambda x: list(eval(x))).tolist()
+                    else:
+                        self.easy_answer_set = df.easy_answers.map(
+                            lambda x: list(eval(x))).tolist()
+                    assert self.len == len(self.easy_answer_set)
+                if 'hard_answers' in df.columns or 'hard_answer_set' in df.columns:
+                    if 'hard_answer_set' in df.columns:
+                        self.hard_answer_set = df.hard_answer_set.map(
+                            lambda x: list(eval(x))).tolist()
+                    else:
+                        self.hard_answer_set = df.hard_answers.map(
+                            lambda x: list(eval(x))).tolist()
+                    assert self.len == len(self.hard_answer_set)
+                    data = {'easy_answer_set': self.easy_answer_set, 'hard_answer_set': self.hard_answer_set}
+            else:
+                assert False, 'not valid mode!'
             for normal_form in all_normal_form:
                 formula = self.form2formula[normal_form]
                 if not loaded[formula]:
@@ -299,7 +318,7 @@ class BenchmarkTaskManager:
             yield data
 
 
-class BenchmarkTask:
+class BenchmarkTask:   # A Task is a formula(corresponding to a query_instance), thus it only needs idxlist
     def __init__(self, query_instance):
         self.query_instance = query_instance
         self.device = None
@@ -330,3 +349,62 @@ class BenchmarkTask:
                 batch_indices=batch_indices)
             yield batch_embedding, batch_indices
 
+
+class BenchmarkWholeManager:   # It manages all tasks in machine learning algorithm
+    def __init__(self, mode, formula_id_data, data_folder: str, device, model):
+        self.mode = mode
+        self.formula_id_data = formula_id_data
+        self.query_classes = {}
+        self.partition = {}
+        self.task_iterators = {}
+        self.formula_to_type_str = {}
+        self.all_task_length = 0
+        for i in formula_id_data.index:
+            type_str = formula_id_data['formula_id'][i]
+            filename = os.path.join(data_folder, f'{mode}-{type_str}.csv')
+            # real_index = formula_id_data.loc[formula_id_data['formula_id'] == f'{type_str}'].index[0]
+            # index != formula id
+            query_class_dict = formula_id_data.loc[i]
+            self.query_classes[type_str] = BenchmarkFormManager(mode, query_class_dict, filename, device, model)
+
+    def build_iterators(self, estimator, batch_size, interested_normal_form: list):
+        # all types of queries are sampled together
+        for i, type_str in enumerate(self.query_classes):
+            interested_formulas = set([self.query_classes[type_str].form2formula[form] for form in
+                                       interested_normal_form])
+            final_allowed_formulas = interested_formulas.intersection(self.query_classes[type_str].allowed_formula)
+            for specific_formula in final_allowed_formulas:
+                self.formula_to_type_str[specific_formula] = type_str
+                self.partition[specific_formula] = len(self.query_classes[type_str].tasks[specific_formula])
+                self.all_task_length += self.partition[specific_formula]
+
+        for specific_formula in self.formula_to_type_str:
+            self.partition[specific_formula] /= self.all_task_length
+            self.task_iterators[specific_formula] = \
+                self.query_classes[self.formula_to_type_str[specific_formula]].tasks[specific_formula]\
+                    .batch_estimation_iterator(estimator, int(batch_size * self.partition[specific_formula]))
+        while True:
+            finish = 0
+            data = defaultdict(dict)
+            for task_formula in self.task_iterators:
+                try:
+                    emb, batch_id = next(self.task_iterators[task_formula])
+                    data[task_formula]['emb'] = emb
+                    if self.mode == 'train':
+                        ans_sets = [self.query_classes[self.formula_to_type_str[task_formula]].answer_set[j]
+                                    for j in batch_id]
+                        data[task_formula]['answer_set'] = ans_sets
+                    else:
+                        easy_ans_sets = [self.query_classes[self.formula_to_type_str[task_formula]].easy_answer_set[j]
+                                         for j in batch_id]
+                        data[task_formula]['easy_answer_set'] = easy_ans_sets
+                        hard_ans_sets = [self.query_classes[self.formula_to_type_str[task_formula]].hard_answer_set[j]
+                                         for j in batch_id]
+                        data[task_formula]['hard_answer_set'] = hard_ans_sets
+                except StopIteration:
+                    finish += 1
+
+            if finish == len(self.formula_to_type_str):
+                break
+
+            yield data
