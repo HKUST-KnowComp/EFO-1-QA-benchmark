@@ -351,7 +351,7 @@ class BenchmarkTask:   # A Task is a formula(corresponding to a query_instance),
 
 
 class BenchmarkWholeManager:   # It manages all tasks in machine learning algorithm
-    def __init__(self, mode, formula_id_data, data_folder: str, device, model):
+    def __init__(self, mode, formula_id_data, data_folder: str, interested_normal_form: list, device, model):
         self.mode = mode
         self.formula_id_data = formula_id_data
         self.query_classes = {}
@@ -359,6 +359,7 @@ class BenchmarkWholeManager:   # It manages all tasks in machine learning algori
         self.task_iterators = {}
         self.formula_to_type_str = {}
         self.all_task_length = 0
+        self.interested_normal_form = interested_normal_form
         for i in formula_id_data.index:
             type_str = formula_id_data['formula_id'][i]
             filename = os.path.join(data_folder, f'{mode}-{type_str}.csv')
@@ -367,11 +368,11 @@ class BenchmarkWholeManager:   # It manages all tasks in machine learning algori
             query_class_dict = formula_id_data.loc[i]
             self.query_classes[type_str] = BenchmarkFormManager(mode, query_class_dict, filename, device, model)
 
-    def build_iterators(self, estimator, batch_size, interested_normal_form: list):
+    def build_iterators(self, estimator, batch_size):
         # all types of queries are sampled together
         for i, type_str in enumerate(self.query_classes):
             interested_formulas = set([self.query_classes[type_str].form2formula[form] for form in
-                                       interested_normal_form])
+                                       self.interested_normal_form])
             final_allowed_formulas = interested_formulas.intersection(self.query_classes[type_str].allowed_formula)
             for specific_formula in final_allowed_formulas:
                 self.formula_to_type_str[specific_formula] = type_str

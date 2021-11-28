@@ -7,14 +7,14 @@ import torch
 from tqdm.std import trange, tqdm
 
 from fol.appfoq import compute_final_loss
-from data_helper import TaskManager, BenchmarkTaskManager, all_normal_form
+from data_helper import TaskManager, BenchmarkFormManager, all_normal_form, BenchmarkWholeManager
 from fol import BetaEstimator, BoxEstimator, LogicEstimator, NLKEstimator, BetaEstimator4V, order_bounds
 from utils.util import (Writer, load_data_with_indexing, load_task_manager, read_from_yaml,
                         set_global_seed)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', default='config/default.yaml', type=str)
-parser.add_argument('--prefix', default='dev', type=str)
+parser.add_argument('--config', default='config/benchmark_train_LogicE.yaml', type=str)
+parser.add_argument('--prefix', default='test_benchmark_train', type=str)
 parser.add_argument('--checkpoint_path', default=None, type=str)
 parser.add_argument('--load_step', default=0, type=int)
 
@@ -160,13 +160,18 @@ def save_eval(log, mode, step, writer):
         writer.append_trace(f'eval_{mode}_{t}', logt)
 
 
-def save_benchmark(log, writer, taskmanger: BenchmarkTaskManager):
+def save_benchmark(log, writer, taskmanger: BenchmarkFormManager):
     form_log = collections.defaultdict(lambda: collections.defaultdict(float))
     for normal_form in all_normal_form:
         formula = taskmanger.form2formula[normal_form]
         if formula in log:
             form_log[normal_form] = log[formula]
-    writer.save_dataframe(form_log, f'eval_{taskmanger.type_str}.csv')
+    writer.save_dataframe(form_log, f"eval_{taskmanger.mode}_{taskmanger.query_inform_dict['formula_id']}.csv")
+
+
+def save_whole_benchmark(log, writer, whole_task_manager: BenchmarkWholeManager):
+    for type_str in whole_task_manager.query_classes:
+        save_benchmark(log, writer, whole_task_manager.query_classes[type_str])
 
 
 def load_beta_model(checkpoint_path, model, optimizer):
@@ -207,9 +212,11 @@ if __name__ == "__main__":
         writer = Writer(case_name=case_name, config=configure, log_path='log')
         # writer = SummaryWriter('./logs-debug/unused-tb')
     else:
-        case_name = f'{args.prefix}/{args.checkpoint_path.split("/")[-1]}'
+        if 'train' in configure['action']:
+            case_name = f'{args.prefix}/{args.config.split("/")[-1].split(".")[0]}'
+        else:
+            case_name = f'{args.prefix}/{args.checkpoint_path.split("/")[-1]}'
         writer = Writer(case_name=case_name, config=configure, log_path='benchmark_log')
-
 
     # initialize environments
     set_global_seed(configure.get('seed', 0))
@@ -251,11 +258,12 @@ if __name__ == "__main__":
         model = NLKEstimator(**model_params)
         model.setup_relation_tensor(projection_train)
         allowed_norm = ['DNF+MultiIUD']
-    elif model_name == 'CQD':
-        pass
     else:
         assert False, 'Not valid model name!'
     model.to(device)
+    valid_tm_list, test_tm_list = [], []
+    train_path_iterator, train_path_tm, train_other_iterator, train_other_tm  = None, None, None, None
+    train_iterator, train_tm, valid_iterator, valid_tm, test_iterator, test_tm = None, None, None, None, None, None
     if configure['data']['type'] == 'beta':
         if 'train' in configure['action']:
             print("[main] load training data")
@@ -273,22 +281,13 @@ if __name__ == "__main__":
             if len(beta_path_tasks) > 0:
                 train_path_tm = TaskManager('train', path_tasks, device)
                 train_path_iterator = train_path_tm.build_iterators(model, batch_size=train_config['batch_size'])
-            else:
-                train_path_tm, train_path_iterator = None, None
             if len(beta_other_tasks) > 0:
                 train_other_tm = TaskManager('train', other_tasks, device)
                 train_other_iterator = train_other_tm.build_iterators(model, batch_size=train_config['batch_size'])
-            else:
-                train_other_tm, train_other_iterator = None, None
             all_tasks = load_task_manager(
                 configure['data']['data_folder'], 'train', task_names=train_config['meta_queries'])
             train_tm = TaskManager('train', all_tasks, device)
             train_iterator = train_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
-        else:
-            train_path_iterator = None
-            train_other_iterator = None
-            train_iterator = None
-            train_tm, train_path_tm, train_other_tm = None, None, None
 
         if 'valid' in configure['action']:
             print("[main] load valid data")
@@ -296,9 +295,6 @@ if __name__ == "__main__":
                                       task_names=configure['evaluate']['meta_queries'])
             valid_tm = TaskManager('valid', tasks, device)
             valid_iterator = valid_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
-        else:
-            valid_iterator = None
-            valid_tm = None
 
         if 'test' in configure['action']:
             print("[main] load test data")
@@ -306,21 +302,50 @@ if __name__ == "__main__":
                                       task_names=configure['evaluate']['meta_queries'])
             test_tm = TaskManager('test', tasks, device)
             test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
-        else:
-            test_iterator = None
-            test_tm = None
     elif configure['data']['type'] == 'benchmark':
-        test_tm_list = []
+        if 'train' in configure['action']:
+            train_formula_id_file = configure['train']['formula_id_file']
+            train_formula_id_data = pd.read_csv(train_formula_id_file)
+            path_formulas_index_list, other_formulas_index_list = [], []
+            other_ops = ['i', 'I', 'u', 'U', 'n', 'd', 'D']
+            for index in train_formula_id_data.index:
+                original_formula = train_formula_id_data['original'][index]
+                if True not in [ops in original_formula for ops in other_ops]:
+                    path_formulas_index_list.append(index)
+                else:
+                    other_formulas_index_list.append(index)
+            path_formula_id_data = train_formula_id_data.loc[path_formulas_index_list]
+            other_formula_id_data = train_formula_id_data.loc[other_formulas_index_list]
+            train_path_tm = BenchmarkWholeManager('train', path_formula_id_data, data_folder,
+                                                  configure['train']['interested_normal_forms'], device, model)
+            train_path_iterator = train_path_tm.build_iterators(model, configure['train']['batch_size'])
+            train_other_tm = BenchmarkWholeManager('train', other_formula_id_data, data_folder,
+                                                   configure['train']['interested_normal_forms'], device, model)
+            train_other_iterator = train_other_tm.build_iterators(model, configure['train']['batch_size'])
+
+        if 'valid' in configure['action']:
+            valid_formula_id_file = configure['evaluate']['formula_id_file']
+            valid_formula_id_data = pd.read_csv(valid_formula_id_file)
+            for i in valid_formula_id_data.index:
+                type_str = valid_formula_id_data['formula_id'][i]
+                filename = os.path.join(data_folder, f'valid-{type_str}.csv')
+                valid_tm = BenchmarkFormManager('valid', valid_formula_id_data.loc[i], filename, device, model)
+                valid_iterator = valid_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
+                valid_tm_list.append(valid_tm)
+
         if 'test' in configure['action']:
-            formula_id_file = configure['evaluate']['formula_id_file']
-            formula_id_data = pd.read_csv(formula_id_file)
-            query_id_str_list = formula_id_data['formula_id']
-            for type_str in query_id_str_list:
-                filename = os.path.join(data_folder, f'data-{type_str}.csv')
-                test_tm = BenchmarkTaskManager(formula_id_data, data_folder, type_str, device, model)
+            test_formula_id_file = configure['evaluate']['formula_id_file']
+            test_formula_id_data = pd.read_csv(test_formula_id_file)
+            for i in test_formula_id_data.index:
+                type_str = test_formula_id_data['formula_id'][i]
+                old_filename = os.path.join(data_folder, f'data-{type_str}.csv')
+                if os.path.exists(old_filename):
+                    test_tm = BenchmarkFormManager('test', test_formula_id_data.loc[i], old_filename, device, model)
+                else:
+                    filename = os.path.join(data_folder, f'test-{type_str}.csv')
+                    test_tm = BenchmarkFormManager('test', test_formula_id_data.loc[i], filename, device, model)
                 test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
                 test_tm_list.append(test_tm)
-            train_path_iterator = None
     else:
         assert False, 'Not valid data type!'
 
@@ -338,7 +363,7 @@ if __name__ == "__main__":
             lr, train_config['warm_up_steps'], init_step = load_beta_model(args.checkpoint_path, model, opt)
 
     training_logs = []
-    if configure['data']['type'] == 'benchmark':
+    if configure['data']['type'] == 'benchmark' and 'train' not in configure['action']:
         assert train_config['steps'] == init_step
     with trange(init_step, train_config['steps'] + 1) as t:
         for step in t:
@@ -416,11 +441,12 @@ if __name__ == "__main__":
                         test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
                         _log = eval_step(model, test_iterator, device, mode='test')
                         '''
-                        test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
-                        _log_easy = eval_step(model, test_iterator, device, mode='test', allowed_easy_ans=True)
-                        for formula in _log_easy:
-                            for metrics in _log_easy[formula]:
-                                _log[formula][f'easy_{metrics}'] = _log_easy[formula][metrics]
+                            test_iterator = 
+                            test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
+                            _log_easy = eval_step(model, test_iterator, device, mode='test', allowed_easy_ans=True)
+                            for formula in _log_easy:
+                                for metrics in _log_easy[formula]:
+                                    _log[formula][f'easy_{metrics}'] = _log_easy[formula][metrics]
                         '''
                         save_benchmark(_log, writer, test_tm)
 
