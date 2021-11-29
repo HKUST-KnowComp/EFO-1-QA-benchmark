@@ -335,6 +335,9 @@ class BenchmarkTask:   # A Task is a formula(corresponding to a query_instance),
         self.device = device
         self.idxlist = np.arange(len(self))
 
+    def setup_iteration(self):
+        self.idxlist = np.random.permutation(len(self))
+
     def __len__(self):
         return self.length
 
@@ -368,7 +371,6 @@ class BenchmarkWholeManager:   # It manages all tasks in machine learning algori
             query_class_dict = formula_id_data.loc[i]
             self.query_classes[type_str] = BenchmarkFormManager(mode, query_class_dict, filename, device, model)
 
-    def build_iterators(self, estimator, batch_size):
         # all types of queries are sampled together
         for i, type_str in enumerate(self.query_classes):
             interested_formulas = set([self.query_classes[type_str].form2formula[form] for form in
@@ -378,9 +380,13 @@ class BenchmarkWholeManager:   # It manages all tasks in machine learning algori
                 self.formula_to_type_str[specific_formula] = type_str
                 self.partition[specific_formula] = len(self.query_classes[type_str].tasks[specific_formula])
                 self.all_task_length += self.partition[specific_formula]
-
         for specific_formula in self.formula_to_type_str:
             self.partition[specific_formula] /= self.all_task_length
+
+    def build_iterators(self, estimator, batch_size):
+        self.task_iterators = {}
+        for specific_formula in self.formula_to_type_str:
+            self.query_classes[self.formula_to_type_str[specific_formula]].tasks[specific_formula].setup_iteration()
             self.task_iterators[specific_formula] = \
                 self.query_classes[self.formula_to_type_str[specific_formula]].tasks[specific_formula]\
                     .batch_estimation_iterator(estimator, int(batch_size * self.partition[specific_formula]))

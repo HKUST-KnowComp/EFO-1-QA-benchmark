@@ -1,9 +1,9 @@
 action: ['train', 'valid', 'test']  # one of [train, train+valid, train+test, valid, test]
 seed: 0
-cuda: 0
+cuda: 3
 data:
   type: benchmark  # one of ['beta', 'benchmark']
-  data_folder: data/FB15k-betae
+  data_folder: data/FB15k-237-betae
   cpu: 10
 train:
   negative_sample_size: 128  # for each positive sample
@@ -18,14 +18,14 @@ train:
   interested_normal_forms:
     - 'DNF+MultiIU'
     - 'DeMorgan'
-  formula_id_file: 'data/FB15k-betae/train_formulas.csv'
+  formula_id_file: 'data/FB15k-237-betae/train_formulas.csv'
 evaluate:  # only used when valid/test in action
   batch_size: 1000
   print: true
   interested_normal_forms:
     - 'DNF+MultiIU'
     - 'DeMorgan'
-  formula_id_file: 'data/FB15k-betae/test_formulas.csv'
+  formula_id_file: 'data/FB15k-237-betae/test_formulas.csv'
 estimator:
   embedding: logic # one of [Transe, box, beta, dm]
   beta:

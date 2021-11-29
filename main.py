@@ -160,18 +160,18 @@ def save_eval(log, mode, step, writer):
         writer.append_trace(f'eval_{mode}_{t}', logt)
 
 
-def save_benchmark(log, writer, taskmanger: BenchmarkFormManager):
+def save_benchmark(log, writer, step, taskmanger: BenchmarkFormManager):
     form_log = collections.defaultdict(lambda: collections.defaultdict(float))
     for normal_form in all_normal_form:
         formula = taskmanger.form2formula[normal_form]
         if formula in log:
             form_log[normal_form] = log[formula]
-    writer.save_dataframe(form_log, f"eval_{taskmanger.mode}_{taskmanger.query_inform_dict['formula_id']}.csv")
+    writer.save_dataframe(form_log, f"eval_{taskmanger.mode}_{step}_{taskmanger.query_inform_dict['formula_id']}.csv")
 
 
-def save_whole_benchmark(log, writer, whole_task_manager: BenchmarkWholeManager):
+def save_whole_benchmark(log, writer, step, whole_task_manager: BenchmarkWholeManager):
     for type_str in whole_task_manager.query_classes:
-        save_benchmark(log, writer, whole_task_manager.query_classes[type_str])
+        save_benchmark(log, writer, step, whole_task_manager.query_classes[type_str])
 
 
 def load_beta_model(checkpoint_path, model, optimizer):
@@ -235,7 +235,7 @@ if __name__ == "__main__":
     # load the data
     print("[main] loading the data")
     data_folder = configure['data']['data_folder']
-    entity_dict, relation_dict, projection_train, reverse_projection_train, projection_valid, reverse_projection_valid, \
+    entity_dict, relation_dict, projection_train, reverse_projection_train, projection_valid, reverse_projection_valid,\
         projection_test, reverse_projection_test = load_data_with_indexing(data_folder)
     n_entity, n_relation = len(entity_dict), len(relation_dict)
 
@@ -262,7 +262,7 @@ if __name__ == "__main__":
         assert False, 'Not valid model name!'
     model.to(device)
     valid_tm_list, test_tm_list = [], []
-    train_path_iterator, train_path_tm, train_other_iterator, train_other_tm  = None, None, None, None
+    train_path_iterator, train_path_tm, train_other_iterator, train_other_tm = None, None, None, None
     train_iterator, train_tm, valid_iterator, valid_tm, test_iterator, test_tm = None, None, None, None, None, None
     if configure['data']['type'] == 'beta':
         if 'train' in configure['action']:
@@ -415,6 +415,7 @@ if __name__ == "__main__":
                 if step % train_config['log_every_steps'] == 0:
                     for metric in training_logs[0].keys():
                         _log[metric] = sum(log[metric] for log in training_logs) / len(training_logs)
+                    _log['step'] = step
                     training_logs = []
                     writer.append_trace('train', _log)
 
@@ -437,6 +438,11 @@ if __name__ == "__main__":
                         _log = eval_step(model, test_iterator, device, mode='test')
                         save_eval(_log, 'test', step, writer)
                 elif configure['data']['type'] == 'benchmark':
+                    # todo: test_in_train, namely test the train dataset
+                    for valid_tm in valid_tm_list:
+                        valid_iterator = valid_tm.build_iterators(model, configure['evaluate']['batch_size'])
+                        _log = eval_step(model, valid_iterator, device, 'valid')
+                        save_benchmark(_log, writer, step, valid_tm)
                     for test_tm in test_tm_list:
                         test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
                         _log = eval_step(model, test_iterator, device, mode='test')
@@ -448,7 +454,7 @@ if __name__ == "__main__":
                                 for metrics in _log_easy[formula]:
                                     _log[formula][f'easy_{metrics}'] = _log_easy[formula][metrics]
                         '''
-                        save_benchmark(_log, writer, test_tm)
+                        save_benchmark(_log, writer, step, test_tm)
 
             if step % train_config['save_every_steps'] == 0 and train_path_iterator:
                 writer.save_model(model, opt, step, train_config['warm_up_steps'], lr)
