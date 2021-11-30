@@ -1,9 +1,9 @@
-action: ['train', 'valid', 'test']  # one of [train, train+valid, train+test, valid, test]
+action: ['test']  # one of [train, train+valid, train+test, valid, test]
 seed: 0
 cuda: 0
 data:
   type: benchmark  # one of ['beta', 'benchmark']
-  data_folder: data/FB15k-237-betae
+  data_folder: data/benchmark/FB15k-237
   cpu: 10
 train:
   negative_sample_size: 128  # for each positive sample
@@ -17,15 +17,21 @@ train:
   checkpoint_every: 10000
   interested_normal_forms:
     - 'DNF+MultiIU'
-  formula_id_file: 'data/FB15k-237-betae/train_formulas.csv'
+  formula_id_file: 'data/test_generated_formula_anchor_node=3.csv'
 evaluate:  # only used when valid/test in action
   batch_size: 1000
   print: true
   interested_normal_forms:
-    - 'DNF'
-    - 'DNF+MultiIU'
+    - 'original'
     - 'DeMorgan'
-  formula_id_file: 'data/FB15k-237-betae/test_formulas.csv'
+    - 'DeMorgan+MultiI'
+    - 'DNF'
+    - 'diff'
+    - 'DNF+diff'
+    - 'DNF+MultiIU'
+    - 'DNF+MultiIUd'
+    - 'DNF+MUltiIUD'
+  formula_id_file: 'data/test_generated_formula_anchor_node=3.csv'
 estimator:
   embedding: beta # one of [Transe, box, beta, dm]
   beta:
@@ -51,9 +57,10 @@ estimator:
     relation_dim: 400
     hidden_dim: 1600
     num_layers: 2
+    evaluate_union: DM
     gamma: 0.375
     t_norm: luk
-    bounded: 0
+    bounded: 1
     use_att: 1
     use_gtrans: 0
   cqd:

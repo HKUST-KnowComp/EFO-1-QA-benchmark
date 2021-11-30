@@ -88,7 +88,7 @@ converting to our format by running:
 python transform_beta_data.py
 ```
 
-Use one of the commands in the following, depending on the choice of models:
+Use one of the commands in the following to do training, depending on the choice of models and choices of data type:
 
 ```bash
 python main.py --config config/{data_type}_{model_name}.yaml
@@ -102,9 +102,9 @@ train one on your own or download
 from [here](https://drive.google.com/drive/folders/13S3wpcsZ9t02aOgA11Qd8lvO0JGGENZ2?usp=sharing):
 
 ```bash
-python main.py --config config/benchmark_beta.yaml --checkpoint_path ckpt/FB15k/Beta_full
-python main.py --config config/benchmark_NewLook.yaml --checkpoint_path ckpt/FB15k/NLK_full --load_step 450000
-python main.py --config config/benchmark_Logic.yaml --checkpoint_path ckpt/FB15k/Logic_full --load_step 450000
+python main.py --config config/evaluate_BetaE.yaml --checkpoint_path ckpt/FB15k-237/Beta_full
+python main.py --config config/evaluate_NewLook.yaml --checkpoint_path ckpt/FB15k-237/NLK_full --load_step 450000
+python main.py --config config/evaluate_LogicE.yaml --checkpoint_path ckpt/FB15k-237/Logic_full --load_step 450000
 ```
 We note that the BetaE checkpoint above is trained from [KGReasoning](https://github.com/snap-stanford/KGReasoning)
 
