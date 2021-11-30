@@ -14,7 +14,7 @@ from utils.util import (Writer, load_data_with_indexing, load_task_manager, read
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', default='config/benchmark_LogicE.yaml', type=str)
-parser.add_argument('--prefix', default='test_benchmark_train', type=str)
+parser.add_argument('--prefix', default='benchmark_train', type=str)
 parser.add_argument('--checkpoint_path', default=None, type=str)
 parser.add_argument('--load_step', default=0, type=int)
 
