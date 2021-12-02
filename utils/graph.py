@@ -5,10 +5,8 @@ import matplotlib.pyplot as plt
 import collections
 import numpy as np
 import sys
-sys.path.append("/home/zwanggc/FirstOrderQueryEstimation")
 from fol import beta_query_v2, parse_formula, beta_query
 from data_helper import all_normal_form
-
 
 beta_step = [15000 * i for i in range(1, 21)] + [360000, 420000, 450000]
 beta_valid_step = [15000 * i for i in range(1, 21)] + [360000, 420000]
@@ -27,6 +25,8 @@ model_compareform_dict = {
     'Logic': ['original', 'DeMorgan', 'DeMorgan+MultiI', 'DNF', 'DNF+MultiIU'],
     'NewLook': ['diff', 'DNF+diff', 'DNF+MultiIUd', 'DNF+MultiIUD']
 }
+all_formula_data = pd.read_csv('data/test_generated_formula_anchor_node=3.csv')
+
 
 def print_loss(path):
     data_file = os.path.join(path, 'train.csv')
@@ -88,6 +88,7 @@ def log_all_metrics(path, step, mode, log_meta_formula=beta_query_v2.values()):
     print(all_data)
     print(averaged_metric)
 
+
 '''
 def log_old_metrics(path, step, mode, log_meta_formula=beta_query.values()):
     log = collections.defaultdict(lambda: collections.defaultdict(float))
@@ -113,6 +114,7 @@ def log_old_metrics(path, step, mode, log_meta_formula=beta_query.values()):
     print(all_data)
     print(averaged_metric)
 '''
+
 
 def read_beta_log(path, mode='test', chosen_step=None, averaged_meta_formula=beta_query_v2.values()):
     train_log = collections.defaultdict(lambda: collections.defaultdict(float))
@@ -275,14 +277,21 @@ def comparison(path, all_meta_formula):
         plot_comparison(eval(f'beta_{mode}'), eval(f'my_{mode}'), ['3p', '3i'])
 
 
-def log_benchmark(folder_path, id_list, percentage=False):
+def typestr2benchmarkname(type_str: str, mode=None, step=None):
+    if mode:
+        return f'eval_{mode}_{step}_{type_str}.csv'
+    else:
+        return f'eval_{type_str}.csv'
+
+
+def log_benchmark(folder_path, id_list, typestr2filename, percentage=False, mode=None, step=None):
     all_log = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(float)))
     for task_id in id_list:
-        id_str = str(task_id)
-        id_str = '0' * (4 - len(id_str)) + id_str
+        type_str = f'type{task_id:04d}'
+        filename = typestr2filename(type_str, mode, step)
         # real_index = all_formula.loc[all_formula['formula_id'] == f'type{id_str}'].index[0]
-        if os.path.exists(os.path.join(folder_path, f'eval_type{id_str}.csv')):
-            single_log = pd.read_csv(os.path.join(folder_path, f'eval_type{id_str}.csv'))
+        if os.path.exists(os.path.join(folder_path, filename)):
+            single_log = pd.read_csv(os.path.join(folder_path, filename))
             index2metrics = single_log['Unnamed: 0']
             for normal_form in single_log.columns:
                 if normal_form != 'Unnamed: 0':
@@ -293,15 +302,17 @@ def log_benchmark(folder_path, id_list, percentage=False):
                             all_log[index2metrics[index]][normal_form][task_id] = single_log[normal_form][index]
     for metric in all_log:
         data_metric = pd.DataFrame.from_dict(all_log[metric])
-        data_metric.to_csv(os.path.join(folder_path, f'all_formula_{metric}.csv'))
+        if mode:
+            data_metric.to_csv(os.path.join(folder_path, f'all_formula_{mode}_{step}_{metric}.csv'))
+        else:
+            data_metric.to_csv(os.path.join(folder_path, f'all_formula_{metric}.csv'))
     return all_log
 
 
 def normal_form_comparison(folder_path, form1, form2, metrics, save_csv=False, percentage=False):
-    all_formula = pd.read_csv('data/generated_formula_anchor_node=3.csv')
     unequal_task = set()
     form1_log, form2_log = collections.defaultdict(lambda: collections.defaultdict(float)), \
-        collections.defaultdict(lambda: collections.defaultdict(float))
+                           collections.defaultdict(lambda: collections.defaultdict(float))
     comparison_log = collections.defaultdict(list)
     for metric in metrics:
         metric_logging = pd.read_csv(os.path.join(folder_path, f'all_formula_{metric}.csv'))
@@ -309,8 +320,8 @@ def normal_form_comparison(folder_path, form1, form2, metrics, save_csv=False, p
         for index in range(len(index2taskid)):
             taskid = index2taskid[index]
             id_str = '0' * (4 - len(str(taskid))) + str(taskid)
-            formula_index = all_formula.loc[all_formula['formula_id'] == f'type{id_str}'].index[0]
-            formula1, formula2 = all_formula[form1][formula_index], all_formula[form2][formula_index]
+            formula_index = all_formula_data.loc[all_formula_data['formula_id'] == f'type{id_str}'].index[0]
+            formula1, formula2 = all_formula_data[form1][formula_index], all_formula_data[form2][formula_index]
             score1, score2 = metric_logging[form1][index], metric_logging[form2][index]
             if formula1 != formula2 and str(score1) != 'nan' and str(score2) != 'nan':
                 # what if two scores are same
@@ -342,8 +353,8 @@ def normal_form_comparison(folder_path, form1, form2, metrics, save_csv=False, p
         compare_taskid['winner'] = {}
         for taskid in unequal_task:
             id_str = '0' * (4 - len(str(taskid))) + str(taskid)
-            formula_index = all_formula.loc[all_formula['formula_id'] == f'type{id_str}'].index[0]
-            formula1, formula2 = all_formula[form1][formula_index], all_formula[form2][formula_index]
+            formula_index = all_formula_data.loc[all_formula_data['formula_id'] == f'type{id_str}'].index[0]
+            formula1, formula2 = all_formula_data[form1][formula_index], all_formula_data[form2][formula_index]
             compare_taskid[f'{form1}_formula'][taskid] = formula1
             compare_taskid[f'{form2}_formula'][taskid] = formula2
             if compare_taskid[f'{form1}_MRR'][taskid] > compare_taskid[f'{form2}_MRR'][taskid]:
@@ -386,16 +397,15 @@ def compare_all_form(folder_path, form_list, metrics, save_csv=False):
                 difference_win_rate[form_list[j]][form_list[i]] = 0
                 difference_win_rate[form_list[i]][form_list[j]] = 0
 
-    dm, dn, dw = pd.DataFrame.from_dict(difference_mrr), pd.DataFrame.from_dict(difference_number),\
-        pd.DataFrame.from_dict(difference_win_rate)
+    dm, dn, dw = pd.DataFrame.from_dict(difference_mrr), pd.DataFrame.from_dict(difference_number), \
+                 pd.DataFrame.from_dict(difference_win_rate)
     dm.to_csv(os.path.join(folder_path, f'allmrr_compare.csv'))
     dn.to_csv(os.path.join(folder_path, f'alllength_compare.csv'))
     dw.to_csv(os.path.join(folder_path, f'allwin_rate_compare.csv'))
 
 
 def log_benchmark_depth_anchornode(folder_path, support_normal_forms, metrics):
-    all_formula = pd.read_csv('data/generated_formula_anchor_node=3.csv')
-    query_type_num = len(all_formula['original'])
+    query_type_num = len(all_formula_data['original'])
     all_logging = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(list)))
     averaged_split = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.defaultdict(float)))
     averaged_all = collections.defaultdict(lambda: collections.defaultdict(float))
@@ -410,9 +420,9 @@ def log_benchmark_depth_anchornode(folder_path, support_normal_forms, metrics):
         for index in range(len(index2taskid)):
             taskid = index2taskid[index]
             id_str = '0' * (4 - len(str(taskid))) + str(taskid)
-            formula_index = all_formula.loc[all_formula['formula_id'] == f'type{id_str}'].index[0]
-            depth = all_formula['original_depth'][formula_index]
-            anchornode_num = all_formula['num_anchor_nodes'][formula_index]
+            formula_index = all_formula_data.loc[all_formula_data['formula_id'] == f'type{id_str}'].index[0]
+            depth = all_formula_data['original_depth'][formula_index]
+            anchornode_num = all_formula_data['num_anchor_nodes'][formula_index]
             for normal_form in support_normal_forms:
                 query_scores = metric_logging.loc[index][normal_form]
                 all_logging[normal_form][(anchornode_num, depth)][metric].append(query_scores)
@@ -422,7 +432,7 @@ def log_benchmark_depth_anchornode(folder_path, support_normal_forms, metrics):
     for normal_form in support_normal_forms:
         for key in all_logging[normal_form]:
             for metric in metrics:
-                averaged_split[normal_form][key][metric] = sum(all_logging[normal_form][key][metric])\
+                averaged_split[normal_form][key][metric] = sum(all_logging[normal_form][key][metric]) \
                                                            / len(all_logging[normal_form][key][metric])
     for normal_form in support_normal_forms:
         for metric in metrics:
@@ -455,8 +465,8 @@ def answer_statistic(data_folder, formula_id_file):
                 data = pickle.load(f)
                 easy_answer_set = data['easy_answer_set']
                 hard_answer_set = data['hard_answer_set']
-                easy_ans_num, hard_ans_num = sum(len(easy) for easy in easy_answer_set) /len(easy_answer_set), \
-                                                sum(len(hard) for hard in hard_answer_set) / len(hard_answer_set)
+                easy_ans_num, hard_ans_num = sum(len(easy) for easy in easy_answer_set) / len(easy_answer_set), \
+                                             sum(len(hard) for hard in hard_answer_set) / len(hard_answer_set)
                 formula_index = formula_id_data.loc[formula_id_data['formula_id'] == f'{type_str}'].index[0]
                 depth = formula_id_data['original_depth'][formula_index]
                 anchor_node_num = formula_id_data['num_anchor_nodes'][formula_index]
@@ -477,7 +487,6 @@ def answer_statistic(data_folder, formula_id_file):
         print(key, len(statistis_grouping[key]))
     data_averaged = pd.DataFrame.from_dict(statistis_grouping_averaged)
     data_averaged.to_csv(os.path.join(data_folder, 'size_statistics_grouping_formhard.csv'))
-
 
 
 box_query_v2 = {
@@ -539,6 +548,7 @@ log_all_metrics(old_path, test_step, 'test', log_meta_formula=check_query.values
 '''
 p_list = [0, 1, 2, 1116, 1117]
 i_list = [13, 137, 1113, 1114]
+beta_list = list(range(0, 14))
 all_3_3_list = list(range(0, 531))
 Beta_path = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k-237/Beta_full211021.21:53:5622b7307f/"
 NLK_path = "/home/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_FB15k-237/NLK_full211022.10:23:213a1fea21/"
@@ -563,13 +573,15 @@ Logic_3i_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_ge
 new_2i_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_generalize/Logic_2i210828.17:53:31146141ce"
 new_3i_path = "/home/hyin/FirstOrderQueryEstimation/benchmark_log/benchmark_generalize/Logic_3i210828.17:56:27662c4441"
 FB15_237_data, FB_data, NELL_data = 'data/benchmark/FB15k-237', 'data/benchmark/FB15k', 'data/benchmark/NELL'
-
-#log_benchmark(Logic_path, all_3_3_list, percentage=True)
+train_logicE_FB15k_237_path = \
+    "/data/zwanggc/FirstOrderQueryEstimation/benchmark_log/benchmark_train/benchmark_LogicE211201.11:22:4329641068"
+# log_benchmark(Logic_path, all_3_3_list, percentage=True)
 # compare_all_form(Box_path, all_normal_form, all_metrics)
-#compare_all_form(Logic_path, model_compareform_dict['LogicE'], metrics=all_metrics, save_csv=True)
+# compare_all_form(Logic_path, model_compareform_dict['LogicE'], metrics=all_metrics, save_csv=True)
 #  pandas_logging_depth_anchornode(NELL_result, model_supportform_dict, all_metrics)
-#log_benchmark_depth_anchornode(Logic_path, model_supportform_dict['LogicE'], all_metrics)
-answer_statistic(NELL_data, formula_file)
+# log_benchmark_depth_anchornode(Logic_path, model_supportform_dict['LogicE'], all_metrics)
+# answer_statistic(NELL_data, formula_file)
+log_benchmark(train_logicE_FB15k_237_path, beta_list, typestr2benchmarkname, False, 'test', 450000)
 # log_old_metrics(old_path, test_step, 'test')
 # train_all, valid_all, test_all = read_beta_log('../download_log/full/')
 # train_part, valid_part, test_part = read_logic_log(logic_path, 'test', test_step, averaged_meta_formula=DNF_query.values())
