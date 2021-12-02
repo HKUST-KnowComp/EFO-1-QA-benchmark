@@ -13,8 +13,8 @@ from utils.util import (Writer, load_data_with_indexing, load_task_manager, read
                         set_global_seed)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', default='config/benchmark_LogicE.yaml', type=str)
-parser.add_argument('--prefix', default='benchmark_train', type=str)
+parser.add_argument('--config', default='config/EFO-1_LogicE.yaml', type=str)
+parser.add_argument('--prefix', default='EFO-1_train', type=str)
 parser.add_argument('--checkpoint_path', default=None, type=str)
 parser.add_argument('--load_step', default=0, type=int)
 
@@ -216,7 +216,7 @@ if __name__ == "__main__":
             case_name = f'{args.prefix}/{args.config.split("/")[-1].split(".")[0]}'
         else:
             case_name = f'{args.prefix}/{args.checkpoint_path.split("/")[-1]}'
-        writer = Writer(case_name=case_name, config=configure, log_path='benchmark_log')
+        writer = Writer(case_name=case_name, config=configure, log_path='EFO-1_log')
 
     # initialize environments
     set_global_seed(configure.get('seed', 0))
@@ -302,7 +302,7 @@ if __name__ == "__main__":
                                       task_names=configure['evaluate']['meta_queries'])
             test_tm = TaskManager('test', tasks, device)
             test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
-    elif configure['data']['type'] == 'benchmark':
+    elif configure['data']['type'] == 'EFO-1':
         if 'train' in configure['action']:
             train_formula_id_file = configure['train']['formula_id_file']
             train_formula_id_data = pd.read_csv(train_formula_id_file)
@@ -363,7 +363,7 @@ if __name__ == "__main__":
             lr, train_config['warm_up_steps'], init_step = load_beta_model(args.checkpoint_path, model, opt)
 
     training_logs = []
-    if configure['data']['type'] == 'benchmark' and 'train' not in configure['action']:
+    if configure['data']['type'] == 'EFO-1' and 'train' not in configure['action']:
         assert train_config['steps'] == init_step
     with trange(init_step, train_config['steps'] + 1) as t:
         for step in t:
@@ -437,7 +437,7 @@ if __name__ == "__main__":
                         test_iterator = test_tm.build_iterators(model, batch_size=configure['evaluate']['batch_size'])
                         _log = eval_step(model, test_iterator, device, mode='test')
                         save_eval(_log, 'test', step, writer)
-                elif configure['data']['type'] == 'benchmark':
+                elif configure['data']['type'] == 'EFO-1':
                     # todo: test_in_train, namely test the train dataset
                     for valid_tm in valid_tm_list:
                         valid_iterator = valid_tm.build_iterators(model, configure['evaluate']['batch_size'])

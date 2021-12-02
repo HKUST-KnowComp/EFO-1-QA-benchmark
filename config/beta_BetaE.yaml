@@ -2,7 +2,7 @@ action: ['train','valid','test']  # one of [train, train+valid, train+test, vali
 seed: 0
 cuda: 0
 data:
-  type: beta  # one of ['beta', 'benchmark']
+  type: beta  # one of ['beta', 'EFO-1']
   data_folder: data/FB15k-237-betae
   cpu: 10
 train:
