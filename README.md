@@ -94,7 +94,7 @@ Use one of the commands in the following to do training, depending on the choice
 python main.py --config config/{data_type}_{model_name}.yaml
 ```
 
-- The `data_type` includes `benchmark` and `beta`
+- The `data_type` includes `EFO-1` and `beta`
 - The `model_name` includes `BetaE`, `LogicE`, `NewLook` and `Query2Box`
 
 If you need to evaluate on the EFO-1-QA benchmark, be sure to load from existing model checkpoint, you can
