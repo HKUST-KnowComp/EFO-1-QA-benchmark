@@ -24,13 +24,13 @@ def train_step(model, opt, iterator):
     data = next(iterator)
     emb_list, answer_list = [], []
     union_emb_list, union_answer_list = [], []
-    for key in data:
-        if 'u' in key or 'U' in key:  # TODO: consider 'evaluate_union' in the future
-            union_emb_list.append(data[key]['emb'])
-            union_answer_list.append(data[key]['answer_set'])
+    for formula in data:
+        if 'u' in formula or 'U' in formula:  # TODO: consider 'evaluate_union' in the future
+            union_emb_list.append(data[formula]['emb'])
+            union_answer_list.append(data[formula]['answer_set'])
         else:
-            emb_list.append(data[key]['emb'])
-            answer_list.extend(data[key]['answer_set'])
+            emb_list.append(data[formula]['emb'])
+            answer_list.extend(data[formula]['answer_set'])
     pred_embedding = torch.cat(emb_list, dim=0)
     all_positive_logit, all_negative_logit, all_subsampling_weight = model.criterion(pred_embedding, answer_list)
     for i in range(len(union_emb_list)):
