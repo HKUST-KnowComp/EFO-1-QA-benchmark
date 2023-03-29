@@ -78,6 +78,14 @@ def compute_final_loss(positive_logit, negative_logit, subsampling_weight):
     return positive_loss, negative_loss
 
 
+def compute_loss_bpr(positive_logit, negative_logit, subsampling_weight):
+    diff = -F.logsigmoid(positive_logit - negative_logit)
+    unweighted_sample_loss = torch.mean(diff, dim=-1)
+    loss = (subsampling_weight * unweighted_sample_loss).sum()
+    loss /= subsampling_weight.sum()
+    return loss
+
+
 class AppFOQEstimator(ABC, nn.Module):
 
     @abstractmethod

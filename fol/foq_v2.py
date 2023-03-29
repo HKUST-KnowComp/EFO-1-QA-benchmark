@@ -867,7 +867,7 @@ class Multiple_Difference(MultipleSetQuery):
         embed_list = super().embedding_estimation(estimator,
                                                   batch_indices,
                                                   **kwargs)
-        return estimator.get_multiple_difference_embedding(embed_list, **kwargs)
+        return estimator.get_multiple_difference_embedding(embed_list, batch_indices, **kwargs)
 
     def deterministic_query(self, projs):
         lquery, rqueries = self.sub_queries[0], self.sub_queries[1:]

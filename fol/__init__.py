@@ -3,6 +3,8 @@ from .estimator_box import BoxEstimator
 from .estimator_beta import BetaEstimator, BetaEstimator4V
 from .estimator_logic import LogicEstimator, order_bounds
 from .estimator_newlook import NLKEstimator
+from .estimator_ConE import ConEstimator
+from .estimator_FuzzQE import FuzzQEstiamtor
 from .foq_v2 import parse_formula, count_depth, count_entities
 
 

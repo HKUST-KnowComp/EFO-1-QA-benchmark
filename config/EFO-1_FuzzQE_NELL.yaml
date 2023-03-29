@@ -1,0 +1,68 @@
+action: ['train', 'valid', 'test']  # one of [train, train+valid, train+test, valid, test]
+seed: 0
+cuda: 1
+data:
+  type: EFO-1  # one of ['beta', 'EFO-1']
+  data_folder: data/NELL-betae
+  cpu: 10
+train:
+  negative_sample_size: 64  # for each positive sample
+  batch_size: 512
+  learning_rate: 0.0005
+  L2_reg: 0.05
+  steps: 450000
+  log_every_steps: 100
+  warm_up_steps: 225000
+  evaluate_every_steps: 70000
+  save_every_steps: 10000
+  checkpoint_every: 10000
+  interested_normal_forms:
+    - 'DNF+MultiIU'
+  formula_id_file: 'data/FB15k-237-betae/train_formulas.csv'
+evaluate:  # only used when valid/test in action
+  batch_size: 1000
+  print: true
+  interested_normal_forms:
+    - 'DNF'
+    - 'DNF+MultiIU'
+    - 'DeMorgan'
+  formula_id_file: 'data/FB15k-237-betae/test_formulas.csv'
+estimator:
+  embedding: FuzzQE # one of [Transe, box, beta, dm, FuzzQe]
+  FuzzQE:
+    entity_dim: 1000
+    relation_num_base: 30
+    t_norm: "product"  #one of ["Lukasiewicz", "Godel", "product"]
+    regular: bounded # {sigmoid : logistic function; bounded: Bounded rectifier}
+    # evaluate_union: DM # one of [DM, DNF] after parsing it can be omitted
+    gamma: 20
+  box:
+    entity_dim: 400
+    relation_dim: 400
+    offset_activation: None
+    center_reg: 0.02
+    gamma: 60
+  dm:
+    entity_dim: 2
+    relation_dim: 2
+    hidden_dim: 1600
+    num_layers: 2
+  logic:
+    entity_dim: 400
+    relation_dim: 400
+    hidden_dim: 1600
+    num_layers: 2
+    gamma: 0.375
+    t_norm: luk
+    bounded: 0
+    use_att: 1
+    use_gtrans: 0
+  cqd:
+    entity_dim: 1000 # actually 2000
+    relation_dim: 1000
+    norm_type: product
+  NewLook:
+    entity_dim: 400
+    relation_dim: 400
+    center_reg: 0.2
+    x_reg: 0.2 # \lambda in the paper

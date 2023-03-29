@@ -6,20 +6,21 @@ import pandas as pd
 import torch
 from tqdm.std import trange, tqdm
 
-from fol.appfoq import compute_final_loss
+from fol.appfoq import compute_final_loss, compute_loss_bpr
 from data_helper import TaskManager, BenchmarkFormManager, all_normal_form, BenchmarkWholeManager
-from fol import BetaEstimator, BoxEstimator, LogicEstimator, NLKEstimator, BetaEstimator4V, order_bounds
+from fol import BetaEstimator, BoxEstimator, LogicEstimator, NLKEstimator, BetaEstimator4V, order_bounds, \
+    ConEstimator, FuzzQEstiamtor
 from utils.util import (Writer, load_data_with_indexing, load_task_manager, read_from_yaml,
                         set_global_seed)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', default='config/EFO-1_LogicE.yaml', type=str)
+parser.add_argument('--config', default='config/EFO-1_FuzzQE.yaml', type=str)
 parser.add_argument('--prefix', default='EFO-1_train', type=str)
 parser.add_argument('--checkpoint_path', default=None, type=str)
 parser.add_argument('--load_step', default=0, type=int)
 
 
-def train_step(model, opt, iterator):
+def train_step(model, opt, iterator, loss_function):
     opt.zero_grad()
     data = next(iterator)
     emb_list, answer_list = [], []
@@ -39,15 +40,24 @@ def train_step(model, opt, iterator):
         all_positive_logit = torch.cat([all_positive_logit, union_positive_logit], dim=0)
         all_negative_logit = torch.cat([all_negative_logit, union_negative_logit], dim=0)
         all_subsampling_weight = torch.cat([all_subsampling_weight, union_subsampling_weight], dim=0)
-    positive_loss, negative_loss = compute_final_loss(all_positive_logit, all_negative_logit, all_subsampling_weight)
-    loss = (positive_loss + negative_loss) / 2
+    if loss_function == 'original':
+        positive_loss, negative_loss = compute_final_loss(all_positive_logit, all_negative_logit,
+                                                          all_subsampling_weight)
+        loss = (positive_loss + negative_loss) / 2
+        log = {
+            'po': positive_loss.item(),
+            'ne': negative_loss.item(),
+            'loss': loss.item()
+        }
+    elif loss_function == 'bpr':
+        loss = compute_loss_bpr(all_positive_logit, all_negative_logit, all_subsampling_weight)
+        log = {
+            'loss': loss.item()
+        }
+    else:
+        raise NotImplementedError
     loss.backward()
     opt.step()
-    log = {
-        'po': positive_loss.item(),
-        'ne': negative_loss.item(),
-        'loss': loss.item()
-    }
     if model.name == 'logic':
         entity_embedding = model.entity_embeddings.weight.data
         if model.bounded:
@@ -258,6 +268,11 @@ if __name__ == "__main__":
         model = NLKEstimator(**model_params)
         model.setup_relation_tensor(projection_train)
         allowed_norm = ['DNF+MultiIUD']
+    elif model_name == 'ConE':
+        model = ConEstimator(**model_params)
+        allowed_norm = ['DeMorgan+MultiI', 'DNF+MultiIU']
+    elif model_name == 'FuzzQE':
+        model = FuzzQEstiamtor(**model_params)
     else:
         assert False, 'Not valid model name!'
     model.to(device)
@@ -350,8 +365,17 @@ if __name__ == "__main__":
         assert False, 'Not valid data type!'
 
     lr = train_config['learning_rate']
-    opt = torch.optim.Adam(
-        filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
+    if model.name == 'FuzzQE':
+        opt = torch.optim.AdamW(
+            filter(lambda p: p.requires_grad, list(model.parameters())),
+            lr=lr, eps=1e-06, weight_decay=train_config['L2_reg'])
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=train_config['steps'], eta_min=0,
+                                                               last_epoch=-1)
+    else:
+        opt = torch.optim.Adam(
+            filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
+        scheduler = None
+    model_loss_function = train_config['loss_function'] if 'loss_function' in train_config else 'original'
     init_step = 1
     # exit()
     assert 2 * train_config['warm_up_steps'] == train_config['steps']
@@ -370,41 +394,45 @@ if __name__ == "__main__":
             # basic training step
             if train_path_iterator:
                 if step >= train_config['warm_up_steps']:
-                    lr /= 5
-                    # logging
-                    opt = torch.optim.Adam(
-                        filter(lambda p: p.requires_grad, model.parameters()),
-                        lr=lr
-                    )
-                    train_config['warm_up_steps'] *= 1.5
+                    if not scheduler:
+                        lr /= 5
+                        # logging
+                        opt = torch.optim.Adam(
+                            filter(lambda p: p.requires_grad, model.parameters()),
+                            lr=lr
+                        )
+                        train_config['warm_up_steps'] *= 1.5
                 try:
-                    _log = train_step(model, opt, train_path_iterator)
+                    _log = train_step(model, opt, train_path_iterator, model_loss_function)
                 except StopIteration:
                     print("new epoch for path meta-query")
                     train_path_iterator = train_path_tm.build_iterators(model, batch_size=train_config['batch_size'])
-                    _log = train_step(model, opt, train_path_iterator)
+                    _log = train_step(model, opt, train_path_iterator, model_loss_function)
                 if train_other_iterator:
                     try:
-                        _log_other = train_step(model, opt, train_other_iterator)
-                        try:
-                            _log_second = train_step(model, opt, train_path_iterator)
-                        except StopIteration:
-                            print("new epoch for path meta-query")
-                            train_path_iterator = train_path_tm.build_iterators(model,
-                                                                                batch_size=train_config['batch_size'])
-                            _log_second = train_step(model, opt, train_path_iterator)
+                        _log_other = train_step(model, opt, train_other_iterator, model_loss_function)
+                        if model_name != 'FuzzQE':
+                            try:
+                                _log_second = train_step(model, opt, train_path_iterator, model_loss_function)
+                            except StopIteration:
+                                print("new epoch for path meta-query")
+                                train_path_iterator = \
+                                    train_path_tm.build_iterators(model, batch_size=train_config['batch_size'])
+                                _log_second = train_step(model, opt, train_path_iterator, model_loss_function)
                     except StopIteration:
                         print("new epoch for other meta-query")
                         train_other_iterator = \
                             train_other_tm.build_iterators(model, batch_size=train_config['batch_size'])
-                        _log_other = train_step(model, opt, train_other_iterator)
-                        try:
-                            _log_second = train_step(model, opt, train_path_iterator)
-                        except StopIteration:
-                            print("new epoch for path meta-query")
-                            train_path_iterator = train_path_tm.build_iterators(model,
-                                                                                batch_size=train_config['batch_size'])
-                            _log_second = train_step(model, opt, train_path_iterator)
+                        _log_other = train_step(model, opt, train_other_iterator, model_loss_function)
+                        if model_name != 'FuzzQE':
+                            try:
+                                _log_second = train_step(model, opt, train_path_iterator, model_loss_function)
+                            except StopIteration:
+                                print("new epoch for path meta-query")
+                                train_path_iterator = train_path_tm.build_iterators(model,
+                                                                                    batch_size=train_config[
+                                                                                        'batch_size'])
+                                _log_second = train_step(model, opt, train_path_iterator, model_loss_function)
                     _alllog = {}
                     for key in _log:
                         _alllog[f'all_{key}'] = (_log[key] + _log_other[key]) / 2
@@ -418,7 +446,8 @@ if __name__ == "__main__":
                     _log['step'] = step
                     training_logs = []
                     writer.append_trace('train', _log)
-
+            if scheduler:
+                scheduler.step()
             if step % train_config['evaluate_every_steps'] == 0 or step == train_config['steps']:
                 if configure['data']['type'] == 'beta':
                     '''
